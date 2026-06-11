@@ -1,0 +1,252 @@
+{
+  "name": "skill-forge",
+  "version": "1.0.0",
+  "schemaVersion": 1,
+  "skills": [
+    {
+      "type": "skill",
+      "name": "api-contracts",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/api-contracts",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/api-contracts"
+    },
+    {
+      "type": "skill",
+      "name": "audit-trail",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/audit-trail",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/audit-trail"
+    },
+    {
+      "type": "skill",
+      "name": "code-quality",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/code-quality",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/code-quality"
+    },
+    {
+      "type": "skill",
+      "name": "coding-discipline",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/coding-discipline",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/coding-discipline"
+    },
+    {
+      "type": "skill",
+      "name": "data-migration",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/data-migration",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/data-migration"
+    },
+    {
+      "type": "skill",
+      "name": "deployment-strategy",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/deployment-strategy",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/deployment-strategy"
+    },
+    {
+      "type": "skill",
+      "name": "failure-analysis",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/failure-analysis",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/failure-analysis"
+    },
+    {
+      "type": "skill",
+      "name": "frontend-engineering",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/frontend-engineering",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/frontend-engineering"
+    },
+    {
+      "type": "skill",
+      "name": "llm-integration",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/llm-integration",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/llm-integration"
+    },
+    {
+      "type": "skill",
+      "name": "migration-deprecation",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/migration-deprecation",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/migration-deprecation"
+    },
+    {
+      "type": "skill",
+      "name": "performance-analysis",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/performance-analysis",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/performance-analysis"
+    },
+    {
+      "type": "skill",
+      "name": "production-readiness",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/production-readiness",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/production-readiness"
+    },
+    {
+      "type": "skill",
+      "name": "security-baseline",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/security-baseline",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/security-baseline"
+    },
+    {
+      "type": "skill",
+      "name": "testing-strategy",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/testing-strategy",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/testing-strategy"
+    },
+    {
+      "type": "skill",
+      "name": "ui-portability-baseline",
+      "version": "0.1.0",
+      "scope": "shared",
+      "path": "inventory/shared/ui-portability-baseline",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/ui-portability-baseline"
+    },
+    {
+      "type": "skill",
+      "name": "agent-instruction-spec",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/agent-instruction-spec",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "olilo-backend-api",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/olilo-backend-api",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "page-render-inspector",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/page-render-inspector",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "skill-authoring-guide",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/skill-authoring-guide",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "svelte5-implementation",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/svelte5-implementation",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "sveltekit-development-standards",
+      "version": "0.1.0",
+      "scope": "project",
+      "path": "inventory/project/sveltekit-development-standards",
+      "installable": true,
+      "runtimeTarget": null
+    },
+    {
+      "type": "skill",
+      "name": "imagegen",
+      "version": "0.1.0",
+      "scope": "system",
+      "path": "inventory/system/imagegen",
+      "installable": false,
+      "runtimeTarget": "~/.codex/skills/.system/imagegen"
+    },
+    {
+      "type": "skill",
+      "name": "openai-docs",
+      "version": "0.1.0",
+      "scope": "system",
+      "path": "inventory/system/openai-docs",
+      "installable": false,
+      "runtimeTarget": "~/.codex/skills/.system/openai-docs"
+    },
+    {
+      "type": "skill",
+      "name": "plugin-creator",
+      "version": "0.1.0",
+      "scope": "system",
+      "path": "inventory/system/plugin-creator",
+      "installable": false,
+      "runtimeTarget": "~/.codex/skills/.system/plugin-creator"
+    },
+    {
+      "type": "skill",
+      "name": "skill-creator",
+      "version": "0.1.0",
+      "scope": "system",
+      "path": "inventory/system/skill-creator",
+      "installable": false,
+      "runtimeTarget": "~/.codex/skills/.system/skill-creator"
+    },
+    {
+      "type": "skill",
+      "name": "skill-installer",
+      "version": "0.1.0",
+      "scope": "system",
+      "path": "inventory/system/skill-installer",
+      "installable": false,
+      "runtimeTarget": "~/.codex/skills/.system/skill-installer"
+    }
+  ],
+  "managedAgents": [
+    {
+      "type": "agents",
+      "name": "global-agents",
+      "version": "0.1.0",
+      "scope": "global",
+      "path": "managed/agents/global/AGENTS.md",
+      "installable": false,
+      "runtimeTarget": "~/.codex/AGENTS.md"
+    }
+  ]
+}

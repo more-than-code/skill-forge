@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Local configuration and secrets
+.env
+.env.*
+.skillforge.json
+
+# Logs and runtime output
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build and coverage output
+dist/
+build/
+coverage/
+
+# Local scratch/install test output
+private/
+skill-forge-install-test/
+skill-forge-registry-install-test*/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+tasks/

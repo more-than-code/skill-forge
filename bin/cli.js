@@ -17,7 +17,7 @@ const REGISTRY_PATH = path.join(REPO_ROOT, 'registry.json');
 const REGISTRY_LOCK_PATH = path.join(REPO_ROOT, 'registry-lock.json');
 const DEFAULT_INSTALL_DIR = '.skills';
 
-const SCOPE_PRIORITY = ['project', 'shared', 'system'];
+const SCOPE_PRIORITY = ['custom', 'system'];
 
 const program = new Command();
 
@@ -38,12 +38,15 @@ async function readRegistry() {
 }
 
 function skillKey(skill) {
+  if (skill.scope === 'custom') return skill.name;
   return `${skill.scope}/${skill.name}`;
 }
 
 function sortSkills(skills) {
   return [...skills].sort((a, b) => {
-    const scopeDiff = SCOPE_PRIORITY.indexOf(a.scope) - SCOPE_PRIORITY.indexOf(b.scope);
+    const aPriority = SCOPE_PRIORITY.includes(a.scope) ? SCOPE_PRIORITY.indexOf(a.scope) : SCOPE_PRIORITY.length;
+    const bPriority = SCOPE_PRIORITY.includes(b.scope) ? SCOPE_PRIORITY.indexOf(b.scope) : SCOPE_PRIORITY.length;
+    const scopeDiff = aPriority - bPriority;
     return scopeDiff || a.name.localeCompare(b.name);
   });
 }
@@ -61,7 +64,10 @@ function resolveSkill(registry, requested) {
   const scoped = requested.includes('/');
 
   if (scoped) {
-    const match = skills.find((skill) => skillKey(skill) === requested);
+    const [scope, name, extra] = requested.split('/');
+    const match = !extra && scope === 'custom'
+      ? skills.find((skill) => skill.scope === 'custom' && skill.name === name)
+      : skills.find((skill) => skillKey(skill) === requested);
     return { skill: match, ambiguous: false };
   }
 
@@ -228,14 +234,14 @@ async function validateRegistry() {
       reportValidationError(errors, `${key} missing YAML frontmatter`);
       continue;
     }
-    for (const field of ['name', 'version', 'description']) {
+    for (const field of ['name', 'description']) {
       if (!frontmatter[field]) reportValidationError(errors, `${key} frontmatter missing ${field}`);
     }
     if (frontmatter.name && frontmatter.name !== skill.name) {
       reportValidationError(errors, `${key} frontmatter name ${frontmatter.name} does not match registry name`);
     }
-    if (frontmatter.version && frontmatter.version !== skill.version) {
-      reportValidationError(errors, `${key} frontmatter version ${frontmatter.version} does not match registry version ${skill.version}`);
+    if (frontmatter.version) {
+      reportValidationError(errors, `${key} frontmatter must not include version; keep versions in registry.json`);
     }
   }
 
@@ -468,11 +474,11 @@ program
 
 program
   .command('diff-global')
-  .description('Compare shared/system inventory skills against global runtime skill targets without writing')
+  .description('Compare custom/system inventory skills against global runtime skill targets without writing')
   .action(async () => {
     try {
       const registry = await readRegistry();
-      const globalSkills = registry.skills.filter((skill) => ['shared', 'system'].includes(skill.scope));
+      const globalSkills = registry.skills.filter((skill) => ['custom', 'system'].includes(skill.scope));
       for (const skill of sortSkills(globalSkills)) {
         printDiffResult(await diffArtifact(skill, skillKey(skill)));
       }

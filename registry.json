@@ -151,12 +151,68 @@
   "managedAgents": [
     {
       "type": "agents",
-      "name": "global-agents",
+      "name": "agents-core",
       "version": "0.1.0",
-      "scope": "global",
-      "path": "inventory/agents/AGENTS.md",
+      "scope": "source",
+      "path": "inventory/agents/core.md",
+      "installable": false,
+      "sourceOnly": true
+    },
+    {
+      "type": "agents",
+      "name": "codex-agents",
+      "version": "0.1.0",
+      "scope": "codex",
+      "path": "inventory/agents/codex/AGENTS.md",
       "installable": false,
       "runtimeTarget": "~/.codex/AGENTS.md"
+    },
+    {
+      "type": "agents",
+      "name": "copilot-cli-agents",
+      "version": "0.1.0",
+      "scope": "copilot-cli",
+      "path": "inventory/agents/copilot-cli/AGENTS.md",
+      "installable": false,
+      "runtimeTarget": "~/.copilot/instructions/AGENTS.md"
+    },
+    {
+      "type": "agents",
+      "name": "claude-code-agents",
+      "version": "0.1.0",
+      "scope": "claude-code",
+      "path": "inventory/agents/claude-code/CLAUDE.md",
+      "installable": false,
+      "runtimeTarget": "~/.claude/CLAUDE.md"
+    }
+  ],
+  "managedSubagents": [
+    {
+      "type": "subagents",
+      "name": "codex-subagents",
+      "version": "0.1.0",
+      "scope": "codex",
+      "path": "inventory/subagents/codex",
+      "installable": false,
+      "runtimeTarget": "~/.codex/agents"
+    },
+    {
+      "type": "subagents",
+      "name": "copilot-cli-subagents",
+      "version": "0.1.0",
+      "scope": "copilot-cli",
+      "path": "inventory/subagents/copilot-cli",
+      "installable": false,
+      "runtimeTarget": "~/.copilot/agents"
+    },
+    {
+      "type": "subagents",
+      "name": "claude-code-subagents",
+      "version": "0.1.0",
+      "scope": "claude-code",
+      "path": "inventory/subagents/claude-code",
+      "installable": false,
+      "runtimeTarget": "~/.claude/agents"
     }
   ]
 }

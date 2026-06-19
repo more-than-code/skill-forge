@@ -1,0 +1,9 @@
+name = "researcher"
+description = "Scoped code research, exploration, in-scope synthesis. Use for understanding existing code, reading APIs, tracing call graphs."
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Explore and synthesize. Stay within scope. No implementation unless explicitly asked.
+Return findings to parent for final decisions.
+"""

@@ -1,23 +1,26 @@
-# AGENTS.md (Spec-Driven, Risk-Tiered, Skills-Compatible)
+# Agent Core Instructions (Spec-Driven, Risk-Tiered, Skills-Compatible)
 
-This file defines **how** agents operate — process, workflow, and safety boundaries.
+This file contains shared process instructions for agentic coding tools. It is a source artifact, not a runtime target by itself.
+
+Tool-specific files should include these rules and add only the runtime paths, delegation model, and instruction-loading behavior for that tool.
 
 Domain expertise is packaged as Agent Skills in global and project-local skill directories. This file references them by name.
 
 ### Skill Activation Protocol
 1. **Discovery:** At session start, scan skill metadata only. Do not load full skill bodies during discovery.
 2. **Discovery paths:**
-   - Global shared skills: `~/.codex/skills/*/SKILL.md`
-   - Global system skills: `~/.codex/skills/.system/*/SKILL.md`
-   - Project-local skills: `.agents/skills/*/SKILL.md`
+   - Tool-neutral shared skills: `~/.agents/skills/*/SKILL.md`
+   - Tool-neutral project-local skills: `.agents/skills/*/SKILL.md`
+   - Tool-specific global/shared skill directories configured by the active coding tool.
    - Repository custom skill inventory: `inventory/skills/*/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 3. **Metadata load:** Read frontmatter (`name`, `description`, and small metadata fields) only. These fields decide activation.
 4. **Precedence and duplicates:**
    - Resolve same-name skills in this order:
      1. `.agents/skills/<name>/SKILL.md` for project-local overrides.
      2. `inventory/skills/<name>/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill.
-     3. `~/.codex/skills/<name>/SKILL.md` for global shared skills.
-     4. `~/.codex/skills/.system/<name>/SKILL.md` for Codex/platform workflows.
+     3. `~/.agents/skills/<name>/SKILL.md` for tool-neutral global shared skills.
+     4. The active tool's configured global/shared skill directory.
+     5. The active tool's system/platform skills, only when they are relevant to the requested workflow.
    - Never activate more than one copy of the same skill name.
    - Mention duplicates briefly only when the selected copy affects the task.
 5. **Activation priority:** Activate the minimal useful set, in this order:
@@ -34,8 +37,9 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
 9. **Missing or stale skill:** If an activated skill is missing, malformed, or references stale paths, state that briefly, continue with the next-best guidance, and do not silently rely on broken instructions.
 
 ### Skill Location Policy
-- Put reusable, cross-project skills in `~/.codex/skills/`.
-- Keep Codex/platform workflow skills in `~/.codex/skills/.system/`.
+- Prefer `~/.agents/skills/` for reusable skills that should work across multiple coding tools.
+- Put tool-specific global skills in that tool's global skill directory only when they rely on that tool's platform behavior.
+- Keep platform workflow skills in the owning tool's system directory.
 - Put project-specific overrides in `.agents/skills/` when the project wants to change behavior for a shared skill name.
 - Use `inventory/skills/` only when the repository itself is a skill registry or intentionally stores installable custom skills there. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 - Do not duplicate shared skills into every repository unless the project intentionally needs a forked version.
@@ -45,7 +49,7 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
 
 **Philosophy:** Spec-driven development. Explore → Spec → Implement. Code is the last step.
 
-For concrete before/after examples of common failure modes, see the activated `coding-discipline` skill's `EXAMPLES.md` (project-local override or `~/.codex/skills/coding-discipline/EXAMPLES.md`).
+For concrete before/after examples of common failure modes, see the activated `coding-discipline` skill's `EXAMPLES.md` (project-local override, `~/.agents/skills/coding-discipline/EXAMPLES.md`, or the active tool's global skill directory).
 
 ---
 
@@ -143,7 +147,7 @@ Strong success criteria let agents loop independently. Weak criteria ("make it w
 - **Implement.**
 
 ### Tier 2
-- **Explore** (subagents recommended — §7):
+- **Explore** (isolated helper/subagent recommended when the active tool supports it — §7):
   - Read affected modules, tests, data flow.
   - Identify callers, consumers, side effects.
   - Validate assumptions with evidence.
@@ -157,7 +161,7 @@ Strong success criteria let agents loop independently. Weak criteria ("make it w
 - **Implement** per spec. Divergence → update spec first.
 
 ### Tier 3
-- **Explore** (subagents mandatory — §7):
+- **Explore** (isolated helper/subagent mandatory when the active tool supports it; otherwise perform the same exploration explicitly in the main context and state that no helper capability was available — §7):
   - All Tier 2 exploration, plus:
   - Map downstream consumers and contracts.
   - Research alternatives and trade-offs.
@@ -291,7 +295,7 @@ Eight review lenses:
 | 2 | Required | Required | Required | Required | If affected | Optional | — | If frontend |
 | 3 | Required | Required | Required | Required | Required | Required | Required | If frontend |
 
-For Tier 3, spawn a review subagent per lens (§7).
+For Tier 3, use a separate review subagent per lens when the active tool supports subagents (§7). If not, run the same review lenses sequentially in the main context and record that fallback.
 
 **Findings:** Critical/High → fix or log approved debt with owner. Medium/Low → note and justify.
 
@@ -304,23 +308,27 @@ For Tier 3, spawn a review subagent per lens (§7).
 
 ---
 
-## 7) Subagent Strategy
+## 7) Delegation Strategy
 
-Keep main context clean. Parallelize work. **Drive exploration before spec writing.**
+Keep main context clean. Parallelize work when the active tool supports safe parallel delegation. **Drive exploration before spec writing.**
 
-One task per subagent. Name descriptively.
+This section is capability-based. Different tools may expose named subagents, helper agents, tasks, or no delegation at all. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
+
+Maintained tool-specific subagent definitions live under `inventory/subagents/<tool>/`. Do not assume subagent file formats are portable across tools.
+
+When subagents are available, use one task per subagent and name descriptively.
 
 **Naming convention:** `[phase]-[scope]-[task]` (e.g. `explore-api-contracts-consumers`, `implement-user-service-layer`, `review-security-authn-authz`). Avoid generic names like `explore` or `fix-stuff`.
 
 | Phase | Tier 1 | Tier 2 | Tier 3 |
 |-------|--------|--------|--------|
-| Exploration | — | Recommended | **Mandatory** |
+| Exploration | — | Recommended if supported | **Mandatory if supported** |
 | Implementation | — | Optional (3+ files) | Recommended |
 | Review | — | Optional | Recommended (per lens) |
 
-### Exploration subagents (most important use)
+### Exploration delegation (most important use)
 
-Spawn before writing Tier 2/3 specs:
+Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execute these checks directly:
 
 - **Codebase analysis:** Trace interface, callers, dependencies of module X.
 - **Behavior validation:** Run command, confirm assumption X.
@@ -332,11 +340,11 @@ Spawn before writing Tier 2/3 specs:
 
 Synthesize findings in main thread → write spec from validated knowledge.
 
-### Implementation subagents
-Split by layer/component. Main thread orchestrates. **No two subagents modify the same file.**
+### Implementation delegation
+Split by layer/component only when the tool can keep edits isolated. Main thread owns orchestration. **No two helpers modify the same file.**
 
-### Review subagents
-One per lens (§6). Returns: findings, severity, locations, reasoning, suggested fix.
+### Review delegation
+Use one helper per lens (§6) when supported. Each returns: findings, severity, locations, reasoning, suggested fix. Without helpers, run each lens sequentially in the main context.
 
 ---
 
@@ -348,7 +356,7 @@ Respects §15 restricted operations. Activate: `testing-strategy` (Bug Fix Proto
 
 ### Sequence (strict order — no skipping)
 
-1. **Explore** — trace behavior, errors, logs, code. Subagents for complex cases.
+1. **Explore** — trace behavior, errors, logs, code. Use helpers/subagents for complex cases when available.
 2. **Diagnose** — root cause, not symptoms.
 3. **Classify** — tier the *fix*. Tier 3 fix → spec + approval.
 4. **Spec** — Tier 2/3 per §3. Tier 1: state change and rationale.
@@ -526,8 +534,8 @@ Tier 2/3: track progress in `todo.md` until archived.
 
 - Don't load everything. Search, grep, targeted reads.
 - Architecture docs and READMEs first.
-- Exploration subagents for unfamiliar modules (§7).
-- On exhaustion: subagent summaries, write to `tasks/notes.md`, summarize state to file.
+- Helper/subagent exploration for unfamiliar modules when available (§7).
+- On context exhaustion: helper summaries if available, write to `tasks/notes.md`, summarize state to file.
 
 ---
 
@@ -576,7 +584,7 @@ If gates are waived, explicitly state waiver text + timestamp + risk.
 - [ ] Summary with spec reference + evidence
 
 ### Tier 3
-- [ ] Exploration complete (subagents mandatory)
+- [ ] Exploration complete (subagents/helpers mandatory when supported; fallback documented otherwise)
 - [ ] Full spec with applicable skill-based sections
 - [ ] Spec approved by user
 - [ ] Implemented per spec
@@ -603,36 +611,3 @@ If gates are waived, explicitly state waiver text + timestamp + risk.
 | Local services with containers or Compose | 2 | podman-utilization, security-baseline, coding-discipline, code-quality | No |
 | Deploy to production | 3 | deployment-strategy, production-readiness | Yes |
 | New frontend flow with routing + state | 3 | frontend-engineering, ui-portability-baseline, security-baseline, coding-discipline, code-quality | Yes |
-
-## Task Delegation
-
-Spawn subagents for isolated context, parallel work, or bulk mechanical tasks.
-Never spawn when the parent needs to hold reasoning together.
-
-Agent routing:
-- `bulk_worker`: formatting, renaming, repetitive file transforms, enumeration
-- `researcher`: code exploration, API tracing, in-scope synthesis, reading tests
-- `planner`: architecture decisions, multi-file tradeoffs, design with real stakes
-
-If a subagent realizes it's undertiered, it must return to parent — not upgrade itself.
-Parent owns final output and cross-spawn synthesis. User instructions override all.
-
----
-
-## Agent Reference
-
-| Agent | Model | Best for |
-|---|---|---|
-| `bulk_worker` | `gpt-5.4-mini` | Formatting, renaming, repetitive transforms, file enumeration |
-| `researcher` | `gpt-5.3-codex` | Code exploration, API tracing, reading tests, in-scope synthesis |
-| `planner` | `gpt-5.5` | Architecture decisions, multi-file tradeoffs, design with real stakes |
-
-### Sandbox modes
-
-| Mode | Can write? | Use for |
-|---|---|---|
-| `read-only` | ❌ | Pure inspection (not used here) |
-| `workspace-write` | ✅ within repo | All three agents above |
-| `danger-full-access` | ✅ unrestricted | Throwaway VMs only |
-
----

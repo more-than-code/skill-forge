@@ -11,13 +11,29 @@ import inquirer from 'inquirer';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CONFIG_FILE = '.skillforge.json';
 const REPO_ROOT = path.join(__dirname, '..');
 const REGISTRY_PATH = path.join(REPO_ROOT, 'registry.json');
 const REGISTRY_LOCK_PATH = path.join(REPO_ROOT, 'registry-lock.json');
-const DEFAULT_INSTALL_DIR = '.skills';
-
 const SCOPE_PRIORITY = ['custom'];
+const ARTIFACT_TYPES = ['skills', 'agents', 'subagents'];
+const TOOL_LABELS = {
+  codex: 'Codex',
+  'copilot-cli': 'Copilot CLI',
+  'claude-code': 'Claude Code'
+};
+const TOOL_SKILL_TARGETS = {
+  codex: '~/.codex/skills',
+  'copilot-cli': '~/.copilot/skills',
+  'claude-code': '~/.claude/skills'
+};
+const ARTIFACT_TYPE_ALIASES = {
+  skill: 'skills',
+  skills: 'skills',
+  agent: 'agents',
+  agents: 'agents',
+  subagent: 'subagents',
+  subagents: 'subagents'
+};
 
 const program = new Command();
 
@@ -42,6 +58,11 @@ function skillKey(skill) {
   return `${skill.scope}/${skill.name}`;
 }
 
+function artifactKey(artifact, type) {
+  if (type === 'skills') return skillKey(artifact);
+  return artifact.name;
+}
+
 function sortSkills(skills) {
   return [...skills].sort((a, b) => {
     const aPriority = SCOPE_PRIORITY.includes(a.scope) ? SCOPE_PRIORITY.indexOf(a.scope) : SCOPE_PRIORITY.length;
@@ -64,9 +85,9 @@ function resolveSkill(registry, requested) {
 
   if (scoped) {
     const [scope, name, extra] = requested.split('/');
-      const match = !extra && scope === 'custom'
-        ? skills.find((skill) => skill.scope === 'custom' && skill.name === name)
-        : skills.find((skill) => skillKey(skill) === requested);
+    const match = !extra && scope === 'custom'
+      ? skills.find((skill) => skill.scope === 'custom' && skill.name === name)
+      : skills.find((skill) => skillKey(skill) === requested);
     return { skill: match, ambiguous: false };
   }
 
@@ -148,7 +169,7 @@ async function buildPackageEntry(artifact) {
     .join('\n');
   const integrity = `sha256-${crypto.createHash('sha256').update(treeInput).digest('base64')}`;
 
-  return {
+  const entry = {
     name: artifact.name,
     version: artifact.version,
     type: artifact.type,
@@ -158,6 +179,12 @@ async function buildPackageEntry(artifact) {
     integrity,
     files
   };
+  if (artifact.sourceOnly === true) entry.sourceOnly = true;
+  return entry;
+}
+
+async function hashBytes(bytes) {
+  return `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
 }
 
 async function buildLock(registry) {
@@ -172,8 +199,14 @@ async function buildLock(registry) {
     packages[skill.path] = await buildPackageEntry(skill);
   }
 
-  for (const artifact of registry.managedAgents) {
-    packages[path.dirname(artifact.path)] = await buildPackageEntry(artifact);
+  for (const artifact of [
+    ...(registry.managedAgents || []),
+    ...(registry.managedSubagents || [])
+  ]) {
+    const absolutePath = path.join(REPO_ROOT, artifact.path);
+    const stat = await fs.stat(absolutePath);
+    const packagePath = stat.isDirectory() ? artifact.path : path.dirname(artifact.path);
+    packages[packagePath] = await buildPackageEntry(artifact);
   }
 
   return {
@@ -205,6 +238,9 @@ async function validateRegistry() {
   if (!registry.version) reportValidationError(errors, 'registry.json missing version');
   if (!Array.isArray(registry.skills)) reportValidationError(errors, 'registry.json missing skills array');
   if (!Array.isArray(registry.managedAgents)) reportValidationError(errors, 'registry.json missing managedAgents array');
+  if (registry.managedSubagents && !Array.isArray(registry.managedSubagents)) {
+    reportValidationError(errors, 'registry.json managedSubagents must be an array');
+  }
 
   const skillKeys = new Set();
   const names = new Map();
@@ -248,9 +284,15 @@ async function validateRegistry() {
     if (keys.length > 1) warnings.push(`${name} exists in multiple scopes: ${keys.join(', ')}`);
   }
 
-  for (const artifact of registry.managedAgents || []) {
-    for (const field of ['name', 'version', 'path', 'runtimeTarget']) {
-      if (!artifact[field]) reportValidationError(errors, `managed agent missing ${field}`);
+  for (const artifact of [
+    ...(registry.managedAgents || []),
+    ...(registry.managedSubagents || [])
+  ]) {
+    for (const field of ['name', 'version', 'path']) {
+      if (!artifact[field]) reportValidationError(errors, `managed artifact missing ${field}`);
+    }
+    if (!artifact.sourceOnly && !artifact.runtimeTarget) {
+      reportValidationError(errors, `${artifact.name} missing runtimeTarget`);
     }
     if (artifact.path && !await fs.pathExists(path.join(REPO_ROOT, artifact.path))) {
       reportValidationError(errors, `${artifact.name} missing file at ${artifact.path}`);
@@ -269,9 +311,24 @@ async function validateRegistry() {
 async function diffArtifact(artifact, label) {
   if (!artifact.runtimeTarget) return { status: 'skip', label, reason: 'no runtime target' };
 
+  const registry = await readRegistry();
   const sourcePath = path.join(REPO_ROOT, artifact.path);
   const targetPath = expandHome(artifact.runtimeTarget);
   if (!await fs.pathExists(targetPath)) return { status: 'missing', label, targetPath };
+
+  if (artifact.type === 'agents') {
+    const sourceContent = await composeAgentContent(registry, artifact);
+    const targetContent = await fs.readFile(targetPath);
+    const sourceIntegrity = await hashBytes(sourceContent);
+    const targetIntegrity = await hashBytes(targetContent);
+    return {
+      status: sourceIntegrity === targetIntegrity ? 'clean' : 'diff',
+      label,
+      targetPath,
+      sourceIntegrity,
+      targetIntegrity
+    };
+  }
 
   const sourceEntry = await buildPackageEntry({ ...artifact, runtimeTarget: null });
   const targetEntry = await buildPackageEntry({
@@ -303,6 +360,291 @@ function printDiffResult(result) {
   }
 }
 
+function getArtifactsByType(registry, type) {
+  if (type === 'skills') return getSkillEntries(registry, { installableOnly: true });
+  if (type === 'agents') return (registry.managedAgents || []).filter((artifact) => !artifact.sourceOnly);
+  if (type === 'subagents') return registry.managedSubagents || [];
+  return [];
+}
+
+function getToolChoices(registry) {
+  const seen = new Set();
+  const choices = [];
+
+  if ((registry.skills || []).some((skill) => skill.installable)) {
+    seen.add('codex');
+    choices.push({
+      name: TOOL_LABELS.codex,
+      value: 'codex'
+    });
+  }
+
+  for (const artifact of [
+    ...(registry.managedAgents || []),
+    ...(registry.managedSubagents || [])
+  ].filter((entry) => entry.runtimeTarget)) {
+    if (seen.has(artifact.scope)) continue;
+    seen.add(artifact.scope);
+    choices.push({
+      name: TOOL_LABELS[artifact.scope] || artifact.scope,
+      value: artifact.scope
+    });
+  }
+
+  return choices;
+}
+
+function normalizeArtifactType(type) {
+  return ARTIFACT_TYPE_ALIASES[type] || type;
+}
+
+function filterArtifactsForTarget(type, artifacts, target) {
+  if (type === 'skills') {
+    return artifacts;
+  }
+  return artifacts.filter((artifact) => artifact.scope === target);
+}
+
+function resolveArtifactFromList(type, artifacts, requested) {
+  if (type === 'skills') {
+    const resolved = resolveSkill({ skills: artifacts }, requested);
+    return {
+      artifact: resolved.skill,
+      ambiguous: resolved.ambiguous,
+      matches: resolved.matches
+    };
+  }
+
+  const matches = artifacts.filter((artifact) => artifact.name === requested || artifactKey(artifact, type) === requested);
+  return {
+    artifact: matches[0],
+    ambiguous: matches.length > 1,
+    matches
+  };
+}
+
+function getAvailableArtifactTypes(registry, target) {
+  return ARTIFACT_TYPES.filter((type) => filterArtifactsForTarget(type, getArtifactsByType(registry, type), target).length > 0);
+}
+
+async function chooseTool(registry, providedTarget) {
+  const choices = getToolChoices(registry);
+  if (providedTarget) {
+    const targets = choices.map((choice) => choice.value);
+    if (!targets.includes(providedTarget)) {
+      throw new Error(`Unsupported target "${providedTarget}". Use one of: ${targets.join(', ')}`);
+    }
+    return providedTarget;
+  }
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'target',
+      message: 'Select target tool:',
+      choices
+    }
+  ]);
+  return answer.target;
+}
+
+async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES) {
+  if (providedType) {
+    const type = normalizeArtifactType(providedType);
+    if (!ARTIFACT_TYPES.includes(type)) {
+      throw new Error(`Unsupported artifact type "${providedType}". Use one of: skill, agent, subagent.`);
+    }
+    if (!availableTypes.includes(type)) {
+      throw new Error(`No ${type} artifacts are available for the selected target.`);
+    }
+    return type;
+  }
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'type',
+      message: 'Select category to install:',
+      choices: [
+        { name: 'Skills', value: 'skills' },
+        { name: 'Agents', value: 'agents' },
+        { name: 'Subagents', value: 'subagents' }
+      ].filter((choice) => availableTypes.includes(choice.value))
+    }
+  ]);
+  return answer.type;
+}
+
+async function chooseTargetPath(defaultPath, providedPath) {
+  if (providedPath) return providedPath;
+  const answer = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'targetPath',
+      message: 'Target path:',
+      default: defaultPath
+    }
+  ]);
+  return answer.targetPath;
+}
+
+async function chooseArtifacts(type, artifacts, requestedName) {
+  if (requestedName) {
+    const resolved = resolveArtifactFromList(type, artifacts, requestedName);
+    if (!resolved.artifact) throw new Error(`${type} artifact "${requestedName}" not found.`);
+    if (resolved.ambiguous) {
+      console.log(chalk.yellow(`> Multiple artifacts named "${requestedName}" found; using ${artifactKey(resolved.artifact, type)}.`));
+      console.log(chalk.gray(`> Use one of ${resolved.matches.map((artifact) => artifactKey(artifact, type)).join(' or ')} to be explicit.`));
+    }
+    return [resolved.artifact];
+  }
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'checkbox',
+      name: 'selected',
+      message: `Select ${type} to install:`,
+      choices: artifacts.map((artifact) => ({
+        name: `${artifactKey(artifact, type)} (v${artifact.version})`,
+        value: artifactKey(artifact, type)
+      })),
+      validate: (selected) => selected.length < 1 ? 'You must choose at least one artifact.' : true
+    }
+  ]);
+
+  return answer.selected.map((selected) => resolveArtifactFromList(type, artifacts, selected).artifact);
+}
+
+function defaultTargetPath(type, artifacts, target) {
+  if (type === 'skills') return TOOL_SKILL_TARGETS[target];
+  return artifacts[0]?.runtimeTarget;
+}
+
+function destinationForArtifact(type, artifact, targetPath) {
+  const expanded = expandHome(targetPath);
+  if (type === 'skills') return path.join(expanded, artifact.name);
+  return expanded;
+}
+
+function getAgentCore(registry) {
+  return (registry.managedAgents || []).find((artifact) => artifact.sourceOnly && artifact.name === 'agents-core');
+}
+
+async function composeAgentContent(registry, artifact) {
+  const core = getAgentCore(registry);
+  if (!core) throw new Error('Missing source-only agents-core artifact.');
+
+  const corePath = path.join(REPO_ROOT, core.path);
+  const overlayPath = path.join(REPO_ROOT, artifact.path);
+  const coreContent = await fs.readFile(corePath, 'utf8');
+  const overlayContent = await fs.readFile(overlayPath, 'utf8');
+  return `${coreContent.trimEnd()}\n\n---\n\n${overlayContent.trimEnd()}\n`;
+}
+
+async function confirmOverwrite(destPath, yes) {
+  if (!await fs.pathExists(destPath)) return true;
+  if (yes) return true;
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'overwrite',
+      message: `${destPath} already exists. Overwrite?`,
+      default: false
+    }
+  ]);
+  return answer.overwrite;
+}
+
+async function findFileCollisions(sourceDir, destDir) {
+  const collisions = [];
+  for (const sourceFile of await listFilesRecursive(sourceDir)) {
+    const relativeFile = path.relative(sourceDir, sourceFile);
+    const destFile = path.join(destDir, relativeFile);
+    if (await fs.pathExists(destFile)) collisions.push(destFile);
+  }
+  return collisions;
+}
+
+async function confirmDirectoryMerge(sourcePath, destPath, yes) {
+  if (!await fs.pathExists(destPath)) return true;
+
+  const destStat = await fs.stat(destPath);
+  if (!destStat.isDirectory()) {
+    throw new Error(`${destPath} exists and is not a directory.`);
+  }
+
+  const collisions = await findFileCollisions(sourcePath, destPath);
+  if (collisions.length === 0) return true;
+  if (yes) return true;
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'overwrite',
+      message: `${collisions.length} file(s) already exist under ${destPath}. Overwrite matching file(s)?`,
+      default: false
+    }
+  ]);
+  return answer.overwrite;
+}
+
+async function copyArtifact(type, artifact, targetPath, { registry, yes = false } = {}) {
+  const sourcePath = path.join(REPO_ROOT, artifact.path);
+  const destPath = destinationForArtifact(type, artifact, targetPath);
+  const sourceStat = await fs.stat(sourcePath);
+
+  const shouldCopy = sourceStat.isDirectory()
+    ? await confirmDirectoryMerge(sourcePath, destPath, yes)
+    : await confirmOverwrite(destPath, yes);
+
+  if (!shouldCopy) {
+    console.log(chalk.yellow(`  Skipped ${artifactKey(artifact, type)}`));
+    return { copied: false, destPath };
+  }
+
+  await fs.ensureDir(path.dirname(destPath));
+  if (type === 'agents') {
+    await fs.writeFile(destPath, await composeAgentContent(registry, artifact));
+  } else {
+    await fs.copy(sourcePath, destPath, { overwrite: true });
+  }
+  console.log(chalk.green(`  ${artifactKey(artifact, type)} -> ${destPath}`));
+  return { copied: true, destPath };
+}
+
+async function installArtifacts({
+  artifactName,
+  providedType,
+  providedTarget,
+  providedPath,
+  yes = false
+}) {
+  const registry = await readRegistry();
+  const target = await chooseTool(registry, providedTarget);
+  const availableTypes = getAvailableArtifactTypes(registry, target);
+  if (availableTypes.length === 0) throw new Error(`No artifacts are available for target "${target}".`);
+
+  const type = await chooseArtifactType(providedType, availableTypes);
+  const allArtifacts = getArtifactsByType(registry, type);
+  const targetArtifacts = filterArtifactsForTarget(type, allArtifacts, target);
+  if (targetArtifacts.length === 0) throw new Error(`No ${type} artifacts match target "${target}".`);
+
+  const targetDefault = defaultTargetPath(type, targetArtifacts, target);
+  const targetPath = await chooseTargetPath(targetDefault, providedPath);
+  if (!targetPath) throw new Error(`No target path available for ${type}.`);
+
+  const artifacts = await chooseArtifacts(type, targetArtifacts, artifactName);
+  let copied = 0;
+
+  for (const artifact of artifacts) {
+    const result = await copyArtifact(type, artifact, targetPath, { registry, yes });
+    if (result.copied) copied += 1;
+  }
+
+  return { type, copied, total: artifacts.length };
+}
+
 program
   .command('list')
   .description('List available skills')
@@ -332,95 +674,52 @@ program
 
 program
   .command('add [skillName]')
-  .description('Install specific skill(s) into your project')
-  .option('-d, --dir <path>', 'Destination directory')
+  .description('Install specific skill(s); use install for agents and subagents')
+  .option('-d, --dir <path>', 'Destination directory for skills')
+  .option('--target <tool>', 'Target tool for default path selection')
+  .option('-y, --yes', 'Overwrite existing target paths without prompting')
   .action(async (skillName, options) => {
     try {
-      const registry = await readRegistry();
-      const installableSkills = getSkillEntries(registry, { installableOnly: true });
-      const configPath = path.join(process.cwd(), CONFIG_FILE);
-      let skillsToInstall = [];
-
-      if (skillName) {
-        const resolved = resolveSkill(registry, skillName);
-        if (!resolved.skill) {
-          console.error(chalk.red(`Error: Skill "${skillName}" not found.`));
-          process.exitCode = 1;
-          return;
-        }
-        if (!resolved.skill.installable) {
-          console.error(chalk.red(`Error: Skill "${skillName}" is tracked but not installable.`));
-          process.exitCode = 1;
-          return;
-        }
-        if (resolved.ambiguous) {
-          console.log(chalk.yellow(`> Multiple skills named "${skillName}" found; using ${skillKey(resolved.skill)}.`));
-          console.log(chalk.gray(`> Use a scoped name like ${resolved.matches.map(skillKey).join(' or ')} to be explicit.`));
-        }
-        skillsToInstall.push(resolved.skill);
-      } else {
-        const answers = await inquirer.prompt([
-          {
-            type: 'checkbox',
-            name: 'selectedSkills',
-            message: 'Which skills would you like to install?',
-            choices: installableSkills.map((skill) => ({
-              name: `${skillKey(skill)} (v${skill.version})`,
-              value: skillKey(skill)
-            })),
-            validate: (answer) => answer.length < 1 ? 'You must choose at least one skill.' : true
-          }
-        ]);
-        skillsToInstall = answers.selectedSkills.map((selected) => resolveSkill(registry, selected).skill);
-      }
-
-      let installDir = options.dir;
-      if (!installDir && await fs.pathExists(configPath)) {
-        try {
-          const config = await fs.readJson(configPath);
-          if (config.installDir) {
-            installDir = config.installDir;
-            console.log(chalk.gray(`> Using saved install directory: ${installDir}`));
-          }
-        } catch {
-          // Ignore invalid config; prompt below.
-        }
-      }
-
-      if (!installDir) {
-        const answer = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'dir',
-            message: 'Where should skills be installed?',
-            default: DEFAULT_INSTALL_DIR
-          }
-        ]);
-        installDir = answer.dir;
-        await fs.writeJson(configPath, { installDir }, { spaces: 2 });
-        console.log(chalk.gray(`> Saved preference to ${CONFIG_FILE}`));
-      }
-
-      console.log(chalk.blue(`\nInstalling ${skillsToInstall.length} skill(s) to "${installDir}/"...\n`));
-      for (const skill of skillsToInstall) {
-        const sourcePath = path.join(REPO_ROOT, skill.path);
-        const destPath = path.join(process.cwd(), installDir, skill.name);
-
-        if (await fs.pathExists(destPath)) {
-          console.log(chalk.yellow(`  Updating existing skill: ${skill.name}`));
-        }
-
-        await fs.ensureDir(path.dirname(destPath));
-        await fs.copy(sourcePath, destPath);
-        console.log(chalk.green(`  ${skillKey(skill)}`));
-      }
-
-      console.log(chalk.blue('\nDone!'));
+      const result = await installArtifacts({
+        artifactName: skillName,
+        providedType: 'skills',
+        providedTarget: options.target || 'codex',
+        providedPath: options.dir,
+        yes: options.yes
+      });
+      console.log(chalk.blue(`\nDone. Installed ${result.copied}/${result.total} skill artifact(s).`));
     } catch (error) {
       console.error(chalk.red('Error installing skill:'), error.message);
       process.exitCode = 1;
     }
   });
+
+function registerInstallCommand() {
+  program
+    .command('install [artifactName]')
+    .description('Install skills, agents, or subagents with target selection and overwrite confirmation')
+    .option('-t, --type <type>', 'Artifact type: skill, agent, or subagent')
+    .option('--target <tool>', 'Target tool: codex, copilot-cli, or claude-code')
+    .option('-p, --path <path>', 'Custom target path')
+    .option('-y, --yes', 'Overwrite existing target paths without prompting')
+    .action(async (artifactName, options) => {
+      try {
+        const result = await installArtifacts({
+          artifactName,
+          providedType: options.type,
+          providedTarget: options.target,
+          providedPath: options.path,
+          yes: options.yes
+        });
+        console.log(chalk.blue(`\nDone. Installed ${result.copied}/${result.total} ${result.type} artifact(s).`));
+      } catch (error) {
+        console.error(chalk.red('Error running install:'), error.message);
+        process.exitCode = 1;
+      }
+    });
+}
+
+registerInstallCommand();
 
 program
   .command('validate')
@@ -466,6 +765,21 @@ program
       }
     } catch (error) {
       console.error(chalk.red('Error diffing managed agents:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('diff-subagents')
+  .description('Compare managed subagent artifacts against their runtime targets without writing')
+  .action(async () => {
+    try {
+      const registry = await readRegistry();
+      for (const artifact of registry.managedSubagents || []) {
+        printDiffResult(await diffArtifact(artifact, artifact.name));
+      }
+    } catch (error) {
+      console.error(chalk.red('Error diffing managed subagents:'), error.message);
       process.exitCode = 1;
     }
   });

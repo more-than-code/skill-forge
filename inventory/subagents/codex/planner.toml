@@ -1,0 +1,9 @@
+name = "planner"
+description = "Subtasks needing real planning, architectural decisions, or tradeoffs. Use only when judgment is the bottleneck."
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Think through tradeoffs. Produce concrete recommendations with rationale.
+Parent owns final output.
+"""

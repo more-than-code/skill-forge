@@ -17,7 +17,7 @@ const REGISTRY_PATH = path.join(REPO_ROOT, 'registry.json');
 const REGISTRY_LOCK_PATH = path.join(REPO_ROOT, 'registry-lock.json');
 const DEFAULT_INSTALL_DIR = '.skills';
 
-const SCOPE_PRIORITY = ['custom', 'system'];
+const SCOPE_PRIORITY = ['custom'];
 
 const program = new Command();
 
@@ -51,9 +51,8 @@ function sortSkills(skills) {
   });
 }
 
-function getSkillEntries(registry, { includeSystem = false, installableOnly = false } = {}) {
+function getSkillEntries(registry, { installableOnly = false } = {}) {
   return sortSkills(registry.skills.filter((skill) => {
-    if (!includeSystem && skill.scope === 'system') return false;
     if (installableOnly && !skill.installable) return false;
     return true;
   }));
@@ -65,9 +64,9 @@ function resolveSkill(registry, requested) {
 
   if (scoped) {
     const [scope, name, extra] = requested.split('/');
-    const match = !extra && scope === 'custom'
-      ? skills.find((skill) => skill.scope === 'custom' && skill.name === name)
-      : skills.find((skill) => skillKey(skill) === requested);
+      const match = !extra && scope === 'custom'
+        ? skills.find((skill) => skill.scope === 'custom' && skill.name === name)
+        : skills.find((skill) => skillKey(skill) === requested);
     return { skill: match, ambiguous: false };
   }
 
@@ -307,12 +306,11 @@ function printDiffResult(result) {
 program
   .command('list')
   .description('List available skills')
-  .option('--all', 'Include system and non-installable inventory')
+  .option('--all', 'Include all tracked skill inventory')
   .action(async (options) => {
     try {
       const registry = await readRegistry();
       const skills = getSkillEntries(registry, {
-        includeSystem: options.all,
         installableOnly: !options.all
       });
 
@@ -474,11 +472,11 @@ program
 
 program
   .command('diff-global')
-  .description('Compare custom/system inventory skills against global runtime skill targets without writing')
+  .description('Compare custom inventory skills against global runtime skill targets without writing')
   .action(async () => {
     try {
       const registry = await readRegistry();
-      const globalSkills = registry.skills.filter((skill) => ['custom', 'system'].includes(skill.scope));
+      const globalSkills = registry.skills.filter((skill) => skill.runtimeTarget);
       for (const skill of sortSkills(globalSkills)) {
         printDiffResult(await diffArtifact(skill, skillKey(skill)));
       }

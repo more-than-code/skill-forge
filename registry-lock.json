@@ -8,7 +8,7 @@
       "name": "skill-forge",
       "version": "1.0.0"
     },
-    "inventory/skills/custom/api-contracts": {
+    "inventory/skills/api-contracts": {
       "name": "api-contracts",
       "version": "0.1.0",
       "type": "skill",
@@ -20,7 +20,7 @@
         "SKILL.md": "sha256-qkkGfblJz4dUpFarOQqBT3gzXlr7U28XIn1z9FxgIiw="
       }
     },
-    "inventory/skills/custom/audit-trail": {
+    "inventory/skills/audit-trail": {
       "name": "audit-trail",
       "version": "0.1.0",
       "type": "skill",
@@ -32,7 +32,7 @@
         "SKILL.md": "sha256-E/Bc8VSovxeVcj4t1GqU4ben2KnKIyHcUzfPNKuldw4="
       }
     },
-    "inventory/skills/custom/code-quality": {
+    "inventory/skills/code-quality": {
       "name": "code-quality",
       "version": "0.1.0",
       "type": "skill",
@@ -44,7 +44,7 @@
         "SKILL.md": "sha256-kQB7PmZtEiXCZBFbnVZcnLWwOVnyBSCBcBpY6Yxr/pE="
       }
     },
-    "inventory/skills/custom/coding-discipline": {
+    "inventory/skills/coding-discipline": {
       "name": "coding-discipline",
       "version": "0.1.0",
       "type": "skill",
@@ -57,7 +57,7 @@
         "SKILL.md": "sha256-y9K1Di0hHK3WHV6ZTpL/WiC5wzb4m6jP/I7hV0Vy1g8="
       }
     },
-    "inventory/skills/custom/data-migration": {
+    "inventory/skills/data-migration": {
       "name": "data-migration",
       "version": "0.1.0",
       "type": "skill",
@@ -69,7 +69,7 @@
         "SKILL.md": "sha256-mrgzf9dHh8JKspgAUrJsmXtetqCRF4oLZ8GY60GTJwY="
       }
     },
-    "inventory/skills/custom/deployment-strategy": {
+    "inventory/skills/deployment-strategy": {
       "name": "deployment-strategy",
       "version": "0.1.0",
       "type": "skill",
@@ -81,7 +81,7 @@
         "SKILL.md": "sha256-ZFVlM297XNB2q7FFGAxeJs9kTZ6S5iZB1V/htumranc="
       }
     },
-    "inventory/skills/custom/failure-analysis": {
+    "inventory/skills/failure-analysis": {
       "name": "failure-analysis",
       "version": "0.1.0",
       "type": "skill",
@@ -93,7 +93,7 @@
         "SKILL.md": "sha256-JOsHJ3TXjy182U7gjYgvsiRAw/Z9sAxy/0q5jE0TyaU="
       }
     },
-    "inventory/skills/custom/frontend-engineering": {
+    "inventory/skills/frontend-engineering": {
       "name": "frontend-engineering",
       "version": "0.1.0",
       "type": "skill",
@@ -108,7 +108,7 @@
         "sveltekit.md": "sha256-e+1KU1+BezkJaEfCL+M0tvFBTqoLtXDq96LWv7fPPDo="
       }
     },
-    "inventory/skills/custom/llm-integration": {
+    "inventory/skills/llm-integration": {
       "name": "llm-integration",
       "version": "0.1.0",
       "type": "skill",
@@ -120,7 +120,7 @@
         "SKILL.md": "sha256-dhKT1V6Mqe/I50Aa4RFcBPamHvpA80FLihWP5uU8md0="
       }
     },
-    "inventory/skills/custom/migration-deprecation": {
+    "inventory/skills/migration-deprecation": {
       "name": "migration-deprecation",
       "version": "0.1.0",
       "type": "skill",
@@ -132,7 +132,7 @@
         "SKILL.md": "sha256-OYYA3g///k+/Za8rzEWtrz8Tx2Vuw9/2RjTLb3nhRfg="
       }
     },
-    "inventory/skills/custom/performance-analysis": {
+    "inventory/skills/performance-analysis": {
       "name": "performance-analysis",
       "version": "0.1.0",
       "type": "skill",
@@ -144,7 +144,7 @@
         "SKILL.md": "sha256-66aEQdz68hQrq4YBk7pVGX3AT1adOIyYg9oHVOSr3vA="
       }
     },
-    "inventory/skills/custom/podman-utilization": {
+    "inventory/skills/podman-utilization": {
       "name": "podman-utilization",
       "version": "0.1.0",
       "type": "skill",
@@ -156,7 +156,7 @@
         "SKILL.md": "sha256-/CzB52pYpU7Y7j9WtQVbf8VFrYIMWyE1/EszD4jSouE="
       }
     },
-    "inventory/skills/custom/production-readiness": {
+    "inventory/skills/production-readiness": {
       "name": "production-readiness",
       "version": "0.1.0",
       "type": "skill",
@@ -168,7 +168,7 @@
         "SKILL.md": "sha256-hoA12WYCsn+PYTm5kcB+5B616uOi1qy9XKxGmadlrtg="
       }
     },
-    "inventory/skills/custom/security-baseline": {
+    "inventory/skills/security-baseline": {
       "name": "security-baseline",
       "version": "0.1.0",
       "type": "skill",
@@ -180,7 +180,7 @@
         "SKILL.md": "sha256-TmQqkT9LCc6dfrnEBO9fqvWVq8O/SKmyp0gucm55MGE="
       }
     },
-    "inventory/skills/custom/testing-strategy": {
+    "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
       "version": "0.1.0",
       "type": "skill",
@@ -192,7 +192,7 @@
         "SKILL.md": "sha256-Ze3BwrZ2PXjxoQ932kCPNhCUrKQeelRnbwO1aT5fF5k="
       }
     },
-    "inventory/skills/custom/ui-portability-baseline": {
+    "inventory/skills/ui-portability-baseline": {
       "name": "ui-portability-baseline",
       "version": "0.1.0",
       "type": "skill",
@@ -204,120 +204,16 @@
         "SKILL.md": "sha256-fPftQ+Z9tmAF2oDcD/K2TMjf+KWPOqvzd1jBsOlFlpE="
       }
     },
-    "inventory/skills/system/imagegen": {
-      "name": "imagegen",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "system",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/imagegen",
-      "integrity": "sha256-4j4CnW8Jx2Cw2hNGIE1gUqQzyiTsRrAJNMQf6mQHerc=",
-      "files": {
-        "agents/openai.yaml": "sha256-nKV0rxRYDceio9w3oXltF/k8uIUL5mUB8Hme+GA+ncA=",
-        "assets/imagegen-small.svg": "sha256-z/XzT1f/YLPukurt0XsV6W3Uued23z54k2yeANQr4pQ=",
-        "assets/imagegen.png": "sha256-lZUvZEBk656JD5jY2wchY0cYZSbkxBrWbTQgYp64biA=",
-        "LICENSE.txt": "sha256-TdE4aSReNWJGpbdwcjJHu7gKjwehgdHT2HOhc0KXzbk=",
-        "references/cli.md": "sha256-ONks2+xfNDBDmjhoztCjxWlODoSnXkbW5/egCspuZzs=",
-        "references/codex-network.md": "sha256-yIKYykSB9hFqFvp5h0NPyXf4sxHBu8DD2GL/0MWYEUg=",
-        "references/image-api.md": "sha256-ylQk38rVpMh7RAHRz/twv8wYx8osKB0SBF+CLln6QJM=",
-        "references/prompting.md": "sha256-qIxFmgMGBRU10baOuJmSXwihdcu80H1yqdDEPzMMuB8=",
-        "references/sample-prompts.md": "sha256-QzB4IfHbGOBr5QGJoHjz4czD7mtVI5NGFOIuZNJ1l6s=",
-        "scripts/image_gen.py": "sha256-Nej5+kfeyhEeRsY8SsIAjgkZjvZkwJJqnf3NZ0WqN+0=",
-        "scripts/remove_chroma_key.py": "sha256-P3ubFK1ckPN2GLwcFqA5ogdqvKEt3EGzrkcOKxytbA4=",
-        "SKILL.md": "sha256-WZgdI1GSIrzs8b5IuzdzC7xQU5zrDjWtCfzvmKPfGdM="
-      }
-    },
-    "inventory/skills/system/openai-docs": {
-      "name": "openai-docs",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "system",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/openai-docs",
-      "integrity": "sha256-jbXkF0yEmKHDMQf73IO5mpGj9LdO00eIgTDXPbTHPQY=",
-      "files": {
-        "agents/openai.yaml": "sha256-AExz9uAUCc/X22megV9f7UztO2PdLMJYdPZ5Hq5/1Lw=",
-        "assets/openai-small.svg": "sha256-Rb4fB1frGIie77Hn23lmjvRqJ13E4OeOjfXr1/bN6tw=",
-        "assets/openai.png": "sha256-FWzITXMyv+lbMQNQvUcLaQ0iqjPWU0DMbC4GAilGGUw=",
-        "LICENSE.txt": "sha256-TdE4aSReNWJGpbdwcjJHu7gKjwehgdHT2HOhc0KXzbk=",
-        "references/latest-model.md": "sha256-tT6ryPMgSqvnk+zLcp/OIesmcJ/Mub6F06Z0sP77fG4=",
-        "references/prompting-guide.md": "sha256-7N9JtKgkqHNnx6bsPAIY4sV4Pf+VGzChAcO2qVFSqvo=",
-        "references/upgrade-guide.md": "sha256-VjeE6xOtG0TDpZL5QKp6wghuvrl98/Sgm6A4svFWTTk=",
-        "scripts/fetch-codex-manual.mjs": "sha256-9T620vKG6e/MOX6L7pOpOONylskJU+TgbpSJnvG2w2M=",
-        "scripts/resolve-latest-model-info.js": "sha256-P8QgoSqxo0SsSbhSE49ZnQHjrFYeyGQmuhYfQqA9PlI=",
-        "SKILL.md": "sha256-XK5gT7JtnKPbR69y4W6cG/+kf55lCLd1ZtI3Tax15hA="
-      }
-    },
-    "inventory/skills/system/plugin-creator": {
-      "name": "plugin-creator",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "system",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/plugin-creator",
-      "integrity": "sha256-RKgFRpYotgkuCWLuNV+L8tqlANKWLffk9EDlYSY6zpc=",
-      "files": {
-        "agents/openai.yaml": "sha256-/srzXWkr09M9GgZWSCWNEuOTr6kFXXit9uV7QvQUL20=",
-        "assets/plugin-creator-small.svg": "sha256-ZZG/jqm7lDWJDb3qKZ4NK9BfOqiTozXSbkxTXpPI5/s=",
-        "assets/plugin-creator.png": "sha256-pAJLAwbdsFhH4QEoedN6rx5lggUZnaWW9RRe16iNkWI=",
-        "references/installing-and-updating.md": "sha256-sDBRf+BbEt2nG6viiQZW18bbagEReX4dINIIgEQnJ20=",
-        "references/plugin-json-spec.md": "sha256-9J7cQ3XUNE64/gyiFI6sLbnl0Oor4xKrWfjoN0bR7I8=",
-        "scripts/create_basic_plugin.py": "sha256-tao09/nc7EuwB6ZtZc/wxcd6ZwQq5sTeV9irf073N9I=",
-        "scripts/read_marketplace_name.py": "sha256-dlkhZ1kVL4MIcCC00pcbStPME4UeJhTvww/CMXrVnZY=",
-        "scripts/update_plugin_cachebuster.py": "sha256-T+PFpJIS9uMKIwbiRcRg4BqvXja8itPdKFLBmSV+/4k=",
-        "scripts/validate_plugin.py": "sha256-pHEt3HwCIR7fAJtO8ico8uTEdlC5/1aWtrNlltwp+ko=",
-        "SKILL.md": "sha256-j9VjFrLEnL3GV6XRl5Z6IzAY4fraZbAKXdAw3OZJmm4="
-      }
-    },
-    "inventory/skills/system/skill-creator": {
-      "name": "skill-creator",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "system",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/skill-creator",
-      "integrity": "sha256-eoKdC7AA2emJbJaZzPzsC509190OVQIBsL2CHYuZR+o=",
-      "files": {
-        "agents/openai.yaml": "sha256-0H0huT/PPU3I2aM5nAX8ImpJozOpbT4caLRRuN2ereY=",
-        "assets/skill-creator-small.svg": "sha256-ZZG/jqm7lDWJDb3qKZ4NK9BfOqiTozXSbkxTXpPI5/s=",
-        "assets/skill-creator.png": "sha256-pAJLAwbdsFhH4QEoedN6rx5lggUZnaWW9RRe16iNkWI=",
-        "license.txt": "sha256-z8d0m5b2O9McPEK1xHG/dWgUBT6EfBDz6wA0F7xSPTA=",
-        "references/openai_yaml.md": "sha256-/6w5MY5AgQgUHUD4IJaOWfcENKiRaU+b8dJb6CN7FQw=",
-        "scripts/generate_openai_yaml.py": "sha256-3a+avfs+di7TyCVx6cYHzpZBiPSfIUYoG+ssuKVTqT0=",
-        "scripts/init_skill.py": "sha256-9Ay4+vw04tXbu4trBCl68Si3CES2e8lEXvaXkODNtJ4=",
-        "scripts/quick_validate.py": "sha256-bMncMZnJNZFs9vc/y7uw47sbWMj1EJ/vpJmXiQgWT1E=",
-        "SKILL.md": "sha256-2kTIj2s4Raj6jGB5LsmnIhEKVal5PCeXV7SP77EfgZw="
-      }
-    },
-    "inventory/skills/system/skill-installer": {
-      "name": "skill-installer",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "system",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/skill-installer",
-      "integrity": "sha256-emGSJ8JlBeEbgPvA/p/ygaqvLkGLCn0KKcsoBzOU5fY=",
-      "files": {
-        "agents/openai.yaml": "sha256-XOIj2LEHC4LEIphTjxuNN294jrnnpCqYfowJQHDXPw4=",
-        "assets/skill-installer-small.svg": "sha256-OShwP/ANwaaB56IkAYQ7fty9SyBRZRzkxDt19+FAUE4=",
-        "assets/skill-installer.png": "sha256-0KIwsaebcbhYt8IVoPuwdo1kWcFOpO+AxhWSYpvw5gU=",
-        "LICENSE.txt": "sha256-z8d0m5b2O9McPEK1xHG/dWgUBT6EfBDz6wA0F7xSPTA=",
-        "scripts/github_utils.py": "sha256-YcG74q4hdDO0tvnwnyGspN9SwSWYBoNDrecZ9wbkhZs=",
-        "scripts/install-skill-from-github.py": "sha256-D7vTbo6ilEQsC9SNb2EKLoZWIWv+9cMi8dz0SO8vCfE=",
-        "scripts/list-skills.py": "sha256-5OH3jKPQRYJ/KgXP2Z+uV8x8Ghv+uocEApEIg03r/zU=",
-        "SKILL.md": "sha256-Cd8Op5IfY9Ub766fyPcdrs5e9J17luNf/4sY0V1q/ac="
-      }
-    },
-    "inventory/agents/global": {
+    "inventory/agents": {
       "name": "global-agents",
       "version": "0.1.0",
       "type": "agents",
       "scope": "global",
       "installable": false,
       "runtimeTarget": "~/.codex/AGENTS.md",
-      "integrity": "sha256-qDdqq4V1ck0ZkTtbk1G6pwftX3ea7I6lt/o3zcQCGS4=",
+      "integrity": "sha256-nerVKpXr/HKgyX9L3kjF7B5FWHG5x9ZtJezA8Ru0Zn4=",
       "files": {
-        "AGENTS.md": "sha256-0H/clfq/fbvuW3DMhRWVcBh7wXhMG701F+PBJVmaoVg="
+        "AGENTS.md": "sha256-rGbYA/XHz9jOWoqVSw/9QqWiqouEqf8wuqfOnTYxMGg="
       }
     }
   }

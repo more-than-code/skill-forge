@@ -8,7 +8,7 @@
       "name": "api-contracts",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/api-contracts",
+      "path": "inventory/skills/api-contracts",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/api-contracts"
     },
@@ -17,7 +17,7 @@
       "name": "audit-trail",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/audit-trail",
+      "path": "inventory/skills/audit-trail",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/audit-trail"
     },
@@ -26,7 +26,7 @@
       "name": "code-quality",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/code-quality",
+      "path": "inventory/skills/code-quality",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/code-quality"
     },
@@ -35,7 +35,7 @@
       "name": "coding-discipline",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/coding-discipline",
+      "path": "inventory/skills/coding-discipline",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/coding-discipline"
     },
@@ -44,7 +44,7 @@
       "name": "data-migration",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/data-migration",
+      "path": "inventory/skills/data-migration",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/data-migration"
     },
@@ -53,7 +53,7 @@
       "name": "deployment-strategy",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/deployment-strategy",
+      "path": "inventory/skills/deployment-strategy",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/deployment-strategy"
     },
@@ -62,7 +62,7 @@
       "name": "failure-analysis",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/failure-analysis",
+      "path": "inventory/skills/failure-analysis",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/failure-analysis"
     },
@@ -71,7 +71,7 @@
       "name": "frontend-engineering",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/frontend-engineering",
+      "path": "inventory/skills/frontend-engineering",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/frontend-engineering"
     },
@@ -80,7 +80,7 @@
       "name": "llm-integration",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/llm-integration",
+      "path": "inventory/skills/llm-integration",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/llm-integration"
     },
@@ -89,7 +89,7 @@
       "name": "migration-deprecation",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/migration-deprecation",
+      "path": "inventory/skills/migration-deprecation",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/migration-deprecation"
     },
@@ -98,7 +98,7 @@
       "name": "performance-analysis",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/performance-analysis",
+      "path": "inventory/skills/performance-analysis",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/performance-analysis"
     },
@@ -107,7 +107,7 @@
       "name": "podman-utilization",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/podman-utilization",
+      "path": "inventory/skills/podman-utilization",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/podman-utilization"
     },
@@ -116,7 +116,7 @@
       "name": "production-readiness",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/production-readiness",
+      "path": "inventory/skills/production-readiness",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/production-readiness"
     },
@@ -125,7 +125,7 @@
       "name": "security-baseline",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/security-baseline",
+      "path": "inventory/skills/security-baseline",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/security-baseline"
     },
@@ -134,7 +134,7 @@
       "name": "testing-strategy",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/testing-strategy",
+      "path": "inventory/skills/testing-strategy",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/testing-strategy"
     },
@@ -143,54 +143,9 @@
       "name": "ui-portability-baseline",
       "version": "0.1.0",
       "scope": "custom",
-      "path": "inventory/skills/custom/ui-portability-baseline",
+      "path": "inventory/skills/ui-portability-baseline",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/ui-portability-baseline"
-    },
-    {
-      "type": "skill",
-      "name": "imagegen",
-      "version": "0.1.0",
-      "scope": "system",
-      "path": "inventory/skills/system/imagegen",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/imagegen"
-    },
-    {
-      "type": "skill",
-      "name": "openai-docs",
-      "version": "0.1.0",
-      "scope": "system",
-      "path": "inventory/skills/system/openai-docs",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/openai-docs"
-    },
-    {
-      "type": "skill",
-      "name": "plugin-creator",
-      "version": "0.1.0",
-      "scope": "system",
-      "path": "inventory/skills/system/plugin-creator",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/plugin-creator"
-    },
-    {
-      "type": "skill",
-      "name": "skill-creator",
-      "version": "0.1.0",
-      "scope": "system",
-      "path": "inventory/skills/system/skill-creator",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/skill-creator"
-    },
-    {
-      "type": "skill",
-      "name": "skill-installer",
-      "version": "0.1.0",
-      "scope": "system",
-      "path": "inventory/skills/system/skill-installer",
-      "installable": false,
-      "runtimeTarget": "~/.codex/skills/.system/skill-installer"
     }
   ],
   "managedAgents": [
@@ -199,7 +154,7 @@
       "name": "global-agents",
       "version": "0.1.0",
       "scope": "global",
-      "path": "inventory/agents/global/AGENTS.md",
+      "path": "inventory/agents/AGENTS.md",
       "installable": false,
       "runtimeTarget": "~/.codex/AGENTS.md"
     }

@@ -10,12 +10,12 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
    - Global shared skills: `~/.codex/skills/*/SKILL.md`
    - Global system skills: `~/.codex/skills/.system/*/SKILL.md`
    - Project-local skills: `.agents/skills/*/SKILL.md`
-   - Repository custom skill inventory: `inventory/skills/custom/*/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
+   - Repository custom skill inventory: `inventory/skills/*/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 3. **Metadata load:** Read frontmatter (`name`, `description`, and small metadata fields) only. These fields decide activation.
 4. **Precedence and duplicates:**
    - Resolve same-name skills in this order:
      1. `.agents/skills/<name>/SKILL.md` for project-local overrides.
-     2. `inventory/skills/custom/<name>/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill.
+     2. `inventory/skills/<name>/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill.
      3. `~/.codex/skills/<name>/SKILL.md` for global shared skills.
      4. `~/.codex/skills/.system/<name>/SKILL.md` for Codex/platform workflows.
    - Never activate more than one copy of the same skill name.
@@ -37,7 +37,7 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
 - Put reusable, cross-project skills in `~/.codex/skills/`.
 - Keep Codex/platform workflow skills in `~/.codex/skills/.system/`.
 - Put project-specific overrides in `.agents/skills/` when the project wants to change behavior for a shared skill name.
-- Use `inventory/skills/custom/` only when the repository itself is a skill registry or intentionally stores installable custom skills there. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
+- Use `inventory/skills/` only when the repository itself is a skill registry or intentionally stores installable custom skills there. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 - Do not duplicate shared skills into every repository unless the project intentionally needs a forked version.
 - If a project needs to customize a shared skill, create a same-named local override in `.agents/skills/` and keep the delta narrow.
 

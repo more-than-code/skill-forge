@@ -1,4 +1,4 @@
-# Copilot CLI AGENTS.md Overlay
+# Copilot CLI Instructions Overlay
 
 This overlay is appended to `inventory/agents/core.md` when installing Copilot CLI agents.
 
@@ -28,8 +28,9 @@ Maintained Copilot custom agent definitions live in `inventory/subagents/copilot
 
 ## Copilot CLI Target Notes
 
-- Runtime target: use the composed content as `AGENTS.md` in the repository root, the current working directory, or a directory listed in `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`.
-- Managed global target: `~/.copilot/instructions/AGENTS.md`.
-- Configure `COPILOT_CUSTOM_INSTRUCTIONS_DIRS=$HOME/.copilot/instructions` so Copilot CLI discovers the managed global instructions file without scanning it as a custom agent.
+- Runtime target: install the composed content as a Markdown file matching `~/.copilot/instructions/**/*.instructions.md`.
+- Managed global target: `~/.copilot/instructions/agents.instructions.md`.
+- The important suffix is `.instructions.md`; examples include `~/.copilot/instructions/agents.instructions.md`, `~/.copilot/instructions/frontend/react.instructions.md`, and `~/.copilot/instructions/backend/api.instructions.md`.
+- Files such as `~/.copilot/instructions/AGENTS.md`, `~/.copilot/instructions/agents.md`, and `~/.copilot/instructions/frontend/react.md` do not match Copilot CLI's documented instructions glob.
 - Local user instructions may also live at `$HOME/.copilot/copilot-instructions.md`; avoid duplicating conflicting policy between that file and this one.
 - Keep this overlay focused on always-on Copilot CLI behavior. Put task-specific reusable workflows in Copilot prompt, agent, or skill files.

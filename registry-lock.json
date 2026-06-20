@@ -234,10 +234,10 @@
       "type": "agents",
       "scope": "copilot-cli",
       "installable": false,
-      "runtimeTarget": "~/.copilot/instructions/AGENTS.md",
-      "integrity": "sha256-29Yz3ShCTkWEESRDU9ZNCOkLHQgtqq+00WS6zd838DU=",
+      "runtimeTarget": "~/.copilot/instructions/agents.instructions.md",
+      "integrity": "sha256-huCAx7fvepS3NQqX1ct96UEt4wIyupcNqRR1hPwSNNg=",
       "files": {
-        "AGENTS.md": "sha256-5hfwbBwTkjMLLIvYuTxe4RCBuAzYj+vRrQodwr4xkjc="
+        "agents.instructions.md": "sha256-bo3NK/zauAoYvbA3F0dvWSwNKbqhQ8J4asw3Bx6u6HI="
       }
     },
     "inventory/agents/claude-code": {

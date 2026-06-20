@@ -1,6 +1,6 @@
 ---
 name: validator
-description: Run assigned validation commands or checks and return reusable evidence: command, cwd, exit code, output summary, artifacts, and timestamp.
+description: "Run assigned validation commands or checks and return reusable evidence: command, cwd, exit code, output summary, artifacts, and timestamp."
 model: "gpt-5.3-codex"
 ---
 

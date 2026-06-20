@@ -30,17 +30,23 @@ Agent routing:
 
 - `bulk_worker`: formatting, renaming, repetitive file transforms, enumeration
 - `researcher`: code exploration, API tracing, in-scope synthesis, reading tests
+- `validator`: command execution, checks, and reusable evidence capture
 - `planner`: architecture decisions, multi-file tradeoffs, design with real stakes
+- `reviewer`: one review lens at a time with severity-tagged findings
 
 Codex subagent rule: if a subagent realizes it's undertiered, it must return to parent, not upgrade itself.
 
 ## Codex Agent Reference
 
+Codex model assignments use OpenAI model identifiers because Codex only supports OpenAI model selection. Do not copy non-OpenAI model choices from Copilot CLI or Claude Code into Codex agent definitions.
+
 | Agent | Model | Best for |
 |---|---|---|
 | `bulk_worker` | `gpt-5.4-mini` | Formatting, renaming, repetitive transforms, file enumeration |
 | `researcher` | `gpt-5.3-codex` | Code exploration, API tracing, reading tests, in-scope synthesis |
+| `validator` | `gpt-5.3-codex` | Command execution, checks, and reusable evidence capture |
 | `planner` | `gpt-5.5` | Architecture decisions, multi-file tradeoffs, design with real stakes |
+| `reviewer` | `gpt-5.3-codex` | One review lens at a time with severity-tagged findings |
 
 ## Codex Sandbox Modes
 
@@ -49,6 +55,8 @@ Codex subagent rule: if a subagent realizes it's undertiered, it must return to 
 | `read-only` | no | Pure inspection |
 | `workspace-write` | yes, within repo/workspace roots | Normal implementation work |
 | `danger-full-access` | yes, unrestricted | Throwaway VMs only |
+
+Codex sandbox assignment: `planner`, `researcher`, and `reviewer` are read-only; `validator` may use `workspace-write` for normal command-generated artifacts; `bulk_worker` uses `workspace-write` for explicitly assigned mechanical edits.
 
 ## Codex Target Notes
 

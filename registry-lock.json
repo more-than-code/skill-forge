@@ -210,9 +210,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-JH8S7ywaJarHaQoVLWBJmPj/U1Inw0fCdMJf0IEyNbA=",
+      "integrity": "sha256-5l0mg+spNrCfCLhBIXmu0Db88kDLy4q1ip4sgek7TjQ=",
       "files": {
-        "core.md": "sha256-Cn3qoGmYZPVx6yp2jf2mL+4OfEHlIxYsi6ndsqMMRdE="
+        "core.md": "sha256-qySOjLod4SEsAVCALkTlb9hNNJ3Ap5ErZpYLXpXfxXg="
       },
       "sourceOnly": true
     },
@@ -223,9 +223,9 @@
       "scope": "codex",
       "installable": false,
       "runtimeTarget": "~/.codex/AGENTS.md",
-      "integrity": "sha256-BiXKoIDlqb/Y7UDw/6BAr24rLCsalM45rvNo/k8S1yU=",
+      "integrity": "sha256-JSQ/mmZtBjoVynZpedwiN+VbqY8PPkos9t+7uY5qfus=",
       "files": {
-        "AGENTS.md": "sha256-KJQrxFLBgUu0CYCQOYjuOzVYB1JGd4mUndwAaVS8lrw="
+        "AGENTS.md": "sha256-yZ79Nqe1FDx71GmWMg8kQm9ywNeEBeX4EUoNFwNT9p8="
       }
     },
     "inventory/agents/copilot-cli": {
@@ -235,9 +235,9 @@
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/instructions/agents.instructions.md",
-      "integrity": "sha256-huCAx7fvepS3NQqX1ct96UEt4wIyupcNqRR1hPwSNNg=",
+      "integrity": "sha256-7vs2e+oNiM3gTPK4y7jMmybPPrFVfx7qZakQCZo2+ik=",
       "files": {
-        "agents.instructions.md": "sha256-bo3NK/zauAoYvbA3F0dvWSwNKbqhQ8J4asw3Bx6u6HI="
+        "agents.instructions.md": "sha256-R96zEMHM2VjfvcAC8EiY3makjQmktHPv99x1CUevwDs="
       }
     },
     "inventory/agents/claude-code": {
@@ -247,9 +247,9 @@
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/CLAUDE.md",
-      "integrity": "sha256-A6Dj5KV78HWqKMlf7UzU64DlBvH0nvU6gJ5Zu0Knm70=",
+      "integrity": "sha256-tmMtqTszXYchvRvKQfeW5hvi89iyII1Wm7l9C7iUhKA=",
       "files": {
-        "CLAUDE.md": "sha256-piwpKZNQyQ9dHF+fAucDV/ntTJJ3AqgfSPunC6gQcVw="
+        "CLAUDE.md": "sha256-HvTylfWGJ9ppuNsengVWkeqNdsou4Yo2YF5LNqNh07M="
       }
     },
     "inventory/subagents/codex": {
@@ -259,11 +259,13 @@
       "scope": "codex",
       "installable": false,
       "runtimeTarget": "~/.codex/agents",
-      "integrity": "sha256-o9T4Kaw1pHxfPQpUo2DoUBK+depIKu6zgmk2FYBeG4M=",
+      "integrity": "sha256-5p2Sp07C7YPptCq8Of0O2B1i1058janU76eDB16YrrA=",
       "files": {
-        "bulk_worker.toml": "sha256-4spFC2JJEMNGSI966OfiSnw8wXydt5MmgwNg8fWYm1k=",
-        "planner.toml": "sha256-KdBklFl0IBxZX7kGznosCn9wrmxe5qa6XL4rMJ0mqsM=",
-        "researcher.toml": "sha256-jvYLvZmZcNOH8QKeO9iGuLprSarOfu7FcpwgZRDyQgc="
+        "bulk_worker.toml": "sha256-dZDeRn1RRGeIN5vOl2x9SbgMQDBLo3cZ6Jni9149jlQ=",
+        "planner.toml": "sha256-Y/Alc4ozf2ADBVuLAt14wCXfragtUe+4oQDlfPOX3eE=",
+        "researcher.toml": "sha256-0FRJjEa/z6uZhMKqzafFwLdPSBw4tJmjat8wS0kmck0=",
+        "reviewer.toml": "sha256-aH4yOIyaYOH2KgCM1At40PIz+BOm0aqsKG8MWRQ+6WY=",
+        "validator.toml": "sha256-69+Cy/ftm6WeO9zoRV4ftKGqDjQGcqm2RKBFfr52b6I="
       }
     },
     "inventory/subagents/copilot-cli": {
@@ -273,11 +275,13 @@
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/agents",
-      "integrity": "sha256-PTn4qEbUcA53dCuaULtNLhAK+p1eYU8cnwkoLLADxDU=",
+      "integrity": "sha256-sPppKhgOrGrkyz+jjLy/tTE0Uz0i4JJ9jmy/Lgr/nYQ=",
       "files": {
-        "bulk-worker.agent.md": "sha256-OK0ysF/jmvM2qRNB13tXfZEcMQi3SEiZNxRT9uRs/eI=",
-        "planner.agent.md": "sha256-GcXuSjuT1sRd4UwdoboaULXqOKqEt2l+34/alqns8Z0=",
-        "researcher.agent.md": "sha256-NNBqczwkRWjeQO6rBroeAa8UsMTfgCBRDb9HgPW13LI="
+        "bulk-worker.agent.md": "sha256-CeTE02+SzMWWOj39GvrTM5oDJhxxx4MivER3/wNbKCM=",
+        "planner.agent.md": "sha256-j/fxqVk2NJbuQ16R4hZcDDhSkoAkDLZ/GHNb59H3YsE=",
+        "researcher.agent.md": "sha256-I1cK3Dk3fuVY55A5olUN0K48eVE+KHo/vijtAh/T/0g=",
+        "reviewer.agent.md": "sha256-hVvqd9K4gwHyCpJHe7tDjsD79Mhc+lG/my6wuuDI064=",
+        "validator.agent.md": "sha256-at256O4507YdXkqM+k+FcFTsUrTHMv4sMNyMGTG1AZA="
       }
     },
     "inventory/subagents/claude-code": {
@@ -287,11 +291,13 @@
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents",
-      "integrity": "sha256-3f0I1DEdqLDWuoYiHfliqfcbNVX08WrIuc/h0FqqcGc=",
+      "integrity": "sha256-8l9wf/b08wPGmOgpzdc36dL39ih9nnNFRWuo2YV81lw=",
       "files": {
-        "bulk-worker.md": "sha256-rxhk3Cb4yLDt++0tyrmwwVMMaIumUwwGVNDFgXE0Xw4=",
-        "planner.md": "sha256-f658Y6I3BozWBpN78dWWDn/SX5iGySRDssgSj9guQUM=",
-        "researcher.md": "sha256-UOTbXlGHFZSbQgx66fZK53Znnmi9nJPDLjZNtP3E2Js="
+        "bulk-worker.md": "sha256-2SM8dpFNrEmfYajOHj0aXmBLD5DZDkwNidCNeTaGKTM=",
+        "planner.md": "sha256-d+7BNzgv3rmo24hAmv5ZsW20JUbL+uo0aCrOcChCueo=",
+        "researcher.md": "sha256-4jUo1bU0/IADY0WFm2s9Fz3ev1gjyGHyA0IUhSyZ1LE=",
+        "reviewer.md": "sha256-MbhDXIHg5h+VFpgWLFA98jfUF5E2BpNZai6htnkUAoY=",
+        "validator.md": "sha256-HggGuPOfnyaqR4jbqPNp5D2RvDKBocaH+a9YdRxGXrE="
       }
     }
   }

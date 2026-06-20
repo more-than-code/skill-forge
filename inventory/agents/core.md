@@ -233,6 +233,7 @@ Implementation is measured against the spec. Verification confirms acceptance cr
 ## 5) Verification (Always Required)
 
 Verify against the spec's acceptance criteria. Evidence required: commands, results, outputs.
+For Tier 2/3 command evidence, use Validation delegation (§7) when a validator helper is available; validator output maps directly onto the §5.2 Quality Gates block.
 
 | Tier | Required |
 |------|----------|
@@ -270,6 +271,8 @@ Every Tier 2/3 completion update must include this block:
 - Result: [pass/fail + brief summary]
 - Artifacts: [path or n/a]
 ```
+
+Validator helpers may also include `Cwd`, `Output summary`, and `Timestamp`; keep the required `Gate`, `Command`, `Exit code`, `Result`, and `Artifacts` fields in completion updates.
 
 ---
 
@@ -323,6 +326,7 @@ When subagents are available, use one task per subagent and name descriptively.
 | Phase | Tier 1 | Tier 2 | Tier 3 |
 |-------|--------|--------|--------|
 | Exploration | — | Recommended if supported | **Mandatory if supported** |
+| Validation | — | Recommended for command evidence | Recommended for command evidence |
 | Implementation | — | Optional (3+ files) | Recommended |
 | Review | — | Optional | Recommended (per lens) |
 
@@ -332,6 +336,7 @@ Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execu
 
 - **Codebase analysis:** Trace interface, callers, dependencies of module X.
 - **Behavior validation:** Run command, confirm assumption X.
+- **Command evidence:** Use a `validator` helper when command execution may write caches, logs, snapshots, coverage, or other artifacts.
 - **Impact assessment:** What depends on this? What breaks if it changes?
 - **Alternatives research:** Compare approaches — trade-offs, cost, risk.
 - **Dependency check:** Version compatibility, breaking changes.
@@ -340,11 +345,14 @@ Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execu
 
 Synthesize findings in main thread → write spec from validated knowledge.
 
+### Validation delegation
+Use the maintained tool-specific `validator` subagent/custom agent for assigned commands, checks, and reproducible evidence. The validator returns command, cwd, exit code, result summary, relevant output excerpts, artifact paths, and timestamp. The parent passes validator results back to `researcher`, `planner`, or `reviewer` when downstream reasoning depends on command output. The validator must not intentionally edit source files.
+
 ### Implementation delegation
 Split by layer/component only when the tool can keep edits isolated. Main thread owns orchestration. **No two helpers modify the same file.**
 
 ### Review delegation
-Use one helper per lens (§6) when supported. Each returns: findings, severity, locations, reasoning, suggested fix. Without helpers, run each lens sequentially in the main context.
+Use one helper per lens (§6) when supported. Prefer the maintained tool-specific `reviewer` subagent/custom agent for this work so every lens returns the same severity-tagged shape. Each review returns: findings, severity, locations, reasoning, suggested fix. Without helpers, run each lens sequentially in the main context and use the same output shape. Built-in review commands may supplement this process, but do not replace it unless they can guarantee the required per-lens output format.
 
 ---
 

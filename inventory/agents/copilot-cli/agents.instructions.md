@@ -26,6 +26,24 @@ Maintained Copilot custom agent definitions live in `inventory/subagents/copilot
 - Use Copilot custom agents only when available and selected for the task.
 - Otherwise run exploration, implementation, and review sequentially in the main Copilot CLI context.
 
+## Copilot CLI Agent Reference
+
+Copilot CLI model assignments use Copilot's own model inventory, which may include both OpenAI and Anthropic models. These values do not need to match Codex exactly when another provider is a better fit for the role.
+
+| Agent | Model | Best for |
+|---|---|---|
+| `bulk-worker` | `gpt-5.4-mini` | Formatting, renaming, repetitive transforms, file enumeration |
+| `researcher` | `gpt-5.3-codex` | Code exploration, API tracing, reading tests, in-scope synthesis |
+| `validator` | `gpt-5.3-codex` | Command execution, checks, and reusable evidence capture |
+| `planner` | `claude-opus-4.8` | Architecture decisions, multi-file tradeoffs, design with real stakes |
+| `reviewer` | `gpt-5.3-codex` | One review lens at a time with severity-tagged findings |
+
+## Copilot CLI Permission Model
+
+Copilot custom agent files do not pin Codex-style `sandbox_mode`. Treat read/write limits in each agent body as behavioral contracts, and use active Copilot CLI session or tool permission controls to enforce them when available.
+
+For `planner`, `researcher`, and `reviewer`, prefer read-only or no-edit permissions. For `validator`, allow command execution and normal command-generated artifacts only. For `bulk-worker`, allow writes only to explicitly assigned files.
+
 ## Copilot CLI Target Notes
 
 - Runtime target: install the composed content as a Markdown file matching `~/.copilot/instructions/**/*.instructions.md`.

@@ -5,5 +5,7 @@ model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Execute straightforward mechanical tasks. No planning, no tradeoffs.
+Expect the parent task description to use `[phase]-[scope]-[task]`; if the assigned task is generic or ambiguous, ask the parent to clarify before acting.
+Only modify files explicitly assigned to this task. Do not edit any file that another helper is editing; if scope overlaps, stop and return to parent.
 If the task requires judgment or design decisions, stop and return to parent.
 """

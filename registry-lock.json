@@ -275,13 +275,13 @@
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/agents",
-      "integrity": "sha256-sPppKhgOrGrkyz+jjLy/tTE0Uz0i4JJ9jmy/Lgr/nYQ=",
+      "integrity": "sha256-V2ztfLr0qV7hPazVOg46e4im9SlooF+U4+dqfQPdiIo=",
       "files": {
         "bulk-worker.agent.md": "sha256-CeTE02+SzMWWOj39GvrTM5oDJhxxx4MivER3/wNbKCM=",
         "planner.agent.md": "sha256-j/fxqVk2NJbuQ16R4hZcDDhSkoAkDLZ/GHNb59H3YsE=",
         "researcher.agent.md": "sha256-I1cK3Dk3fuVY55A5olUN0K48eVE+KHo/vijtAh/T/0g=",
         "reviewer.agent.md": "sha256-hVvqd9K4gwHyCpJHe7tDjsD79Mhc+lG/my6wuuDI064=",
-        "validator.agent.md": "sha256-at256O4507YdXkqM+k+FcFTsUrTHMv4sMNyMGTG1AZA="
+        "validator.agent.md": "sha256-gzyK8o0A71A1aiHlNYOoTB7hQ7A+8JZzDNPxCXNXoSE="
       }
     },
     "inventory/subagents/claude-code": {
@@ -291,13 +291,13 @@
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents",
-      "integrity": "sha256-8l9wf/b08wPGmOgpzdc36dL39ih9nnNFRWuo2YV81lw=",
+      "integrity": "sha256-1WzLkzy5XeP81W5AiHoo+x0yGRpF+JfCUwwRIB5Di8c=",
       "files": {
         "bulk-worker.md": "sha256-2SM8dpFNrEmfYajOHj0aXmBLD5DZDkwNidCNeTaGKTM=",
         "planner.md": "sha256-d+7BNzgv3rmo24hAmv5ZsW20JUbL+uo0aCrOcChCueo=",
         "researcher.md": "sha256-4jUo1bU0/IADY0WFm2s9Fz3ev1gjyGHyA0IUhSyZ1LE=",
         "reviewer.md": "sha256-MbhDXIHg5h+VFpgWLFA98jfUF5E2BpNZai6htnkUAoY=",
-        "validator.md": "sha256-HggGuPOfnyaqR4jbqPNp5D2RvDKBocaH+a9YdRxGXrE="
+        "validator.md": "sha256-LUArKe89vNFlFgpHVtxjYuZcUC404ABGrw1X9HsFZ4s="
       }
     }
   }

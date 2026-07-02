@@ -35,7 +35,7 @@ Copilot CLI model assignments use Copilot's own model inventory, which may inclu
 | `bulk-worker` | `gpt-5.4-mini` | Formatting, renaming, repetitive transforms, file enumeration |
 | `researcher` | `gpt-5.3-codex` | Code exploration, API tracing, reading tests, in-scope synthesis |
 | `validator` | `gpt-5.3-codex` | Command execution, checks, and reusable evidence capture |
-| `planner` | `claude-opus-4.8` | Architecture decisions, multi-file tradeoffs, design with real stakes |
+| `planner` | `claude-fable-5` | Architecture decisions, multi-file tradeoffs, design with real stakes |
 | `reviewer` | `gpt-5.3-codex` | One review lens at a time with severity-tagged findings |
 
 ## Copilot CLI Permission Model

@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Subtasks needing real planning, architecture decisions, or tradeoff analysis.
-model: "claude-opus-4.8"
+model: "claude-fable-5"
 ---
 
 Think through tradeoffs and produce concrete recommendations with rationale.

@@ -170,7 +170,7 @@
     {
       "type": "agents",
       "name": "copilot-cli-agents",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "copilot-cli",
       "path": "inventory/agents/copilot-cli/agents.instructions.md",
       "installable": false,
@@ -199,7 +199,7 @@
     {
       "type": "subagents",
       "name": "copilot-cli-subagents",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "copilot-cli",
       "path": "inventory/subagents/copilot-cli",
       "installable": false,

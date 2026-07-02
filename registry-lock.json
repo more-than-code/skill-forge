@@ -230,14 +230,14 @@
     },
     "inventory/agents/copilot-cli": {
       "name": "copilot-cli-agents",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "agents",
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/instructions/agents.instructions.md",
-      "integrity": "sha256-7vs2e+oNiM3gTPK4y7jMmybPPrFVfx7qZakQCZo2+ik=",
+      "integrity": "sha256-cWdCPHpO1afGxAxBCbnX1n3Sc0aBBeTmdKmtgNWBxxA=",
       "files": {
-        "agents.instructions.md": "sha256-R96zEMHM2VjfvcAC8EiY3makjQmktHPv99x1CUevwDs="
+        "agents.instructions.md": "sha256-c7zEPAU5jJb4g8T5ys/7muFrBpzqulFDIA0v4gkzOfQ="
       }
     },
     "inventory/agents/claude-code": {
@@ -270,15 +270,15 @@
     },
     "inventory/subagents/copilot-cli": {
       "name": "copilot-cli-subagents",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "subagents",
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/agents",
-      "integrity": "sha256-V2ztfLr0qV7hPazVOg46e4im9SlooF+U4+dqfQPdiIo=",
+      "integrity": "sha256-StNohxCFxYHbsbJVv5Uudr9+nlXwZRgVbbGo4nbJmPs=",
       "files": {
         "bulk-worker.agent.md": "sha256-CeTE02+SzMWWOj39GvrTM5oDJhxxx4MivER3/wNbKCM=",
-        "planner.agent.md": "sha256-j/fxqVk2NJbuQ16R4hZcDDhSkoAkDLZ/GHNb59H3YsE=",
+        "planner.agent.md": "sha256-bNqGg6A5Q5sAR6H9lQL9E07xnWWO82kRcD7ddtoyF2k=",
         "researcher.agent.md": "sha256-I1cK3Dk3fuVY55A5olUN0K48eVE+KHo/vijtAh/T/0g=",
         "reviewer.agent.md": "sha256-hVvqd9K4gwHyCpJHe7tDjsD79Mhc+lG/my6wuuDI064=",
         "validator.agent.md": "sha256-gzyK8o0A71A1aiHlNYOoTB7hQ7A+8JZzDNPxCXNXoSE="

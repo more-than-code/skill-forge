@@ -50,6 +50,28 @@ When outputs derive from sources, test the traceability:
 - Test that derived artifacts are consistent with each other
 - Regression diff: compare before/after with explicit change counts — not just "tests pass"
 
+## Bug Fix Protocol
+
+Bug fixes are reproducer-first: write tests that reproduce the exact bug and confirm they fail on current code *before* touching production code, capture a passing baseline of the existing suite, fix the root cause, then confirm the reproducer passes and no regressions appear. The reproducer becomes the permanent regression test.
+
+Complete every bug fix with this report:
+
+```markdown
+## Bug Fix: [Brief Description]
+**Tier:** [1/2/3]
+**Issue:** [What was broken]
+**Root Cause:** [Why]
+**Reproducer Tests:** [test file:test names — written before fix]
+**Fix:** [What changed and why]
+**Existing Tests Updated:** [list with reason, or "none"]
+**Regressions:** [none / flagged — details]
+**Verification:**
+- Gate A (reproducer passes): [command + result]
+- Gate B (existing tests pass): [command + result]
+- Gate C (test updates): [list or n/a]
+**Files Changed:** [list]
+```
+
 ## Validation Loop
 
 After writing tests:

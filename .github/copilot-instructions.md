@@ -26,14 +26,14 @@ Skill Forge is a Node.js ESM CLI and local registry for agent-facing artifacts. 
 
 Managed agent files are composed at install time. `inventory/agents/core.md` is the shared source artifact, and `inventory/agents/<tool>/...` files are tool-specific overlays appended with a markdown separator. Runtime files such as `~/.codex/AGENTS.md`, `~/.copilot/instructions/agents.instructions.md`, and `~/.claude/CLAUDE.md` are deployment targets, not the source of truth.
 
-Managed subagents are stored separately per tool under `inventory/subagents/codex/`, `inventory/subagents/copilot-cli/`, and `inventory/subagents/claude-code/`. Keep tool-specific naming and model conventions in the matching directory instead of copying definitions between tools.
+Managed subagents are stored separately per tool under `inventory/subagents/codex/`, `inventory/subagents/copilot-cli/`, and `inventory/subagents/claude-code/`. Keep tool-specific naming and model conventions in the matching directory instead of copying definitions between tools. Role sets intentionally differ per tool: Claude Code defines only `bulk-worker`, `reviewer`, and `validator` because exploration and planning map to its built-in `Explore` and `Plan` agents; do not "fix" the asymmetry by adding `researcher`/`planner` back to the Claude Code directory.
 
 ## Key conventions
 
 - Custom skills use `scope: "custom"` in `registry.json` and are addressed by bare skill name in CLI output and installs. Scoped `custom/<name>` is accepted, but the bare name is the normal user-facing form.
 - Keep inventory changes synchronized across the source files, `registry.json`, and `registry-lock.json`. `node bin/cli.js validate` treats a stale lockfile as an error.
 - The CLI defaults `add` to the Codex skill target unless `--target` or `--dir` is provided. Use `install` for agents and subagents.
-- `diff-*` commands are read-only. `install` and `add` write to runtime targets and prompt before overwriting unless `--yes` is passed.
+- `diff-*` commands are read-only. `install` and `add` write to runtime targets and prompt before overwriting unless `--yes` is passed. `--yes` does not skip the interactive target-path prompt; non-interactive runs must also pass `--path` (or `--dir` for `add`).
 - The repository ignores `tasks/` and `private/`; prior smoke-test outputs may exist under ignored paths and should not be treated as canonical inventory.
 - Copilot CLI managed instruction files must use the `.instructions.md` suffix. The canonical Copilot overlay is `inventory/agents/copilot-cli/agents.instructions.md`, and the managed runtime target is `~/.copilot/instructions/agents.instructions.md`.
 - Do not put platform-specific behavior in `inventory/agents/core.md` when it belongs in a tool overlay. Keep shared process in core and runtime/tool path details in the relevant overlay.

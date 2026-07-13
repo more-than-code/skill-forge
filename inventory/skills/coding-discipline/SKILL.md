@@ -11,7 +11,7 @@ description: >
 
 Behavioral guidelines to reduce common LLM coding mistakes. These address failure modes where the code is not technically wrong but is overcomplicated, assumes too much, or changes more than it should.
 
-Use this skill as part of the default implementation-time skill set in `AGENTS.md`. It should be active before writing code on every implementation task, alongside `security-baseline` and `code-quality`.
+Use this skill as part of the default implementation-time skill set defined in the core agent instructions. It should be active before writing code on every implementation task, alongside `security-baseline` and `code-quality`.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks (typo fixes, obvious one-liners), use judgment.
 
@@ -30,12 +30,8 @@ Use this skill as part of the default implementation-time skill set in `AGENTS.m
 - [ ] Success criteria defined and verifiable — not "make it work"
 
 ### During Implementation
-- [ ] No features beyond what was asked
-- [ ] No abstractions for single-use code
-- [ ] No error handling for impossible scenarios
-- [ ] Code length proportional to problem complexity
-- [ ] Control flow straightforward — easy for a human to trace without jumping across too many layers
 - [ ] Every changed line traces to the request
+- [ ] Artifact-level simplicity, complexity, and readability checks applied from `code-quality` (activated alongside this skill)
 
 ### After Implementation
 - [ ] Orphaned imports/variables from YOUR changes cleaned up
@@ -92,13 +88,7 @@ Each step is independently verifiable. Don't batch all verification to the end.
 
 ## Anti-Patterns
 
-### Over-Abstraction
-**Wrong:** Strategy pattern with abstract base class, two concrete implementations, a config dataclass, and a calculator class — for a single discount calculation.
-**Right:** One function: `calculate_discount(amount, percent)`. Add complexity when you actually need multiple discount types.
-
-### Speculative Features
-**Wrong:** `save_preferences(db, user_id, prefs, merge=True, validate=True, notify=False)` with caching, validation, and notification systems — when the request was "save user preferences."
-**Right:** `save_preferences(db, user_id, preferences)` — one function, one job. Add caching when performance matters, validation when bad data appears.
+Artifact-level anti-patterns (over-abstraction, speculative features, over-parameterization) are owned by `code-quality`. Worked before/after examples for all of them live in `EXAMPLES.md` beside this skill.
 
 ### Drive-By Refactoring
 **Wrong:** While fixing an empty-email crash, also add username validation, change comments, add docstrings, and "improve" email validation.

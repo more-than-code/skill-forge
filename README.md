@@ -127,6 +127,15 @@ Use `--yes` only when overwriting existing target files is intended:
 node bin/cli.js install codex-subagents --type subagent --target codex --yes
 ```
 
+`--yes` only skips overwrite confirmation. The CLI still prompts interactively
+for the target path, so non-interactive runs (scripts, CI) must also pass
+`--path` (or `--dir` for `add`):
+
+```bash
+node bin/cli.js install claude-code-agents --type agent --target claude-code \
+  --path '~/.claude/CLAUDE.md' --yes
+```
+
 ## Adding Or Updating A Skill
 
 1. Add or edit the skill under `inventory/skills/<skill-name>/`.
@@ -174,6 +183,12 @@ inventory/subagents/codex/
 inventory/subagents/copilot-cli/
 inventory/subagents/claude-code/
 ```
+
+Role sets intentionally differ per tool. Codex and Copilot CLI define five roles
+(`bulk_worker`/`bulk-worker`, `researcher`, `validator`, `planner`, `reviewer`).
+Claude Code defines only `bulk-worker`, `reviewer`, and `validator`; exploration
+and planning map to Claude Code's built-in `Explore` and `Plan` agents, as
+documented in the Claude Code overlay.
 
 Install them with:
 

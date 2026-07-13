@@ -317,7 +317,7 @@ Keep main context clean. Parallelize work when the active tool supports safe par
 
 This section is capability-based. Different tools may expose named subagents, helper agents, tasks, or no delegation at all. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
 
-Maintained tool-specific subagent definitions live under `inventory/subagents/<tool>/`. Do not assume subagent file formats are portable across tools.
+Maintained tool-specific subagent definitions are authored under `inventory/subagents/<tool>/` in the skill registry repository — that path does not exist in consumer projects; installed copies live in each tool's runtime agents directory. Do not assume subagent file formats are portable across tools.
 
 When subagents are available, use one task per subagent and name descriptively.
 
@@ -409,21 +409,7 @@ Existing test fails after fix
 
 ### Bug Fix Report Template
 
-```markdown
-## Bug Fix: [Brief Description]
-**Tier:** [1/2/3]
-**Issue:** [What was broken]
-**Root Cause:** [Why]
-**Reproducer Tests:** [test file:test names — written before fix]
-**Fix:** [What changed and why]
-**Existing Tests Updated:** [list with reason, or "none"]
-**Regressions:** [none / flagged — details]
-**Verification:**
-- Gate A (reproducer passes): [command + result]
-- Gate B (existing tests pass): [command + result]
-- Gate C (test updates): [list or n/a]
-**Files Changed:** [list]
-```
+The report template lives in the `testing-strategy` skill (Bug Fix Protocol section), which this sequence already activates. Complete every bug fix with that report.
 
 ---
 
@@ -431,18 +417,7 @@ Existing test fails after fix
 
 **Stuck:** Stop after 2 failed retries → re-assess approach → escalate to user after 3 attempts with what you tried and your hypothesis.
 
-**Escalation template:**
-```markdown
-## Escalation: [Task Name]
-**Attempts:** 3
-**Approach 1:** [What you tried, why it failed]
-**Approach 2:** [What you tried, why it failed]
-**Approach 3:** [What you tried, why it failed]
-**Current State:** [What's working, what's not]
-**Hypothesis:** [Your best guess at root cause]
-**Blockers:** [What's preventing progress]
-**Requested Help:** [Specific question or permission needed]
-```
+**Escalation format:** Escalate under a `## Escalation: [Task Name]` heading with: each approach tried and why it failed, current state (what works, what doesn't), best-guess hypothesis at the root cause, blockers, and the specific question or permission needed.
 
 **Scope changed:** Stop → reclassify tier → update spec → present to user.
 
@@ -506,28 +481,8 @@ Hard rules (always apply):
   - [ ] Evidence logged (commands, exit codes, summary)
   - [ ] If failed: status set to blocked and rerun/fix loop tracked
   ```
-- `tasks/archive.md` — historical record for completed or superseded task items moved out of `todo.md` to keep the active queue small. Preserve the original task block format when archiving, and add `**Archived:** YYYY-MM-DD` when moved.
-  ```
-  ## [Task Title]
-  **Tier:** [1/2/3]  **Status:** [complete | cancelled | superseded]  **Date:** YYYY-MM-DD  **Archived:** YYYY-MM-DD
-  ### Spec
-  - Goal: [one sentence]
-  - Changes: [files/modules]
-  - Acceptance criteria: [numbered, testable]
-  ### Progress
-  - [x] Exploration  - [x] Implementation  - [x] Verification
-  ### Gates
-  - [ ] Mandatory gates executed automatically post-implementation
-  - [ ] Evidence logged (commands, exit codes, summary)
-  - [ ] If failed: status set to blocked and rerun/fix loop tracked
-  ```
-- `tasks/lessons.md` — durable learning (§12). One entry per lesson:
-  ```
-  ### [YYYY-MM-DD] - [Title]
-  **What went wrong:** [1 sentence]
-  **Why:** [root cause]
-  **Prevention:** [actionable rule]
-  ```
+- `tasks/archive.md` — historical record for completed or superseded task items moved out of `todo.md` to keep the active queue small. Archived blocks use the same format as `todo.md`, with **Status** set to `complete`, `cancelled`, or `superseded` and an added `**Archived:** YYYY-MM-DD` field.
+- `tasks/lessons.md` — durable learning. One entry per lesson, using the §12 template.
 
 Archival rule:
 - Keep `planned`, `in-progress`, and `blocked` tasks in `todo.md`.

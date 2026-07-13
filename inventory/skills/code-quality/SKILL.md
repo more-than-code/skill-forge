@@ -71,6 +71,6 @@ When same inputs must produce same outputs:
 - **Speculative features** — caching, event systems, plugin architectures for single-use code.
 - **Clever code** — if it needs a comment to explain *what* it does, rewrite it.
 - **Spaghetti code** — logic distributed across too many helpers, flags, callbacks, or layers to follow safely.
-- **Drive-by refactoring** — don't refactor unrelated code in the same changeset.
-- **Style drift** — changing quote styles, adding type hints, reformatting whitespace in code you didn't need to touch.
 - **Non-deterministic output** — random IDs, completion-order merges, or unstable sorts that make diffing between runs impossible.
+
+Change-scope anti-patterns (drive-by refactoring, style drift) are owned by `coding-discipline`.

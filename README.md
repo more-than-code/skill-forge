@@ -1,6 +1,9 @@
 # Skill Forge
 
-Skill Forge is a local registry and installer for agent-facing artifacts:
+Skill Forge evaluates how an agent tool and its artifacts — managed instructions,
+skills, subagents — perform together across SDLC lenses (work phase, task type,
+cost), and evolves those artifacts based on the evidence. Its substrate is a
+local registry and installer for agent-facing artifacts:
 
 - Skills for reusable task guidance.
 - Managed agent instruction overlays for Codex, Copilot CLI, and Claude Code.
@@ -22,6 +25,9 @@ The repository is the source of truth. Runtime locations such as `~/.codex/skill
 - Diffs canonical inventory against runtime targets without writing.
 - Prompts before overwriting existing files unless `--yes` is provided.
 
+Architecture, design principles, the evaluation-framework roadmap, and the key
+design decisions log live in [docs/DESIGN.md](docs/DESIGN.md).
+
 ## Repository Layout
 
 ```text
@@ -30,6 +36,10 @@ inventory/
   skills/                  # installable custom skills
   agents/                  # managed global instruction overlays
   subagents/               # managed subagent definitions
+  hooks/                   # managed runtime hook scripts (usage stats)
+test/                      # node:test CLI suite (npm test)
+otel/                      # local observability stack configs (see otel/README.md)
+docker-compose.yml         # container stack definition (docker/podman compose)
 registry.json              # human-maintained registry manifest
 registry-lock.json         # generated integrity lockfile
 ```
@@ -85,6 +95,20 @@ Diff canonical artifacts against runtime targets without writing:
 node bin/cli.js diff-global
 node bin/cli.js diff-agents
 node bin/cli.js diff-subagents
+node bin/cli.js diff-hooks
+```
+
+Run the test suite:
+
+```bash
+npm test
+```
+
+Generate a static HTML catalog (skills by tag, subagents per tool, composed
+agent previews, and local usage stats when present) into `site/`:
+
+```bash
+node bin/cli.js site
 ```
 
 ## Installing Artifacts
@@ -195,6 +219,43 @@ Install them with:
 ```bash
 node bin/cli.js install codex-subagents --type subagent --target codex
 ```
+
+## Managed Agent Placeholders
+
+`inventory/agents/core.md` may use `{{placeholder}}` tokens (for example
+`{{explore_agent}}`, `{{plan_agent}}`) that resolve at compose time from the
+`vars` map on each managed agent entry in `registry.json`. This lets shared
+process text name the tool-correct subagent (`researcher` for Codex,
+`Explore` for Claude Code) without per-tool mapping prose. `validate` fails
+on unresolved placeholders and warns on unused vars.
+
+## Usage Stats
+
+`inventory/hooks/claude-code/` provides a deterministic usage recorder for
+Claude Code:
+
+```bash
+node bin/cli.js install claude-code-hooks --type hook --target claude-code \
+  --path '~/.claude/hooks/skill-forge' --yes
+```
+
+Then merge the hooks block from
+`~/.claude/hooks/skill-forge/settings-snippet.json` into
+`~/.claude/settings.json` (or a project's `.claude/settings.json`). Each
+`PostToolUse` on the Agent/Task tool and each `SessionEnd` appends one
+metadata-only JSONL record (agent type, model, task description, project,
+timestamps — never prompt or transcript content) under
+`~/.skill-forge/stats/`. Set `SKILL_FORGE_HOME` to relocate. Other tools can
+pipe an equivalent JSON payload to `node bin/cli.js stats record`. The
+`site` command renders per-project aggregates from these files.
+
+For whole-session token and cost economics (including main-loop vs subagent
+spend), see [otel/README.md](otel/README.md) — a loopback-only container stack
+(root `docker-compose.yml`; OTel collector, Prometheus, Grafana — works with
+`docker compose` and `podman compose`) consuming Claude Code's native
+telemetry, with a provisioned "Claude Code Token Economics" dashboard. The
+JSONL stats above complement it with exact custom-subagent names joined on
+session ID.
 
 ## Safety Notes
 

@@ -1,0 +1,12 @@
+{
+  "_comment": "Merge the env block below into ~/.claude/settings.json to send Claude Code telemetry to the local skill-forge OTel stack. Privacy defaults: prompt and response content logging stay OFF (OTEL_LOG_USER_PROMPTS / OTEL_LOG_ASSISTANT_RESPONSES are not set).",
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:4317",
+    "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+    "OTEL_LOGS_EXPORT_INTERVAL": "5000"
+  }
+}

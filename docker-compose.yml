@@ -1,0 +1,43 @@
+# Container stack for skill-forge: local OTel observability for Claude Code
+# token economics (see otel/README.md). Works with `docker compose` and
+# `podman compose` from the repository root. All ports bind loopback only.
+name: skill-forge-otel
+
+services:
+  otel-collector:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro,Z
+      - ./otel/data:/data:Z
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    restart: unless-stopped
+
+  prometheus:
+    image: docker.io/prom/prometheus:v3.1.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: docker.io/grafana/grafana:11.4.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro,Z
+      - ./otel/grafana/dashboards:/var/lib/grafana/dashboards:ro,Z
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

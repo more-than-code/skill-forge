@@ -1,0 +1,77 @@
+{
+  "uid": "skill-forge-claude-code",
+  "title": "Claude Code Token Economics",
+  "description": "Cost and token usage from Claude Code OTel telemetry. Metric name suffixes vary by collector version, so queries match by prefix.",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total cost (USD, range)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum({__name__=~\"claude_code_cost_usage.*\"})", "instant": true }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Sessions",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum({__name__=~\"claude_code_session_count.*\"})", "instant": true }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "piechart",
+      "title": "Cost by query source (main vs subagent vs auxiliary)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (query_source) ({__name__=~\"claude_code_cost_usage.*\"})", "instant": true, "legendFormat": "{{query_source}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Token usage by type",
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (type) ({__name__=~\"claude_code_token_usage.*\"})", "legendFormat": "{{type}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Cost by agent (built-ins verbatim; user-defined agents report as \"custom\")",
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (agent_name) ({__name__=~\"claude_code_cost_usage.*\"})", "legendFormat": "{{agent_name}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Cost by session (top 15) — join session_id with ~/.skill-forge/stats JSONL for delegation detail",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "topk(15, sum by (session_id, query_source) ({__name__=~\"claude_code_cost_usage.*\"}))", "instant": true, "format": "table" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 }, "overrides": [] }
+    }
+  ]
+}

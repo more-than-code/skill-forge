@@ -1,6 +1,6 @@
 # Copilot CLI Instructions Overlay
 
-This overlay is appended to `inventory/agents/core.md` when installing Copilot CLI agents.
+This overlay extends the shared core instructions with Copilot CLI-specific behavior.
 
 ## Copilot CLI Skill Paths
 
@@ -20,7 +20,7 @@ For concrete before/after examples of common failure modes, also check `~/.copil
 
 Copilot CLI may expose custom agents or helper workflows. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
 
-Maintained Copilot custom agent definitions live in `inventory/subagents/copilot-cli/` and install to `~/.copilot/agents/`.
+Maintained Copilot custom agent definitions are installed at `~/.copilot/agents/`.
 
 - Do not use Codex subagent names (`bulk_worker`, `researcher`, `planner`) unless a Copilot custom agent with the same behavior exists.
 - Use Copilot custom agents only when available and selected for the task.

@@ -12,15 +12,13 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
    - Tool-neutral shared skills: `~/.agents/skills/*/SKILL.md`
    - Tool-neutral project-local skills: `.agents/skills/*/SKILL.md`
    - Tool-specific global/shared skill directories configured by the active coding tool.
-   - Repository custom skill inventory: `inventory/skills/*/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 3. **Metadata load:** Read frontmatter (`name`, `description`, and small metadata fields) only. These fields decide activation.
 4. **Precedence and duplicates:**
    - Resolve same-name skills in this order:
      1. `.agents/skills/<name>/SKILL.md` for project-local overrides.
-     2. `inventory/skills/<name>/SKILL.md` only when the current repository is a skill registry and the task is to create, review, edit, install, or explicitly use that skill.
-     3. `~/.agents/skills/<name>/SKILL.md` for tool-neutral global shared skills.
-     4. The active tool's configured global/shared skill directory.
-     5. The active tool's system/platform skills, only when they are relevant to the requested workflow.
+     2. `~/.agents/skills/<name>/SKILL.md` for tool-neutral global shared skills.
+     3. The active tool's configured global/shared skill directory.
+     4. The active tool's system/platform skills, only when they are relevant to the requested workflow.
    - Never activate more than one copy of the same skill name.
    - Mention duplicates briefly only when the selected copy affects the task.
 5. **Activation priority:** Activate the minimal useful set, in this order:
@@ -41,7 +39,6 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
 - Put tool-specific global skills in that tool's global skill directory only when they rely on that tool's platform behavior.
 - Keep platform workflow skills in the owning tool's system directory.
 - Put project-specific overrides in `.agents/skills/` when the project wants to change behavior for a shared skill name.
-- Use `inventory/skills/` only when the repository itself is a skill registry or intentionally stores installable custom skills there. Treat inventory custom skills as repository artifacts, not automatically activated agent skills.
 - Do not duplicate shared skills into every repository unless the project intentionally needs a forked version.
 - If a project needs to customize a shared skill, create a same-named local override in `.agents/skills/` and keep the delta narrow.
 
@@ -317,9 +314,11 @@ Keep main context clean. Parallelize work when the active tool supports safe par
 
 This section is capability-based. Different tools may expose named subagents, helper agents, tasks, or no delegation at all. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
 
-Maintained tool-specific subagent definitions are authored under `inventory/subagents/<tool>/` in the skill registry repository — that path does not exist in consumer projects; installed copies live in each tool's runtime agents directory. Do not assume subagent file formats are portable across tools.
+Maintained tool-specific subagent definitions are installed in each tool's runtime agents directory. Do not assume subagent file formats are portable across tools.
 
 When subagents are available, use one task per subagent and name descriptively.
+
+Every delegated prompt must be self-contained: the subagent does not see this conversation, so include exact file paths and line numbers, the relevant acceptance criteria or constraints already decided, and the required output shape. Never reference "the plan above" or prior discussion.
 
 **Naming convention:** `[phase]-[scope]-[task]` (e.g. `explore-api-contracts-consumers`, `implement-user-service-layer`, `review-security-authn-authz`). Avoid generic names like `explore` or `fix-stuff`.
 
@@ -346,7 +345,7 @@ Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execu
 Synthesize findings in main thread → write spec from validated knowledge.
 
 ### Validation delegation
-Use the maintained tool-specific `validator` subagent/custom agent for assigned commands, checks, and reproducible evidence. The validator returns command, cwd, exit code, result summary, relevant output excerpts, artifact paths, and timestamp. The parent passes validator results back to `researcher`, `planner`, or `reviewer` when downstream reasoning depends on command output. The validator must not intentionally edit source files.
+Use the maintained tool-specific `validator` subagent/custom agent for assigned commands, checks, and reproducible evidence. The validator returns command, cwd, exit code, result summary, relevant output excerpts, artifact paths, and timestamp. The parent passes validator results back to `{{explore_agent}}`, `{{plan_agent}}`, or `reviewer` when downstream reasoning depends on command output. The validator must not intentionally edit source files.
 
 ### Implementation delegation
 Split by layer/component only when the tool can keep edits isolated. Main thread owns orchestration. **No two helpers modify the same file.**

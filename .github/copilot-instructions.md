@@ -30,6 +30,7 @@ Managed subagents are stored separately per tool under `inventory/subagents/code
 
 ## Key conventions
 
+- `inventory/skills/` contents are installable repository artifacts, not automatically activated agent skills; activate one only when the task is to create, review, edit, install, or explicitly use it.
 - Custom skills use `scope: "custom"` in `registry.json` and are addressed by bare skill name in CLI output and installs. Scoped `custom/<name>` is accepted, but the bare name is the normal user-facing form.
 - Keep inventory changes synchronized across the source files, `registry.json`, and `registry-lock.json`. `node bin/cli.js validate` treats a stale lockfile as an error.
 - The CLI defaults `add` to the Codex skill target unless `--target` or `--dir` is provided. Use `install` for agents and subagents.

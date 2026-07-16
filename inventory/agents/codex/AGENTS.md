@@ -1,6 +1,6 @@
 # Codex AGENTS.md Overlay
 
-This overlay is appended to `inventory/agents/core.md` when installing Codex agents.
+This overlay extends the shared core instructions with Codex-specific behavior.
 
 ## Codex Skill Paths
 
@@ -24,7 +24,7 @@ Use subagents or helper tasks for isolated context, parallel work, or bulk mecha
 
 The named agent routes below are Codex-specific. Other tools should map these roles to their nearest available mechanism, or do the work in the main context if no equivalent exists.
 
-Maintained Codex subagent definitions live in `inventory/subagents/codex/` and install to `~/.codex/agents/`.
+Maintained Codex subagent definitions are installed at `~/.codex/agents/`.
 
 Agent routing:
 
@@ -62,4 +62,4 @@ Codex sandbox assignment: `planner`, `researcher`, and `reviewer` are read-only;
 
 - Runtime target: `~/.codex/AGENTS.md`.
 - Project-specific overrides should live in the repository `AGENTS.md` file.
-- Keep this overlay focused on Codex-specific behavior. Shared process belongs in `inventory/agents/core.md`.
+- Keep this overlay focused on Codex-specific behavior. Shared process belongs in the core instructions.

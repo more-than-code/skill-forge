@@ -32,3 +32,5 @@ Thumbs.db
 *.swo
 
 tasks/
+site/
+otel/data/

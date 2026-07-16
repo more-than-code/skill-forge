@@ -1,0 +1,26 @@
+{
+  "_comment": "Merge the hooks block below into ~/.claude/settings.json (or a project's .claude/settings.json) to record agent-usage stats. PostToolUse on Task/Agent captures subagent type, model, and task description; SessionEnd marks session boundaries.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/skill-forge/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/skill-forge/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

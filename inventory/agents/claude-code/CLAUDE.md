@@ -1,6 +1,6 @@
 # Claude Code CLAUDE.md Overlay
 
-This overlay is appended to `inventory/agents/core.md` when installing Claude Code agents.
+This overlay extends the shared core instructions with Claude Code-specific behavior.
 
 ## Claude Code Skill Paths
 
@@ -20,11 +20,10 @@ For concrete before/after examples of common failure modes, also check `~/.claud
 
 Claude Code may expose subagents or helper workflows. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
 
-Maintained Claude Code subagent definitions are authored in `inventory/subagents/claude-code/` in the skill registry repository and install to `~/.claude/agents/`.
+Maintained Claude Code subagent definitions are installed at `~/.claude/agents/`.
 
 - For exploration (§7), use the built-in `Explore` agent. For planning, use the built-in `Plan` agent. Both are harness-enforced read-only. Include the required output shape (findings with file references, or spec-shaped plans with acceptance criteria and verification gates) in the task prompt.
-- Use the maintained `validator`, `reviewer`, and `bulk-worker` subagents for their §7 roles. Where core instructions reference `researcher` or `planner`, map them to `Explore` and `Plan` in Claude Code.
-- Do not use Codex subagent names (`bulk_worker`, `researcher`, `planner`). Use Claude Code subagents only when they are configured for the current project or user profile.
+- Use the maintained `validator`, `reviewer`, and `bulk-worker` subagents for their §7 roles.
 - Use `.claude/rules/` or project-local Claude configuration for narrower file/path-specific guidance instead of expanding this file.
 - Claude-specific auto memory may record learnings separately. Do not treat auto memory as a substitute for explicit safety, verification, or permission rules in the composed file.
 
@@ -62,4 +61,4 @@ Claude Code subagent files do not pin Codex-style `sandbox_mode`. Enforcement is
 - Managed global target: `~/.claude/CLAUDE.md`.
 - Project-specific overrides should live in the repository `CLAUDE.md` file.
 - Keep instructions concise. Claude Code loads `CLAUDE.md` as persistent context, not as an enforced policy engine.
-- Keep this overlay focused on Claude Code-specific behavior. Shared process belongs in `inventory/agents/core.md`.
+- Keep this overlay focused on Claude Code-specific behavior. Shared process belongs in the core instructions.

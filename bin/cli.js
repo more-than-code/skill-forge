@@ -15,7 +15,7 @@ const REPO_ROOT = path.join(__dirname, '..');
 const REGISTRY_PATH = path.join(REPO_ROOT, 'registry.json');
 const REGISTRY_LOCK_PATH = path.join(REPO_ROOT, 'registry-lock.json');
 const SCOPE_PRIORITY = ['custom'];
-const ARTIFACT_TYPES = ['skills', 'agents', 'subagents'];
+const ARTIFACT_TYPES = ['skills', 'agents', 'subagents', 'hooks'];
 const TOOL_LABELS = {
   codex: 'Codex',
   'copilot-cli': 'Copilot CLI',
@@ -32,7 +32,9 @@ const ARTIFACT_TYPE_ALIASES = {
   agent: 'agents',
   agents: 'agents',
   subagent: 'subagents',
-  subagents: 'subagents'
+  subagents: 'subagents',
+  hook: 'hooks',
+  hooks: 'hooks'
 };
 
 const program = new Command();
@@ -40,7 +42,7 @@ const program = new Command();
 program
   .name('skill-forge')
   .description('CLI to manage skills from the skill-forge registry')
-  .version('1.0.0');
+  .version('1.1.0');
 
 function expandHome(targetPath) {
   if (!targetPath) return targetPath;
@@ -201,7 +203,8 @@ async function buildLock(registry) {
 
   for (const artifact of [
     ...(registry.managedAgents || []),
-    ...(registry.managedSubagents || [])
+    ...(registry.managedSubagents || []),
+    ...(registry.managedHooks || [])
   ]) {
     const absolutePath = path.join(REPO_ROOT, artifact.path);
     const stat = await fs.stat(absolutePath);
@@ -286,7 +289,8 @@ async function validateRegistry() {
 
   for (const artifact of [
     ...(registry.managedAgents || []),
-    ...(registry.managedSubagents || [])
+    ...(registry.managedSubagents || []),
+    ...(registry.managedHooks || [])
   ]) {
     for (const field of ['name', 'version', 'path']) {
       if (!artifact[field]) reportValidationError(errors, `managed artifact missing ${field}`);
@@ -296,6 +300,23 @@ async function validateRegistry() {
     }
     if (artifact.path && !await fs.pathExists(path.join(REPO_ROOT, artifact.path))) {
       reportValidationError(errors, `${artifact.name} missing file at ${artifact.path}`);
+    }
+  }
+
+  const agentCore = getAgentCore(registry);
+  if (agentCore) {
+    const coreSource = await fs.readFile(path.join(REPO_ROOT, agentCore.path), 'utf8');
+    for (const artifact of (registry.managedAgents || []).filter((entry) => !entry.sourceOnly)) {
+      if (!artifact.path || !await fs.pathExists(path.join(REPO_ROOT, artifact.path))) continue;
+      const composed = await composeAgentContent(registry, artifact);
+      const unresolved = findUnresolvedPlaceholders(composed);
+      if (unresolved.length > 0) {
+        reportValidationError(errors, `${artifact.name} has unresolved placeholders: ${unresolved.map((name) => `{{${name}}}`).join(', ')}; add them to the artifact's vars in registry.json`);
+      }
+      const source = coreSource + await fs.readFile(path.join(REPO_ROOT, artifact.path), 'utf8');
+      for (const varName of Object.keys(artifact.vars || {})) {
+        if (!source.includes(`{{${varName}}}`)) warnings.push(`${artifact.name} defines unused var ${varName}`);
+      }
     }
   }
 
@@ -364,6 +385,7 @@ function getArtifactsByType(registry, type) {
   if (type === 'skills') return getSkillEntries(registry, { installableOnly: true });
   if (type === 'agents') return (registry.managedAgents || []).filter((artifact) => !artifact.sourceOnly);
   if (type === 'subagents') return registry.managedSubagents || [];
+  if (type === 'hooks') return registry.managedHooks || [];
   return [];
 }
 
@@ -381,7 +403,8 @@ function getToolChoices(registry) {
 
   for (const artifact of [
     ...(registry.managedAgents || []),
-    ...(registry.managedSubagents || [])
+    ...(registry.managedSubagents || []),
+    ...(registry.managedHooks || [])
   ].filter((entry) => entry.runtimeTarget)) {
     if (seen.has(artifact.scope)) continue;
     seen.add(artifact.scope);
@@ -452,7 +475,7 @@ async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES)
   if (providedType) {
     const type = normalizeArtifactType(providedType);
     if (!ARTIFACT_TYPES.includes(type)) {
-      throw new Error(`Unsupported artifact type "${providedType}". Use one of: skill, agent, subagent.`);
+      throw new Error(`Unsupported artifact type "${providedType}". Use one of: skill, agent, subagent, hook.`);
     }
     if (!availableTypes.includes(type)) {
       throw new Error(`No ${type} artifacts are available for the selected target.`);
@@ -468,7 +491,8 @@ async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES)
       choices: [
         { name: 'Skills', value: 'skills' },
         { name: 'Agents', value: 'agents' },
-        { name: 'Subagents', value: 'subagents' }
+        { name: 'Subagents', value: 'subagents' },
+        { name: 'Hooks', value: 'hooks' }
       ].filter((choice) => availableTypes.includes(choice.value))
     }
   ]);
@@ -530,6 +554,20 @@ function getAgentCore(registry) {
   return (registry.managedAgents || []).find((artifact) => artifact.sourceOnly && artifact.name === 'agents-core');
 }
 
+const PLACEHOLDER_PATTERN = /\{\{([a-z0-9_]+)\}\}/g;
+
+function substituteVars(content, vars = {}) {
+  let result = content;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+  return result;
+}
+
+function findUnresolvedPlaceholders(content) {
+  return [...new Set([...content.matchAll(PLACEHOLDER_PATTERN)].map((match) => match[1]))];
+}
+
 async function composeAgentContent(registry, artifact) {
   const core = getAgentCore(registry);
   if (!core) throw new Error('Missing source-only agents-core artifact.');
@@ -538,7 +576,8 @@ async function composeAgentContent(registry, artifact) {
   const overlayPath = path.join(REPO_ROOT, artifact.path);
   const coreContent = await fs.readFile(corePath, 'utf8');
   const overlayContent = await fs.readFile(overlayPath, 'utf8');
-  return `${coreContent.trimEnd()}\n\n---\n\n${overlayContent.trimEnd()}\n`;
+  const composed = `${coreContent.trimEnd()}\n\n---\n\n${overlayContent.trimEnd()}\n`;
+  return substituteVars(composed, artifact.vars);
 }
 
 async function confirmOverwrite(destPath, yes) {
@@ -785,6 +824,65 @@ program
   });
 
 program
+  .command('diff-hooks')
+  .description('Compare managed hook artifacts against their runtime targets without writing')
+  .action(async () => {
+    try {
+      const registry = await readRegistry();
+      for (const artifact of registry.managedHooks || []) {
+        printDiffResult(await diffArtifact(artifact, artifact.name));
+      }
+    } catch (error) {
+      console.error(chalk.red('Error diffing managed hooks:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('stats')
+  .argument('<action>', 'Only "record" is supported')
+  .description('Record a usage-stats event: reads a JSON payload from stdin and appends metadata JSONL under $SKILL_FORGE_HOME/stats (default ~/.skill-forge/stats)')
+  .action(async (action) => {
+    try {
+      if (action !== 'record') throw new Error(`Unsupported stats action "${action}". Use: record`);
+      const stdin = await new Promise((resolve) => {
+        const chunks = [];
+        process.stdin.on('data', (chunk) => chunks.push(chunk));
+        process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      });
+      let payload = {};
+      try {
+        payload = JSON.parse(stdin || '{}');
+      } catch {
+        throw new Error('stdin is not valid JSON');
+      }
+      const cwd = payload.cwd || process.cwd();
+      const record = {
+        schema: 1,
+        ts: new Date().toISOString(),
+        tool: payload.tool || 'unknown',
+        event: payload.event || payload.hook_event_name || 'unknown',
+        session_id: payload.session_id || null,
+        project: path.basename(cwd),
+        cwd,
+        tool_name: payload.tool_name || null,
+        agent_type: payload.agent_type || payload.tool_input?.subagent_type || null,
+        model: payload.model || payload.tool_input?.model || null,
+        description: payload.description || payload.tool_input?.description || null
+      };
+      const home = process.env.SKILL_FORGE_HOME || path.join(process.env.HOME, '.skill-forge');
+      const statsDir = path.join(home, 'stats');
+      await fs.ensureDir(statsDir);
+      const slug = cwd.replace(/\//g, '-').replace(/^-/, '').replace(/[^A-Za-z0-9._-]/g, '_') || 'unknown';
+      await fs.appendFile(path.join(statsDir, `${slug}.jsonl`), `${JSON.stringify(record)}\n`);
+      console.log(chalk.green(`Recorded ${record.event} for ${record.project}`));
+    } catch (error) {
+      console.error(chalk.red('Error recording stats:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command('diff-global')
   .description('Compare custom inventory skills against global runtime skill targets without writing')
   .action(async () => {
@@ -796,6 +894,158 @@ program
       }
     } catch (error) {
       console.error(chalk.red('Error diffing global skills:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function parseTomlSubagent(text) {
+  const field = (name) => text.match(new RegExp(`^${name}\\s*=\\s*"([^"]*)"`, 'm'))?.[1] || '';
+  return { name: field('name'), description: field('description'), model: field('model') };
+}
+
+async function collectStats() {
+  const home = process.env.SKILL_FORGE_HOME || path.join(process.env.HOME, '.skill-forge');
+  const statsDir = path.join(home, 'stats');
+  if (!await fs.pathExists(statsDir)) return { statsDir, projects: [] };
+
+  const projects = new Map();
+  for (const file of (await fs.readdir(statsDir)).filter((name) => name.endsWith('.jsonl'))) {
+    const lines = (await fs.readFile(path.join(statsDir, file), 'utf8')).split('\n').filter(Boolean);
+    for (const line of lines) {
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const key = record.project || file;
+      if (!projects.has(key)) projects.set(key, { project: key, events: 0, agents: new Map(), models: new Map(), lastTs: '' });
+      const entry = projects.get(key);
+      entry.events += 1;
+      if (record.agent_type) entry.agents.set(record.agent_type, (entry.agents.get(record.agent_type) || 0) + 1);
+      if (record.model) entry.models.set(record.model, (entry.models.get(record.model) || 0) + 1);
+      if (record.ts > entry.lastTs) entry.lastTs = record.ts;
+    }
+  }
+  return { statsDir, projects: [...projects.values()].sort((a, b) => b.events - a.events) };
+}
+
+function countMapToText(map) {
+  return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => `${key} (${count})`).join(', ') || '—';
+}
+
+async function buildSiteHtml(registry) {
+  const sections = [];
+
+  const tagIndex = new Map();
+  for (const skill of sortSkills(registry.skills)) {
+    for (const tag of skill.tags || ['untagged']) {
+      if (!tagIndex.has(tag)) tagIndex.set(tag, []);
+      tagIndex.get(tag).push(skill.name);
+    }
+  }
+  const tagRows = [...tagIndex.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([tag, names]) => `<tr><td><span class="tag">${escapeHtml(tag)}</span></td><td>${names.map((name) => `<a href="#skill-${escapeHtml(name)}">${escapeHtml(name)}</a>`).join(', ')}</td></tr>`)
+    .join('\n');
+
+  const skillCards = [];
+  for (const skill of sortSkills(registry.skills)) {
+    const skillDir = path.join(REPO_ROOT, skill.path);
+    const frontmatter = parseFrontmatter(await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8')) || {};
+    const companions = (await fs.readdir(skillDir)).filter((name) => name !== 'SKILL.md');
+    skillCards.push(`<article class="card" id="skill-${escapeHtml(skill.name)}">
+<h3>${escapeHtml(skill.name)} <small>v${escapeHtml(skill.version)}</small></h3>
+<p>${(skill.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join(' ')}</p>
+<p>${escapeHtml(frontmatter.description || '')}</p>
+${companions.length > 0 ? `<p><small>Companions: ${companions.map(escapeHtml).join(', ')}</small></p>` : ''}
+</article>`);
+  }
+  sections.push(`<section><h2>Skills (${registry.skills.length})</h2>
+<h3>By tag</h3><table><thead><tr><th>Tag</th><th>Skills</th></tr></thead><tbody>${tagRows}</tbody></table>
+${skillCards.join('\n')}</section>`);
+
+  const agentBlocks = [];
+  for (const artifact of (registry.managedAgents || []).filter((entry) => !entry.sourceOnly)) {
+    const composed = await composeAgentContent(registry, artifact);
+    const vars = Object.entries(artifact.vars || {}).map(([key, value]) => `${key} → ${value}`).join(', ');
+    agentBlocks.push(`<article class="card"><h3>${escapeHtml(artifact.name)} <small>v${escapeHtml(artifact.version)} → ${escapeHtml(artifact.runtimeTarget)}</small></h3>
+${vars ? `<p><small>Vars: ${escapeHtml(vars)}</small></p>` : ''}
+<details><summary>Composed preview (${composed.split('\n').length} lines)</summary><pre>${escapeHtml(composed)}</pre></details></article>`);
+  }
+  sections.push(`<section><h2>Managed Agents</h2>${agentBlocks.join('\n')}</section>`);
+
+  const subagentBlocks = [];
+  for (const artifact of registry.managedSubagents || []) {
+    const dir = path.join(REPO_ROOT, artifact.path);
+    const rows = [];
+    for (const file of (await fs.readdir(dir)).sort()) {
+      const text = await fs.readFile(path.join(dir, file), 'utf8');
+      const meta = file.endsWith('.toml') ? parseTomlSubagent(text) : (parseFrontmatter(text) || {});
+      rows.push(`<tr><td>${escapeHtml(meta.name || file)}</td><td>${escapeHtml(meta.model || 'default')}</td><td>${escapeHtml(meta.tools || 'all')}</td><td>${escapeHtml(meta.description || '')}</td></tr>`);
+    }
+    subagentBlocks.push(`<article class="card"><h3>${escapeHtml(artifact.name)} <small>v${escapeHtml(artifact.version)} → ${escapeHtml(artifact.runtimeTarget)}</small></h3>
+<table><thead><tr><th>Name</th><th>Model</th><th>Tools</th><th>Description</th></tr></thead><tbody>${rows.join('\n')}</tbody></table></article>`);
+  }
+  sections.push(`<section><h2>Managed Subagents</h2><p><small>Role sets intentionally differ per tool; Claude Code maps exploration/planning to built-in Explore/Plan.</small></p>${subagentBlocks.join('\n')}</section>`);
+
+  const hookBlocks = [];
+  for (const artifact of registry.managedHooks || []) {
+    const files = await fs.readdir(path.join(REPO_ROOT, artifact.path));
+    hookBlocks.push(`<article class="card"><h3>${escapeHtml(artifact.name)} <small>v${escapeHtml(artifact.version)} → ${escapeHtml(artifact.runtimeTarget)}</small></h3>
+<p><small>Files: ${files.map(escapeHtml).join(', ')}</small></p></article>`);
+  }
+  if (hookBlocks.length > 0) sections.push(`<section><h2>Managed Hooks</h2>${hookBlocks.join('\n')}</section>`);
+
+  const stats = await collectStats();
+  if (stats.projects.length === 0) {
+    sections.push(`<section><h2>Usage Stats</h2><p>No usage stats recorded yet in <code>${escapeHtml(stats.statsDir)}</code>. Install the claude-code-hooks artifact and merge the settings snippet to start recording.</p></section>`);
+  } else {
+    const statRows = stats.projects.map((entry) => `<tr><td>${escapeHtml(entry.project)}</td><td>${entry.events}</td><td>${escapeHtml(countMapToText(entry.agents))}</td><td>${escapeHtml(countMapToText(entry.models))}</td><td>${escapeHtml(entry.lastTs)}</td></tr>`).join('\n');
+    sections.push(`<section><h2>Usage Stats</h2><p><small>Aggregated from ${escapeHtml(stats.statsDir)} — metadata only.</small></p>
+<table><thead><tr><th>Project</th><th>Events</th><th>Agents</th><th>Models</th><th>Last activity</th></tr></thead><tbody>${statRows}</tbody></table></section>`);
+  }
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Forge Catalog</title>
+<style>
+:root { color-scheme: light dark; --border: #8884; --tagbg: #8882; }
+body { font: 15px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1rem; }
+h1 { margin-bottom: 0; } h1 + p { margin-top: 0.2rem; opacity: 0.7; }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 1rem; margin: 0.7rem 0; }
+.tag { background: var(--tagbg); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; }
+table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid var(--border); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+pre { overflow-x: auto; background: var(--tagbg); padding: 0.6rem; border-radius: 6px; }
+small { opacity: 0.7; }
+</style></head><body>
+<h1>Skill Forge Catalog</h1>
+<p>Generated ${new Date().toISOString()} from registry v${escapeHtml(registry.version)} — read-only preview of canonical inventory.</p>
+${sections.join('\n')}
+</body></html>\n`;
+}
+
+program
+  .command('site')
+  .description('Generate a static HTML catalog of skills, agents, subagents, hooks, and local usage stats')
+  .option('-o, --out <dir>', 'Output directory', 'site')
+  .action(async (options) => {
+    try {
+      const registry = await readRegistry();
+      const outDir = path.resolve(options.out);
+      await fs.ensureDir(outDir);
+      const outFile = path.join(outDir, 'index.html');
+      await fs.writeFile(outFile, await buildSiteHtml(registry));
+      console.log(chalk.green(`Wrote ${outFile}`));
+    } catch (error) {
+      console.error(chalk.red('Error generating site:'), error.message);
       process.exitCode = 1;
     }
   });

@@ -162,6 +162,8 @@ node bin/cli.js install claude-code-agents --type agent --target claude-code \
 
 ## Adding Or Updating A Skill
 
+Manually:
+
 1. Add or edit the skill under `inventory/skills/<skill-name>/`.
 2. Ensure `SKILL.md` has `name` and `description` frontmatter.
 3. Add or update the matching entry in `registry.json`.
@@ -179,6 +181,68 @@ node bin/cli.js install claude-code-agents --type agent --target claude-code \
 
 Versions are tracked in `registry.json`; skill frontmatter should not include a
 `version` field.
+
+### `skill` subcommand (agent-facing)
+
+`skf skill` wraps the same steps into single commands intended for programmatic
+(agent) use — no interactive prompts, `--json` output on every subcommand, and
+`write`/`delete` automatically regenerate the lockfile and re-validate.
+
+```bash
+skf skill list [--all] [--json]
+skf skill read <name> [--json]
+skf skill write <name> [--set-version <semver>] [--tags <a,b,c>] [--installable <true|false>] \
+  [--file <relpath>=<localpath>]... [--remove-file <relpath>]... [--skip-skill-md] [--json]
+skf skill set-version <name> <semver> [--json]
+skf skill bump <name> [--patch|--minor|--major] [--json]
+skf skill delete <name> --yes [--json]
+```
+
+`write` reads the full `SKILL.md` body (including its `name`/`description`
+frontmatter) from stdin and upserts it; `--set-version` is required when
+creating a new skill. Companion files (e.g. `EXAMPLES.md`, or nested paths
+like `refs/example.md`) are staged from local disk via repeatable
+`--file <relative-path>=<local-source-path>` flags; `--file SKILL.md=<path>`
+can be used instead of stdin. `--remove-file <relative-path>` (repeatable)
+deletes a companion file from the skill directory — it cannot target
+`SKILL.md` (use `skill delete` to remove the whole skill), cannot overlap
+with a `--file` target in the same call, and pruning also removes any
+now-empty parent directories under the skill dir. Removing a path that
+doesn't exist is a no-op reported as a warning, not an error. All `--file`
+and `--remove-file` paths are validated against path traversal (no `..`
+segments, no absolute paths). Files not mentioned in a given `write` call are
+left untouched. Pass `--skip-skill-md` to update companions only, without
+supplying SKILL.md content (valid only when updating an existing skill).
+`read --json` returns companion contents as a
+`{ "<relative-path>": "<content>" }` map. `set-version` sets the skill's
+registry version without rewriting `SKILL.md` (same effect as
+`write --skip-skill-md --set-version` without needing a content source).
+`bump` increments the current registry version by one step — default
+`--patch`, or `--minor` / `--major` (mutually exclusive); minor/major reset
+lower components to 0. Both version commands auto-run lock + validate and
+emit `--json` with `previousVersion` / `version` (or `action: "unchanged"`
+when `set-version` is a no-op). `delete` requires `--yes` explicitly since
+there is no interactive confirmation.
+
+`write` validates everything it can — SKILL.md frontmatter, every `--file`
+local source's existence, every `--remove-file` target's existence/type,
+duplicate `--file`/`--remove-file` targets — *before* touching the
+filesystem, so a bad input never leaves a partial write behind: on a
+new-skill create, if the filesystem step itself still fails (disk full,
+permission change mid-flight), the just-created skill directory is removed.
+Multi-file **updates** are not crash-atomic after preflight: a mid-flight I/O
+error can leave a partially updated skill tree (registry is only written after
+files succeed). With `--json`, those failures include `"partial": true` so
+callers can re-issue a full `skill write`. `--remove-file` refuses to target a
+directory (no recursive delete via a typo) and refuses `SKILL.md`. If registry
+validation still fails *after* a successful write/delete (e.g. an unrelated
+pre-existing registry problem), that change is left in place (no automatic
+rollback at that stage) and the command exits non-zero — run `validate` again
+after fixing. With `--json`, failures also emit a JSON object
+(`{"error": "..."}`, optionally `"partial": true`, or
+`{"error", "errors", "warnings"}` for a post-write validation failure) to
+stdout instead of leaving it empty, so callers can always `JSON.parse(stdout)`
+regardless of exit code.
 
 ## Managed Agents
 

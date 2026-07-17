@@ -7,11 +7,24 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import inquirer from 'inquirer';
+import {
+  SEMVER_PATTERN,
+  assertNoDuplicateRelPaths,
+  assertPathWithinInventorySkills as assertPathWithinInventorySkillsAt,
+  assertSafeRelativePath,
+  assertSkillMdStdinAvailable,
+  bumpSemver,
+  parseSemver
+} from '../lib/skill-helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const REPO_ROOT = path.join(__dirname, '..');
+// SKILL_FORGE_ROOT is an internal/test override so mutator tests can isolate
+// registry + inventory without touching the developer checkout.
+const REPO_ROOT = process.env.SKILL_FORGE_ROOT
+  ? path.resolve(process.env.SKILL_FORGE_ROOT)
+  : path.join(__dirname, '..');
 const REGISTRY_PATH = path.join(REPO_ROOT, 'registry.json');
 const REGISTRY_LOCK_PATH = path.join(REPO_ROOT, 'registry-lock.json');
 const SCOPE_PRIORITY = ['custom'];
@@ -36,6 +49,7 @@ const ARTIFACT_TYPE_ALIASES = {
   hook: 'hooks',
   hooks: 'hooks'
 };
+const SKILL_NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
 const program = new Command();
 
@@ -53,6 +67,65 @@ function expandHome(targetPath) {
 
 async function readRegistry() {
   return fs.readJson(REGISTRY_PATH);
+}
+
+async function writeRegistry(registry) {
+  await fs.writeJson(REGISTRY_PATH, registry, { spaces: 2 });
+}
+
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function splitTags(value) {
+  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function toSkillSummary(skill) {
+  return {
+    name: skill.name,
+    version: skill.version,
+    scope: skill.scope,
+    tags: skill.tags || [],
+    installable: skill.installable,
+    path: skill.path,
+    runtimeTarget: skill.runtimeTarget
+  };
+}
+
+function parseFileAssignment(raw) {
+  const eq = raw.indexOf('=');
+  if (eq <= 0 || eq === raw.length - 1) {
+    throw new Error(`Invalid --file "${raw}"; expected <relative-path>=<local-source-path>.`);
+  }
+  const relPath = assertSafeRelativePath(raw.slice(0, eq), '--file path');
+  const localPath = raw.slice(eq + 1);
+  return { relPath, localPath };
+}
+
+async function pruneEmptyParents(dir, skillDir) {
+  let current = dir;
+  while (current !== skillDir) {
+    const entries = await fs.readdir(current).catch(() => null);
+    if (!entries || entries.length > 0) break;
+    await fs.remove(current);
+    current = path.dirname(current);
+  }
+}
+
+function assertPathWithinInventorySkills(relPath) {
+  return assertPathWithinInventorySkillsAt(relPath, REPO_ROOT);
+}
+
+function printSkillError(options, message, extra = {}) {
+  if (options?.json) {
+    console.log(JSON.stringify({ error: message, ...extra }, null, 2));
+  } else {
+    console.error(chalk.red(message));
+  }
+  process.exitCode = 1;
 }
 
 function skillKey(skill) {
@@ -221,11 +294,11 @@ async function buildLock(registry) {
   };
 }
 
-async function writeLock() {
+async function writeLock({ silent = false } = {}) {
   const registry = await readRegistry();
   const lock = await buildLock(registry);
   await fs.writeJson(REGISTRY_LOCK_PATH, lock, { spaces: 2 });
-  console.log(chalk.green(`Wrote ${path.relative(process.cwd(), REGISTRY_LOCK_PATH)}`));
+  if (!silent) console.log(chalk.green(`Wrote ${path.relative(process.cwd(), REGISTRY_LOCK_PATH)}`));
 }
 
 function reportValidationError(errors, message) {
@@ -711,6 +784,400 @@ program
     }
   });
 
+const skillCommand = program
+  .command('skill')
+  .description('Read, write, and delete skill inventory artifacts (agent-facing; auto-runs lock + validate on mutation)');
+
+skillCommand
+  .command('list')
+  .description('List skills in the registry')
+  .option('--all', 'Include tracked (non-installable) skills')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      const registry = await readRegistry();
+      const skills = getSkillEntries(registry, { installableOnly: !options.all });
+
+      if (options.json) {
+        console.log(JSON.stringify(skills.map(toSkillSummary), null, 2));
+        return;
+      }
+
+      console.log(chalk.blue.bold(options.all ? '\nAll Skills:' : '\nAvailable Skills:'));
+      if (skills.length === 0) {
+        console.log(chalk.yellow('  No skills found.'));
+      } else {
+        for (const skill of skills) {
+          const installable = skill.installable ? 'installable' : 'tracked';
+          console.log(`- ${skillKey(skill)} (${installable}, v${skill.version})`);
+        }
+      }
+      console.log();
+    } catch (error) {
+      printSkillError(options, `Error listing skills: ${error.message}`);
+    }
+  });
+
+skillCommand
+  .command('read <name>')
+  .description("Print a skill's SKILL.md and companion file contents plus registry metadata")
+  .option('--json', 'Output structured JSON')
+  .action(async (name, options) => {
+    try {
+      const registry = await readRegistry();
+      const { skill, ambiguous, matches } = resolveSkill(registry, name);
+      if (!skill) throw new Error(`Skill "${name}" not found.`);
+      if (ambiguous) throw new Error(`Multiple skills named "${name}" found: ${matches.map(skillKey).join(', ')}. Use a scoped name.`);
+
+      const skillDir = path.join(REPO_ROOT, skill.path);
+      const body = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8');
+      const companionPaths = (await listFilesRecursive(skillDir))
+        .map((filePath) => path.relative(skillDir, filePath))
+        .filter((relPath) => relPath !== 'SKILL.md');
+      const companions = {};
+      for (const relPath of companionPaths) {
+        companions[relPath] = await fs.readFile(path.join(skillDir, relPath), 'utf8');
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify({ ...toSkillSummary(skill), body, companions }, null, 2));
+        return;
+      }
+
+      console.log(chalk.blue.bold(`\n${skillKey(skill)} (v${skill.version})`));
+      console.log(chalk.gray(`tags: ${(skill.tags || []).join(', ') || '—'} | installable: ${skill.installable} | path: ${skill.path}`));
+      if (companionPaths.length > 0) console.log(chalk.gray(`companions: ${companionPaths.join(', ')}`));
+      console.log();
+      console.log(chalk.blue.bold('--- SKILL.md ---'));
+      console.log(body);
+      for (const relPath of companionPaths) {
+        console.log(chalk.blue.bold(`\n--- ${relPath} ---`));
+        console.log(companions[relPath]);
+      }
+    } catch (error) {
+      printSkillError(options, `Error reading skill: ${error.message}`);
+    }
+  });
+
+skillCommand
+  .command('write <name>')
+  .description("Create or update a skill's SKILL.md and companion files, optionally remove companion files, and sync the registry (auto-runs lock + validate)")
+  .option('--set-version <semver>', 'Registry version, e.g. 0.2.0 (required when creating a new skill; named --set-version to avoid colliding with the global -V/--version flag)')
+  .option('--tags <list>', 'Comma-separated tags; replaces existing tags when provided')
+  .option('--installable <bool>', '"true" or "false"; defaults to "true" for new skills, unchanged on update')
+  .option('--file <assignment>', 'Additional file to write, formatted <relative-path>=<local-source-path>; repeatable. Use "SKILL.md=<path>" instead of stdin, or any other relative path for a companion file', (value, previous) => [...previous, value], [])
+  .option('--remove-file <relativePath>', 'Companion file to delete from the skill directory; repeatable. Cannot remove "SKILL.md" — use "skill delete" to remove the whole skill', (value, previous) => [...previous, value], [])
+  .option('--skip-skill-md', 'Leave SKILL.md untouched (only valid when updating an existing skill); use with --file/--remove-file for companion-only changes')
+  .option('--json', 'Output structured JSON')
+  .action(async (name, options) => {
+    try {
+      if (!SKILL_NAME_PATTERN.test(name)) {
+        throw new Error(`Invalid skill name "${name}". Use lowercase letters, digits, and hyphens (e.g. "my-skill").`);
+      }
+      if (options.setVersion && !SEMVER_PATTERN.test(options.setVersion)) {
+        throw new Error(`Invalid --set-version "${options.setVersion}". Use semver, e.g. "0.1.0".`);
+      }
+      if (options.installable !== undefined && !['true', 'false'].includes(options.installable)) {
+        throw new Error('--installable must be "true" or "false".');
+      }
+
+      const fileAssignments = options.file.map(parseFileAssignment);
+      assertNoDuplicateRelPaths(fileAssignments.map((assignment) => assignment.relPath), '--file');
+      const skillMdAssignment = fileAssignments.find((assignment) => assignment.relPath === 'SKILL.md');
+      const companionAssignments = fileAssignments.filter((assignment) => assignment.relPath !== 'SKILL.md');
+      if (options.skipSkillMd && skillMdAssignment) {
+        throw new Error('--skip-skill-md and --file SKILL.md=<path> are mutually exclusive.');
+      }
+
+      const removeFiles = options.removeFile.map((relPath) => assertSafeRelativePath(relPath, '--remove-file path'));
+      assertNoDuplicateRelPaths(removeFiles, '--remove-file');
+      if (removeFiles.includes('SKILL.md')) {
+        throw new Error('Cannot remove "SKILL.md" via --remove-file; use "skill delete" to remove the whole skill.');
+      }
+      const overlap = removeFiles.find((relPath) => fileAssignments.some((assignment) => assignment.relPath === relPath));
+      if (overlap) throw new Error(`"--file" and "--remove-file" both target "${overlap}"; that's ambiguous.`);
+
+      const registry = await readRegistry();
+      const existingIndex = registry.skills.findIndex((skill) => skill.scope === 'custom' && skill.name === name);
+      const isNew = existingIndex === -1;
+      if (isNew && !options.setVersion) throw new Error('--set-version is required when creating a new skill.');
+      if (isNew && options.skipSkillMd) throw new Error('--skip-skill-md cannot be used when creating a new skill; SKILL.md is required.');
+
+      const skillDir = path.join(REPO_ROOT, 'inventory/skills', name);
+
+      // Preflight: resolve and validate everything in memory before touching the filesystem,
+      // so a bad input (missing local file, bad frontmatter) never leaves a partial write behind.
+      let body = null;
+      if (!options.skipSkillMd) {
+        if (!skillMdAssignment) assertSkillMdStdinAvailable(Boolean(process.stdin.isTTY));
+        body = skillMdAssignment ? await fs.readFile(skillMdAssignment.localPath, 'utf8') : await readStdin();
+        if (!body.trim()) {
+          throw new Error('No SKILL.md content received (via stdin or --file SKILL.md=<path>). Pass --skip-skill-md to leave SKILL.md untouched on an update.');
+        }
+
+        const frontmatter = parseFrontmatter(body);
+        if (!frontmatter) throw new Error('SKILL.md content is missing YAML frontmatter (--- name/description ---).');
+        if (!frontmatter.name) throw new Error('Frontmatter is missing required field "name".');
+        if (!frontmatter.description) throw new Error('Frontmatter is missing required field "description".');
+        if (frontmatter.name !== name) throw new Error(`Frontmatter name "${frontmatter.name}" does not match "${name}".`);
+        if (frontmatter.version) throw new Error('Frontmatter must not include "version"; pass --set-version instead.');
+      }
+
+      for (const { relPath, localPath } of companionAssignments) {
+        const stat = await fs.stat(localPath).catch(() => null);
+        if (!stat) throw new Error(`--file "${relPath}=${localPath}": local source not found.`);
+        if (!stat.isFile()) throw new Error(`--file "${relPath}=${localPath}": local source must be a regular file.`);
+      }
+
+      const removalPlans = [];
+      for (const relPath of removeFiles) {
+        const destPath = path.join(skillDir, relPath);
+        const stat = await fs.stat(destPath).catch(() => null);
+        if (stat && stat.isDirectory()) {
+          throw new Error(`--remove-file "${relPath}" is a directory; refusing to remove it recursively. Remove its files individually.`);
+        }
+        removalPlans.push({ relPath, destPath, exists: Boolean(stat) });
+      }
+
+      // Mutate: everything above was pure validation, so failures here only happen on genuine
+      // I/O problems (disk full, permission changes mid-flight). Roll back a directory we just
+      // created for a brand-new skill; never roll back a pre-existing skill's directory.
+      // Multi-file updates are not crash-atomic after preflight: mid-flight I/O errors may leave
+      // a partial tree. JSON failures then set partial: true so agents can re-issue write.
+      const skillDirExistedBefore = await fs.pathExists(skillDir);
+      let wroteAny = false;
+      try {
+        await fs.ensureDir(skillDir);
+        if (!options.skipSkillMd) {
+          await fs.writeFile(path.join(skillDir, 'SKILL.md'), body.endsWith('\n') ? body : `${body}\n`);
+          wroteAny = true;
+        }
+        for (const { relPath, localPath } of companionAssignments) {
+          const destPath = path.join(skillDir, relPath);
+          await fs.ensureDir(path.dirname(destPath));
+          await fs.copy(localPath, destPath, { overwrite: true });
+          wroteAny = true;
+        }
+      } catch (mutationError) {
+        if (isNew && !skillDirExistedBefore) {
+          await fs.remove(skillDir).catch(() => {});
+          wroteAny = false;
+        }
+        if (wroteAny) mutationError.partial = true;
+        throw mutationError;
+      }
+
+      const removedFiles = [];
+      const removeNotices = [];
+      for (const { relPath, destPath, exists } of removalPlans) {
+        if (exists) {
+          await fs.remove(destPath);
+          await pruneEmptyParents(path.dirname(destPath), skillDir);
+          removedFiles.push(relPath);
+        } else {
+          removeNotices.push(`--remove-file "${relPath}" not found; nothing removed.`);
+        }
+      }
+
+      const entry = isNew
+        ? {
+            type: 'skill',
+            name,
+            version: options.setVersion,
+            scope: 'custom',
+            path: `inventory/skills/${name}`,
+            installable: options.installable === undefined ? true : options.installable === 'true',
+            runtimeTarget: `~/.codex/skills/${name}`,
+            tags: options.tags ? splitTags(options.tags) : []
+          }
+        : { ...registry.skills[existingIndex] };
+
+      if (!isNew) {
+        if (options.setVersion) entry.version = options.setVersion;
+        if (options.tags) entry.tags = splitTags(options.tags);
+        if (options.installable !== undefined) entry.installable = options.installable === 'true';
+      }
+
+      if (isNew) registry.skills.push(entry);
+      else registry.skills[existingIndex] = entry;
+
+      await writeRegistry(registry);
+      await writeLock({ silent: options.json });
+      const { errors, warnings: validationWarnings } = await validateRegistry();
+      const warnings = [...removeNotices, ...validationWarnings];
+      if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
+
+      if (errors.length > 0) {
+        const message = `Skill "${name}" was written but registry validation failed; fix and re-run "skill-forge validate".`;
+        if (options.json) {
+          console.log(JSON.stringify({ error: message, errors, warnings }, null, 2));
+        } else {
+          for (const error of errors) console.error(chalk.red(`Error: ${error}`));
+          console.error(chalk.red(message));
+        }
+        process.exitCode = 1;
+        return;
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify({ action: isNew ? 'created' : 'updated', skill: toSkillSummary(entry), removedFiles, warnings }, null, 2));
+        return;
+      }
+      console.log(chalk.green(`${isNew ? 'Created' : 'Updated'} ${skillKey(entry)} (v${entry.version}).`));
+      if (removedFiles.length > 0) console.log(chalk.gray(`Removed: ${removedFiles.join(', ')}`));
+    } catch (error) {
+      printSkillError(
+        options,
+        `Error writing skill: ${error.message}`,
+        error.partial ? { partial: true } : {}
+      );
+    }
+  });
+
+skillCommand
+  .command('delete <name>')
+  .description('Delete a skill from inventory and the registry (auto-runs lock + validate)')
+  .option('-y, --yes', 'Confirm deletion (required — there is no interactive prompt)')
+  .option('--json', 'Output structured JSON')
+  .action(async (name, options) => {
+    try {
+      if (!options.yes) throw new Error('Refusing to delete without --yes.');
+
+      const registry = await readRegistry();
+      const { skill, ambiguous, matches } = resolveSkill(registry, name);
+      if (!skill) throw new Error(`Skill "${name}" not found.`);
+      if (ambiguous) throw new Error(`Multiple skills named "${name}" found: ${matches.map(skillKey).join(', ')}. Use a scoped name.`);
+
+      const resolvedSkillPath = assertPathWithinInventorySkills(skill.path);
+      registry.skills = registry.skills.filter((entry) => entry !== skill);
+      await fs.remove(resolvedSkillPath);
+      await writeRegistry(registry);
+      await writeLock({ silent: options.json });
+      const { errors, warnings } = await validateRegistry();
+      if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
+
+      if (errors.length > 0) {
+        const message = `Skill "${name}" was deleted but registry validation failed; fix and re-run "skill-forge validate".`;
+        if (options.json) {
+          console.log(JSON.stringify({ error: message, errors, warnings }, null, 2));
+        } else {
+          for (const error of errors) console.error(chalk.red(`Error: ${error}`));
+          console.error(chalk.red(message));
+        }
+        process.exitCode = 1;
+        return;
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify({ action: 'deleted', name, warnings }, null, 2));
+        return;
+      }
+      console.log(chalk.green(`Deleted ${skillKey(skill)}.`));
+    } catch (error) {
+      printSkillError(options, `Error deleting skill: ${error.message}`);
+    }
+  });
+
+/**
+ * Update a skill's registry version only (no inventory file changes).
+ * Shared by set-version and bump.
+ */
+async function applySkillVersion(name, nextVersion, options, { action, previousVersion }) {
+  parseSemver(nextVersion); // validate shape
+  const registry = await readRegistry();
+  const { skill, ambiguous, matches } = resolveSkill(registry, name);
+  if (!skill) throw new Error(`Skill "${name}" not found.`);
+  if (ambiguous) throw new Error(`Multiple skills named "${name}" found: ${matches.map(skillKey).join(', ')}. Use a scoped name.`);
+
+  const from = previousVersion ?? skill.version;
+  if (from === nextVersion) {
+    if (options.json) {
+      console.log(JSON.stringify({
+        action: 'unchanged',
+        skill: toSkillSummary(skill),
+        previousVersion: from,
+        version: nextVersion,
+        warnings: []
+      }, null, 2));
+      return;
+    }
+    console.log(chalk.gray(`${skillKey(skill)} already at v${nextVersion}; nothing to do.`));
+    return;
+  }
+
+  skill.version = nextVersion;
+  await writeRegistry(registry);
+  await writeLock({ silent: options.json });
+  const { errors, warnings } = await validateRegistry();
+  if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
+
+  if (errors.length > 0) {
+    const message = `Skill "${name}" version was set to ${nextVersion} but registry validation failed; fix and re-run "skill-forge validate".`;
+    if (options.json) {
+      console.log(JSON.stringify({ error: message, errors, warnings, previousVersion: from, version: nextVersion }, null, 2));
+    } else {
+      for (const error of errors) console.error(chalk.red(`Error: ${error}`));
+      console.error(chalk.red(message));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      action,
+      skill: toSkillSummary(skill),
+      previousVersion: from,
+      version: nextVersion,
+      warnings
+    }, null, 2));
+    return;
+  }
+  console.log(chalk.green(`${skillKey(skill)} ${from} → ${nextVersion}.`));
+}
+
+skillCommand
+  .command('set-version <name> <semver>')
+  .description('Set a skill\'s registry version (auto-runs lock + validate); does not modify SKILL.md')
+  .option('--json', 'Output structured JSON')
+  .action(async (name, semver, options) => {
+    try {
+      await applySkillVersion(name, semver, options, { action: 'set-version' });
+    } catch (error) {
+      printSkillError(options, `Error setting skill version: ${error.message}`);
+    }
+  });
+
+skillCommand
+  .command('bump <name>')
+  .description('Bump a skill\'s registry version by one major/minor/patch step (default: --patch)')
+  .option('--patch', 'Increment patch (default)')
+  .option('--minor', 'Increment minor and reset patch to 0')
+  .option('--major', 'Increment major and reset minor and patch to 0')
+  .option('--json', 'Output structured JSON')
+  .action(async (name, options) => {
+    try {
+      const levels = [
+        options.major && 'major',
+        options.minor && 'minor',
+        options.patch && 'patch'
+      ].filter(Boolean);
+      if (levels.length > 1) throw new Error('Specify only one of --major, --minor, or --patch.');
+      const level = levels[0] || 'patch';
+
+      const registry = await readRegistry();
+      const { skill, ambiguous, matches } = resolveSkill(registry, name);
+      if (!skill) throw new Error(`Skill "${name}" not found.`);
+      if (ambiguous) throw new Error(`Multiple skills named "${name}" found: ${matches.map(skillKey).join(', ')}. Use a scoped name.`);
+
+      const previousVersion = skill.version;
+      const nextVersion = bumpSemver(previousVersion, level);
+      await applySkillVersion(name, nextVersion, options, { action: 'bump', previousVersion });
+    } catch (error) {
+      printSkillError(options, `Error bumping skill version: ${error.message}`);
+    }
+  });
+
 program
   .command('add [skillName]')
   .description('Install specific skill(s); use install for agents and subagents')
@@ -845,11 +1312,7 @@ program
   .action(async (action) => {
     try {
       if (action !== 'record') throw new Error(`Unsupported stats action "${action}". Use: record`);
-      const stdin = await new Promise((resolve) => {
-        const chunks = [];
-        process.stdin.on('data', (chunk) => chunks.push(chunk));
-        process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      });
+      const stdin = await readStdin();
       let payload = {};
       try {
         payload = JSON.parse(stdin || '{}');

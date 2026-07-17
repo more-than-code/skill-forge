@@ -1,4 +1,4 @@
-# Skill Forge Repository Instructions (Codex)
+# Skill Forge Repository Instructions
 
 This repository evaluates and evolves agent artifacts (instructions, skills, subagents) on top of a skill-registry substrate; see `docs/DESIGN.md` for goals and architecture. These rules apply only when working inside it; they intentionally do not ship in the composed agent instructions.
 

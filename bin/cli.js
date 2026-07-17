@@ -14,6 +14,8 @@ import {
   assertSafeRelativePath,
   assertSkillMdStdinAvailable,
   bumpSemver,
+  canonicalizeSkillRelPath,
+  isSkillMdRelPath,
   parseSemver
 } from '../lib/skill-helpers.js';
 
@@ -100,9 +102,15 @@ function parseFileAssignment(raw) {
   if (eq <= 0 || eq === raw.length - 1) {
     throw new Error(`Invalid --file "${raw}"; expected <relative-path>=<local-source-path>.`);
   }
-  const relPath = assertSafeRelativePath(raw.slice(0, eq), '--file path');
+  const relPath = canonicalizeSkillRelPath(assertSafeRelativePath(raw.slice(0, eq), '--file path'));
   const localPath = raw.slice(eq + 1);
   return { relPath, localPath };
+}
+
+async function assertLocalSourceFile(relPath, localPath) {
+  const stat = await fs.stat(localPath).catch(() => null);
+  if (!stat) throw new Error(`--file "${relPath}=${localPath}": local source not found.`);
+  if (!stat.isFile()) throw new Error(`--file "${relPath}=${localPath}": local source must be a regular file.`);
 }
 
 async function pruneEmptyParents(dir, skillDir) {
@@ -829,11 +837,11 @@ skillCommand
       if (!skill) throw new Error(`Skill "${name}" not found.`);
       if (ambiguous) throw new Error(`Multiple skills named "${name}" found: ${matches.map(skillKey).join(', ')}. Use a scoped name.`);
 
-      const skillDir = path.join(REPO_ROOT, skill.path);
+      const skillDir = assertPathWithinInventorySkills(skill.path);
       const body = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8');
       const companionPaths = (await listFilesRecursive(skillDir))
         .map((filePath) => path.relative(skillDir, filePath))
-        .filter((relPath) => relPath !== 'SKILL.md');
+        .filter((relPath) => !isSkillMdRelPath(relPath));
       const companions = {};
       for (const relPath of companionPaths) {
         companions[relPath] = await fs.readFile(path.join(skillDir, relPath), 'utf8');
@@ -867,7 +875,7 @@ skillCommand
   .option('--installable <bool>', '"true" or "false"; defaults to "true" for new skills, unchanged on update')
   .option('--file <assignment>', 'Additional file to write, formatted <relative-path>=<local-source-path>; repeatable. Use "SKILL.md=<path>" instead of stdin, or any other relative path for a companion file', (value, previous) => [...previous, value], [])
   .option('--remove-file <relativePath>', 'Companion file to delete from the skill directory; repeatable. Cannot remove "SKILL.md" — use "skill delete" to remove the whole skill', (value, previous) => [...previous, value], [])
-  .option('--skip-skill-md', 'Leave SKILL.md untouched (only valid when updating an existing skill); use with --file/--remove-file for companion-only changes')
+  .option('--skip-skill-md', 'Leave SKILL.md untouched (only valid when updating an existing skill); use for companion/metadata/removal-only changes')
   .option('--json', 'Output structured JSON')
   .action(async (name, options) => {
     try {
@@ -889,11 +897,14 @@ skillCommand
         throw new Error('--skip-skill-md and --file SKILL.md=<path> are mutually exclusive.');
       }
 
-      const removeFiles = options.removeFile.map((relPath) => assertSafeRelativePath(relPath, '--remove-file path'));
+      const removeFiles = options.removeFile.map((relPath) => {
+        const safe = assertSafeRelativePath(relPath, '--remove-file path');
+        if (isSkillMdRelPath(safe)) {
+          throw new Error('Cannot remove "SKILL.md" via --remove-file; use "skill delete" to remove the whole skill.');
+        }
+        return safe;
+      });
       assertNoDuplicateRelPaths(removeFiles, '--remove-file');
-      if (removeFiles.includes('SKILL.md')) {
-        throw new Error('Cannot remove "SKILL.md" via --remove-file; use "skill delete" to remove the whole skill.');
-      }
       const overlap = removeFiles.find((relPath) => fileAssignments.some((assignment) => assignment.relPath === relPath));
       if (overlap) throw new Error(`"--file" and "--remove-file" both target "${overlap}"; that's ambiguous.`);
 
@@ -910,6 +921,7 @@ skillCommand
       let body = null;
       if (!options.skipSkillMd) {
         if (!skillMdAssignment) assertSkillMdStdinAvailable(Boolean(process.stdin.isTTY));
+        if (skillMdAssignment) await assertLocalSourceFile('SKILL.md', skillMdAssignment.localPath);
         body = skillMdAssignment ? await fs.readFile(skillMdAssignment.localPath, 'utf8') : await readStdin();
         if (!body.trim()) {
           throw new Error('No SKILL.md content received (via stdin or --file SKILL.md=<path>). Pass --skip-skill-md to leave SKILL.md untouched on an update.');
@@ -924,9 +936,7 @@ skillCommand
       }
 
       for (const { relPath, localPath } of companionAssignments) {
-        const stat = await fs.stat(localPath).catch(() => null);
-        if (!stat) throw new Error(`--file "${relPath}=${localPath}": local source not found.`);
-        if (!stat.isFile()) throw new Error(`--file "${relPath}=${localPath}": local source must be a regular file.`);
+        await assertLocalSourceFile(relPath, localPath);
       }
 
       const removalPlans = [];
@@ -939,92 +949,97 @@ skillCommand
         removalPlans.push({ relPath, destPath, exists: Boolean(stat) });
       }
 
-      // Mutate: everything above was pure validation, so failures here only happen on genuine
-      // I/O problems (disk full, permission changes mid-flight). Roll back a directory we just
-      // created for a brand-new skill; never roll back a pre-existing skill's directory.
-      // Multi-file updates are not crash-atomic after preflight: mid-flight I/O errors may leave
-      // a partial tree. JSON failures then set partial: true so agents can re-issue write.
+      // Mutate: preflight passed. Failures here are genuine I/O/registry issues.
+      // New-skill dirs are rolled back only if the registry entry was never written.
+      // Any durable change sets partial: true on JSON errors so agents can re-issue write.
       const skillDirExistedBefore = await fs.pathExists(skillDir);
-      let wroteAny = false;
+      let mutated = false;
+      let registryWritten = false;
+      const removedFiles = [];
+      const removeNotices = [];
+
       try {
         await fs.ensureDir(skillDir);
         if (!options.skipSkillMd) {
           await fs.writeFile(path.join(skillDir, 'SKILL.md'), body.endsWith('\n') ? body : `${body}\n`);
-          wroteAny = true;
+          mutated = true;
         }
         for (const { relPath, localPath } of companionAssignments) {
           const destPath = path.join(skillDir, relPath);
           await fs.ensureDir(path.dirname(destPath));
           await fs.copy(localPath, destPath, { overwrite: true });
-          wroteAny = true;
+          mutated = true;
         }
+
+        for (const { relPath, destPath, exists } of removalPlans) {
+          if (exists) {
+            await fs.remove(destPath);
+            await pruneEmptyParents(path.dirname(destPath), skillDir);
+            removedFiles.push(relPath);
+            mutated = true;
+          } else {
+            removeNotices.push(`--remove-file "${relPath}" not found; nothing removed.`);
+          }
+        }
+
+        const entry = isNew
+          ? {
+              type: 'skill',
+              name,
+              version: options.setVersion,
+              scope: 'custom',
+              path: `inventory/skills/${name}`,
+              installable: options.installable === undefined ? true : options.installable === 'true',
+              runtimeTarget: `~/.codex/skills/${name}`,
+              tags: options.tags ? splitTags(options.tags) : []
+            }
+          : { ...registry.skills[existingIndex] };
+
+        if (!isNew) {
+          if (options.setVersion) entry.version = options.setVersion;
+          if (options.tags) entry.tags = splitTags(options.tags);
+          if (options.installable !== undefined) entry.installable = options.installable === 'true';
+        }
+
+        if (isNew) registry.skills.push(entry);
+        else registry.skills[existingIndex] = entry;
+
+        await writeRegistry(registry);
+        registryWritten = true;
+        mutated = true;
+        await writeLock({ silent: options.json });
+        mutated = true;
+
+        const { errors, warnings: validationWarnings } = await validateRegistry();
+        const warnings = [...removeNotices, ...validationWarnings];
+        if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
+
+        if (errors.length > 0) {
+          const message = `Skill "${name}" was written but registry validation failed; fix and re-run "skill-forge validate".`;
+          if (options.json) {
+            console.log(JSON.stringify({ error: message, errors, warnings, partial: true }, null, 2));
+          } else {
+            for (const error of errors) console.error(chalk.red(`Error: ${error}`));
+            console.error(chalk.red(message));
+          }
+          process.exitCode = 1;
+          return;
+        }
+
+        if (options.json) {
+          console.log(JSON.stringify({ action: isNew ? 'created' : 'updated', skill: toSkillSummary(entry), removedFiles, warnings }, null, 2));
+          return;
+        }
+        console.log(chalk.green(`${isNew ? 'Created' : 'Updated'} ${skillKey(entry)} (v${entry.version}).`));
+        if (removedFiles.length > 0) console.log(chalk.gray(`Removed: ${removedFiles.join(', ')}`));
       } catch (mutationError) {
-        if (isNew && !skillDirExistedBefore) {
+        if (isNew && !skillDirExistedBefore && !registryWritten) {
           await fs.remove(skillDir).catch(() => {});
-          wroteAny = false;
+          mutated = false;
         }
-        if (wroteAny) mutationError.partial = true;
+        if (mutated) mutationError.partial = true;
         throw mutationError;
       }
-
-      const removedFiles = [];
-      const removeNotices = [];
-      for (const { relPath, destPath, exists } of removalPlans) {
-        if (exists) {
-          await fs.remove(destPath);
-          await pruneEmptyParents(path.dirname(destPath), skillDir);
-          removedFiles.push(relPath);
-        } else {
-          removeNotices.push(`--remove-file "${relPath}" not found; nothing removed.`);
-        }
-      }
-
-      const entry = isNew
-        ? {
-            type: 'skill',
-            name,
-            version: options.setVersion,
-            scope: 'custom',
-            path: `inventory/skills/${name}`,
-            installable: options.installable === undefined ? true : options.installable === 'true',
-            runtimeTarget: `~/.codex/skills/${name}`,
-            tags: options.tags ? splitTags(options.tags) : []
-          }
-        : { ...registry.skills[existingIndex] };
-
-      if (!isNew) {
-        if (options.setVersion) entry.version = options.setVersion;
-        if (options.tags) entry.tags = splitTags(options.tags);
-        if (options.installable !== undefined) entry.installable = options.installable === 'true';
-      }
-
-      if (isNew) registry.skills.push(entry);
-      else registry.skills[existingIndex] = entry;
-
-      await writeRegistry(registry);
-      await writeLock({ silent: options.json });
-      const { errors, warnings: validationWarnings } = await validateRegistry();
-      const warnings = [...removeNotices, ...validationWarnings];
-      if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
-
-      if (errors.length > 0) {
-        const message = `Skill "${name}" was written but registry validation failed; fix and re-run "skill-forge validate".`;
-        if (options.json) {
-          console.log(JSON.stringify({ error: message, errors, warnings }, null, 2));
-        } else {
-          for (const error of errors) console.error(chalk.red(`Error: ${error}`));
-          console.error(chalk.red(message));
-        }
-        process.exitCode = 1;
-        return;
-      }
-
-      if (options.json) {
-        console.log(JSON.stringify({ action: isNew ? 'created' : 'updated', skill: toSkillSummary(entry), removedFiles, warnings }, null, 2));
-        return;
-      }
-      console.log(chalk.green(`${isNew ? 'Created' : 'Updated'} ${skillKey(entry)} (v${entry.version}).`));
-      if (removedFiles.length > 0) console.log(chalk.gray(`Removed: ${removedFiles.join(', ')}`));
     } catch (error) {
       printSkillError(
         options,
@@ -1059,7 +1074,7 @@ skillCommand
       if (errors.length > 0) {
         const message = `Skill "${name}" was deleted but registry validation failed; fix and re-run "skill-forge validate".`;
         if (options.json) {
-          console.log(JSON.stringify({ error: message, errors, warnings }, null, 2));
+          console.log(JSON.stringify({ error: message, errors, warnings, partial: true }, null, 2));
         } else {
           for (const error of errors) console.error(chalk.red(`Error: ${error}`));
           console.error(chalk.red(message));

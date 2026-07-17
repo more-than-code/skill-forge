@@ -11,6 +11,8 @@ import {
   assertSafeRelativePath,
   assertSkillMdStdinAvailable,
   bumpSemver,
+  canonicalizeSkillRelPath,
+  isSkillMdRelPath,
   parseSemver
 } from '../lib/skill-helpers.js';
 
@@ -241,6 +243,41 @@ test('skill write/read/delete --json failures emit a JSON error object on stdout
   assert.deepEqual(JSON.parse(failedDelete.stdout), { error: 'Error deleting skill: Skill "does-not-exist-at-all" not found.' });
 });
 
+test('skill delete post-validation failure JSON includes partial: true', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'to-delete';
+  await fx.runWithStdin(
+    ['skill', 'write', name, '--set-version', '0.1.0', '--json'],
+    `---\nname: ${name}\ndescription: Will be deleted.\n---\n\nBody.\n`
+  );
+
+  // Sibling skill exists on disk (so lock can hash it) but has invalid frontmatter,
+  // so validate fails after a durable delete without writeLock throwing first.
+  const brokenDir = fx.skillDir('broken-sibling');
+  await fs.mkdir(brokenDir, { recursive: true });
+  await fs.writeFile(path.join(brokenDir, 'SKILL.md'), 'no frontmatter here\n');
+  const registry = await fx.readRegistry();
+  registry.skills.push({
+    type: 'skill',
+    name: 'broken-sibling',
+    version: '0.1.0',
+    scope: 'custom',
+    path: 'inventory/skills/broken-sibling',
+    installable: true,
+    runtimeTarget: '~/.codex/skills/broken-sibling',
+    tags: []
+  });
+  await fx.writeRegistry(registry);
+
+  const failed = await fx.run(['skill', 'delete', name, '--yes', '--json']).catch((error) => error);
+  assert.ok(failed instanceof Error);
+  const payload = JSON.parse(failed.stdout);
+  assert.equal(payload.partial, true);
+  assert.match(payload.error, /was deleted but registry validation failed/);
+  assert.ok(Array.isArray(payload.errors) && payload.errors.length > 0);
+  assert.equal(await fs.access(fx.skillDir(name)).then(() => true, () => false), false, 'delete must still remove the skill dir');
+});
+
 test('skill write rejects a frontmatter/name mismatch and an unsafe name, leaving no orphaned directory', async () => {
   const fx = await skillForgeFixture();
   const skillDir = fx.skillDir('name-mismatch');
@@ -311,33 +348,59 @@ test('skill write rejects duplicate --file/--remove-file targets and directory r
   assert.match(stdout, /Registry validation passed/);
 });
 
-test('skill delete refuses registry paths that escape inventory/skills', async () => {
+test('skill delete and read refuse registry paths that escape inventory/skills', async () => {
   const fx = await skillForgeFixture();
   const outside = await tempDir('skf-outside-');
   const marker = path.join(outside, 'do-not-delete.txt');
   await fs.writeFile(marker, 'safe\n');
+  // Sibling skill dir that must survive a boundary-path delete attempt
+  const keepDir = fx.skillDir('keep-me');
+  await fs.mkdir(keepDir, { recursive: true });
+  await fs.writeFile(path.join(keepDir, 'SKILL.md'), '---\nname: keep-me\ndescription: x.\n---\n\nKeep.\n');
 
   const registry = await fx.readRegistry();
-  registry.skills.push({
-    type: 'skill',
-    name: 'abs-escape',
-    version: '0.1.0',
-    scope: 'custom',
-    path: outside,
-    installable: true,
-    runtimeTarget: '~/.codex/skills/abs-escape',
-    tags: []
-  });
-  registry.skills.push({
-    type: 'skill',
-    name: 'rel-escape',
-    version: '0.1.0',
-    scope: 'custom',
-    path: 'inventory/skills/../../../tmp-should-not-delete',
-    installable: true,
-    runtimeTarget: '~/.codex/skills/rel-escape',
-    tags: []
-  });
+  registry.skills.push(
+    {
+      type: 'skill',
+      name: 'abs-escape',
+      version: '0.1.0',
+      scope: 'custom',
+      path: outside,
+      installable: true,
+      runtimeTarget: '~/.codex/skills/abs-escape',
+      tags: []
+    },
+    {
+      type: 'skill',
+      name: 'rel-escape',
+      version: '0.1.0',
+      scope: 'custom',
+      path: 'inventory/skills/../../../tmp-should-not-delete',
+      installable: true,
+      runtimeTarget: '~/.codex/skills/rel-escape',
+      tags: []
+    },
+    {
+      type: 'skill',
+      name: 'boundary-escape',
+      version: '0.1.0',
+      scope: 'custom',
+      path: 'inventory/skills',
+      installable: true,
+      runtimeTarget: '~/.codex/skills/boundary-escape',
+      tags: []
+    },
+    {
+      type: 'skill',
+      name: 'keep-me',
+      version: '0.1.0',
+      scope: 'custom',
+      path: 'inventory/skills/keep-me',
+      installable: true,
+      runtimeTarget: '~/.codex/skills/keep-me',
+      tags: []
+    }
+  );
   await fx.writeRegistry(registry);
 
   const absFail = await fx.run(['skill', 'delete', 'abs-escape', '--yes', '--json']).catch((error) => error);
@@ -349,8 +412,62 @@ test('skill delete refuses registry paths that escape inventory/skills', async (
   assert.ok(relFail instanceof Error);
   assert.match(JSON.parse(relFail.stdout).error, /escapes inventory\/skills/);
 
+  const boundaryFail = await fx.run(['skill', 'delete', 'boundary-escape', '--yes', '--json']).catch((error) => error);
+  assert.ok(boundaryFail instanceof Error);
+  assert.match(JSON.parse(boundaryFail.stdout).error, /escapes inventory\/skills/);
+  assert.equal(await fs.readFile(path.join(keepDir, 'SKILL.md'), 'utf8').then((t) => t.includes('Keep')), true);
+
+  const readAbs = await fx.run(['skill', 'read', 'abs-escape', '--json']).catch((error) => error);
+  assert.ok(readAbs instanceof Error);
+  assert.match(JSON.parse(readAbs.stdout).error, /absolute path/);
+
   const still = await fx.readRegistry();
-  assert.equal(still.skills.length, 2, 'refused deletes must not remove registry entries');
+  assert.equal(still.skills.length, 4, 'refused deletes must not remove registry entries');
+});
+
+test('skill write treats skill.md case-insensitively as SKILL.md and rejects removing it', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'case-skill';
+  const staging = await tempDir('skf-case-');
+  const skillMdPath = path.join(staging, 'body.md');
+  await fs.writeFile(
+    skillMdPath,
+    `---\nname: ${name}\ndescription: Case test.\n---\n\nFrom skill.md flag.\n`
+  );
+
+  const created = await fx.run([
+    'skill', 'write', name, '--set-version', '0.1.0',
+    '--file', `skill.md=${skillMdPath}`,
+    '--json'
+  ]);
+  assert.equal(JSON.parse(created.stdout).action, 'created');
+  assert.match(await fs.readFile(path.join(fx.skillDir(name), 'SKILL.md'), 'utf8'), /From skill\.md flag/);
+
+  await assert.rejects(
+    fx.run(['skill', 'write', name, '--skip-skill-md', '--remove-file', 'Skill.md']),
+    /Cannot remove "SKILL.md"/
+  );
+  await assert.rejects(
+    fx.run(['skill', 'write', name, '--skip-skill-md', '--file', `skill.md=${skillMdPath}`]),
+    /mutually exclusive/
+  );
+  await assert.rejects(
+    fx.run([
+      'skill', 'write', name, '--set-version', '0.1.0',
+      '--file', `SKILL.md=${skillMdPath}`,
+      '--file', `skill.md=${skillMdPath}`
+    ]),
+    /Duplicate --file target/
+  );
+
+  // Missing SKILL.md local source uses the same structured message as companions
+  const missing = await fx.run([
+    'skill', 'write', name,
+    '--file', `SKILL.md=${path.join(staging, 'nope.md')}`,
+    '--json'
+  ]).catch((error) => error);
+  assert.ok(missing instanceof Error);
+  assert.match(JSON.parse(missing.stdout).error, /local source not found/);
 });
 
 test('skill helpers reject unsafe paths and TTY stdin for SKILL.md', () => {
@@ -365,6 +482,14 @@ test('skill helpers reject unsafe paths and TTY stdin for SKILL.md', () => {
   );
   assert.throws(() => assertPathWithinInventorySkills('/tmp/evil', root), /absolute path/);
   assert.throws(() => assertPathWithinInventorySkills('inventory/skills/../../../etc', root), /escapes inventory\/skills/);
+  assert.throws(() => assertPathWithinInventorySkills('inventory/skills', root), /escapes inventory\/skills/);
+
+  assert.equal(isSkillMdRelPath('SKILL.md'), true);
+  assert.equal(isSkillMdRelPath('skill.md'), true);
+  assert.equal(isSkillMdRelPath('Skill.md'), true);
+  assert.equal(isSkillMdRelPath('refs/skill.md'), false);
+  assert.equal(canonicalizeSkillRelPath('skill.md'), 'SKILL.md');
+  assert.equal(canonicalizeSkillRelPath('refs/a.md'), 'refs/a.md');
 
   assert.throws(() => assertSkillMdStdinAvailable(true), /stdin is a TTY/);
   assert.doesNotThrow(() => assertSkillMdStdinAvailable(false));

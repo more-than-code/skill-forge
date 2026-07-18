@@ -225,6 +225,21 @@
         "agent-facing",
         "inventory"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "codex-config-toml",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/codex-config-toml",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/codex-config-toml",
+      "tags": [
+        "codex",
+        "config",
+        "toml",
+        "gotchas"
+      ]
     }
   ],
   "managedAgents": [

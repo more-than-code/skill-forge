@@ -44,6 +44,18 @@
         "SKILL.md": "sha256-dT/pGEfR5F2YjVKchmPZxRlkpwJsHxSnca5E7jTAmpk="
       }
     },
+    "inventory/skills/codex-config-toml": {
+      "name": "codex-config-toml",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/codex-config-toml",
+      "integrity": "sha256-5s/ahLtXHFKZkb6+E+hf+Tgen5L2SCEaUkAIHgAjfMY=",
+      "files": {
+        "SKILL.md": "sha256-oy83iSS4O0NEv28xbG8hFusgNWShMgLMV+gptUzkRrk="
+      }
+    },
     "inventory/skills/coding-discipline": {
       "name": "coding-discipline",
       "version": "0.1.1",

@@ -20,6 +20,18 @@
         "SKILL.md": "sha256-qkkGfblJz4dUpFarOQqBT3gzXlr7U28XIn1z9FxgIiw="
       }
     },
+    "inventory/skills/audio-webkit-cleanup": {
+      "name": "audio-webkit-cleanup",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/audio-webkit-cleanup",
+      "integrity": "sha256-ObSMDtV36BLjNekDO6GysOQCLBiAwvDT0/0luXZw4Lk=",
+      "files": {
+        "SKILL.md": "sha256-CPKnEffh1ZFNmfkJMpecbbkkm1F00wyZFObbGJnSnCw="
+      }
+    },
     "inventory/skills/audit-trail": {
       "name": "audit-trail",
       "version": "0.1.0",
@@ -132,6 +144,18 @@
         "SKILL.md": "sha256-dhKT1V6Mqe/I50Aa4RFcBPamHvpA80FLihWP5uU8md0="
       }
     },
+    "inventory/skills/llm-json-portable": {
+      "name": "llm-json-portable",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/llm-json-portable",
+      "integrity": "sha256-rOiGePzb5Se+IjHwDCz7zHUumCzMtofnt/f4lXtBehM=",
+      "files": {
+        "SKILL.md": "sha256-hCY8hsTUApUPxKsADbfyC9BAIbM3WiCsblD8zT3Mh6A="
+      }
+    },
     "inventory/skills/migration-deprecation": {
       "name": "migration-deprecation",
       "version": "0.1.0",
@@ -227,6 +251,18 @@
       "integrity": "sha256-TE6dGtwTozOUsxaNy3Kt0S+uU7gwOJ5QrUILNwvaQlE=",
       "files": {
         "SKILL.md": "sha256-fPftQ+Z9tmAF2oDcD/K2TMjf+KWPOqvzd1jBsOlFlpE="
+      }
+    },
+    "inventory/skills/umbrella-workspace": {
+      "name": "umbrella-workspace",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/umbrella-workspace",
+      "integrity": "sha256-tgMx/yjx/iuJyV+Cd92cx0vAB88w1YmJM5tWmcWZws0=",
+      "files": {
+        "SKILL.md": "sha256-gVULuKHe8yWLApTnLjNdAQakGu4j61SAjzcuFah2IO4="
       }
     },
     "inventory/agents": {

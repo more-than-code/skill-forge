@@ -240,6 +240,49 @@
         "toml",
         "gotchas"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "umbrella-workspace",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/umbrella-workspace",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/umbrella-workspace",
+      "tags": [
+        "multi-repo",
+        "cooperation",
+        "handoff"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "llm-json-portable",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/llm-json-portable",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/llm-json-portable",
+      "tags": [
+        "llm",
+        "portable",
+        "json"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "audio-webkit-cleanup",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/audio-webkit-cleanup",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/audio-webkit-cleanup",
+      "tags": [
+        "audio",
+        "webkit",
+        "ios",
+        "portable"
+      ]
     }
   ],
   "managedAgents": [

@@ -1,0 +1,36 @@
+{
+  "_comment": "Grok loads ~/.grok/hooks/*.json automatically. PostToolUse on spawn_subagent (and Claude Task/Agent aliases) captures subagent type, model, and task description; SubagentStop marks child completion; SessionEnd marks session boundaries.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "spawn_subagent|Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.grok/hooks/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.grok/hooks/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.grok/hooks/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -21,9 +21,9 @@ roadmap.
 ## Design Principles
 
 1. **The repository is the source of truth.** Runtime files (`~/.claude/CLAUDE.md`,
-   `~/.codex/AGENTS.md`, `~/.copilot/instructions/agents.instructions.md`, skill and
-   agent directories) are deployment targets. Edit inventory, then reinstall;
-   `diff-*` commands detect drift.
+   `~/.codex/AGENTS.md`, `~/.copilot/instructions/agents.instructions.md`,
+   `~/.grok/AGENTS.md`, skill and agent directories) are deployment targets. Edit
+   inventory, then reinstall; `diff-*` commands detect drift.
 2. **Integrity is locked.** `registry.json` is the human-maintained manifest;
    `registry-lock.json` carries SHA-256 integrity per artifact file. A stale lockfile
    is a validation error.
@@ -46,19 +46,19 @@ roadmap.
 
 | Type | Inventory | Runtime target | Notes |
 |---|---|---|---|
-| Skills (16) | `inventory/skills/<name>/` | `~/.codex/skills`, `~/.claude/skills`, `~/.copilot/skills` | `name`/`description` frontmatter; versions and `tags` in registry only |
+| Skills (16) | `inventory/skills/<name>/` | `~/.codex/skills`, `~/.claude/skills`, `~/.copilot/skills`, `~/.grok/skills` | `name`/`description` frontmatter; versions and `tags` in registry only |
 | Managed agents | `inventory/agents/core.md` + `<tool>/` overlay | Tool instruction file | Composed at install; `{{placeholder}}` tokens resolved from per-tool `vars` |
 | Subagents | `inventory/subagents/<tool>/` | Tool agents dir | Role sets differ per tool (see below) |
-| Hooks | `inventory/hooks/claude-code/` | `~/.claude/hooks/skill-forge` | Deterministic usage-stats writer + settings snippet |
+| Hooks | `inventory/hooks/claude-code/`, `inventory/hooks/grok/` | `~/.claude/hooks/skill-forge`, `~/.grok/hooks` | Deterministic usage-stats writer; Claude uses a settings snippet, Grok loads a hook JSON directly |
 
 ### Composed instruction model
 
 `core.md` (shared process: risk tiers, explore→spec→implement, gates, delegation,
 review lenses) + tool overlay, joined with a separator at compose time.
 Placeholders like `{{explore_agent}}`/`{{plan_agent}}` resolve per tool
-(`researcher`/`planner` for Codex and Copilot, `Explore`/`Plan` for Claude Code), so
-the deployed file names the right agents with no mapping prose. `validate` fails on
-unresolved placeholders and warns on unused vars.
+(`researcher`/`planner` for Codex and Copilot, `Explore`/`Plan` for Claude Code,
+`explore`/`plan` for Grok), so the deployed file names the right agents with no
+mapping prose. `validate` fails on unresolved placeholders and warns on unused vars.
 
 ### Delegation model
 
@@ -67,11 +67,16 @@ unresolved placeholders and warns on unused vars.
 - **Claude Code:** three maintained roles (`bulk-worker`, `reviewer`, `validator` —
   the latter two with enforcing `tools:` allowlists); exploration and planning use
   the built-in `Explore`/`Plan` agents, which are harness-enforced read-only.
+- **Grok:** three maintained roles (`bulk-worker`, `reviewer`, `validator`);
+  exploration and planning use the built-in `explore`/`plan` agents (read-only).
+  `reviewer` uses `permission_mode: plan`; parent may pass `capability_mode` on
+  `spawn_subagent` for tighter tool filters.
 
 ### Observability (current)
 
 - **Stats hook** (`skill-forge-stats.mjs`): Claude Code `PostToolUse`(Agent/Task) and
-  `SessionEnd` events append schema-versioned JSONL to `~/.skill-forge/stats/` —
+  `SessionEnd` events, and Grok `PostToolUse`(spawn_subagent), `SubagentStop`, and
+  `SessionEnd` events, append schema-versioned JSONL to `~/.skill-forge/stats/` —
   exact agent names (including custom subagents), task descriptions, session IDs.
 - **OTel stack** (root `docker-compose.yml`, project `skill-forge-otel`, loopback
   only): collector (4317/4318) → Prometheus (9090) → Grafana (3001) with the
@@ -206,7 +211,7 @@ any new component.
 - `install --yes` still prompts interactively for the target path; `--yes` should
   imply the default path for scripted use.
 - Codex/Copilot equivalents for the stats hook (no hook support today — revisit as
-  those tools grow event mechanisms).
+  those tools grow event mechanisms). Grok has a first-class stats hook.
 - Template extraction follow-ups: §8/§9/§13 are done; audit remaining always-loaded
   content periodically.
 
@@ -220,5 +225,6 @@ any new component.
 | 2026-07-14 | Registry-only rules extracted to repo-local `CLAUDE.md`/`AGENTS.md` | Consumer projects shouldn't carry registry-repo instructions |
 | 2026-07-14 | Compose-time `{{placeholder}}` substitution with per-tool `vars` | Deployed files name tool-correct agents; validate enforces resolution |
 | 2026-07-14 | Usage stats via deterministic hooks, JSONL, metadata-only | Instructed self-reporting is unreliable; content capture is off-limits |
+| 2026-07-18 | Grok first-class: agents overlay, subagents, hooks | Grok has built-in `explore`/`plan` + hooks JSON discovery; role set mirrors Claude Code asymmetry rather than copying Codex |
 | 2026-07-14 | OTel (collector/Prometheus/Grafana, loopback) for whole-session economics | Native `query_source`/`agent.name` split answers delegation-cost questions |
 | 2026-07-14 | Evaluation framework: one phase vocabulary; hook-based Layer 2; tier-scaled judge | Avoid dual taxonomies, unreliable self-audit, and unbounded judge cost |

@@ -162,6 +162,8 @@ skf install <name> --type skill --target codex --path ~/.codex/skills --yes
 skf install <name> --type skill --target claude-code --path ~/.claude/skills --yes
 # copilot-cli
 skf install <name> --type skill --target copilot-cli --path ~/.copilot/skills --yes
+# grok
+skf install <name> --type skill --target grok --path ~/.grok/skills --yes
 ```
 
 ## Anti-patterns

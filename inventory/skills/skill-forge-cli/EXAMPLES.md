@@ -84,6 +84,7 @@ skf validate
 # --yes alone is not enough: without --path the CLI prompts for Target path and hangs.
 skf install demo-skill --type skill --target codex --path ~/.codex/skills --yes
 skf install demo-skill --type skill --target claude-code --path ~/.claude/skills --yes
+skf install demo-skill --type skill --target grok --path ~/.grok/skills --yes
 ```
 
 ## Delete

@@ -215,7 +215,7 @@
     {
       "type": "skill",
       "name": "skill-forge-cli",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-cli",
       "installable": true,
@@ -275,6 +275,19 @@
         "explore_agent": "Explore",
         "plan_agent": "Plan"
       }
+    },
+    {
+      "type": "agents",
+      "name": "grok-agents",
+      "version": "0.1.0",
+      "scope": "grok",
+      "path": "inventory/agents/grok/AGENTS.md",
+      "installable": false,
+      "runtimeTarget": "~/.grok/AGENTS.md",
+      "vars": {
+        "explore_agent": "explore",
+        "plan_agent": "plan"
+      }
     }
   ],
   "managedHooks": [
@@ -286,6 +299,15 @@
       "path": "inventory/hooks/claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/hooks/skill-forge"
+    },
+    {
+      "type": "hooks",
+      "name": "grok-hooks",
+      "version": "0.1.0",
+      "scope": "grok",
+      "path": "inventory/hooks/grok",
+      "installable": false,
+      "runtimeTarget": "~/.grok/hooks"
     }
   ],
   "managedSubagents": [
@@ -315,6 +337,15 @@
       "path": "inventory/subagents/claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents"
+    },
+    {
+      "type": "subagents",
+      "name": "grok-subagents",
+      "version": "0.1.0",
+      "scope": "grok",
+      "path": "inventory/subagents/grok",
+      "installable": false,
+      "runtimeTarget": "~/.grok/agents"
     }
   ]
 }

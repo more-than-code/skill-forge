@@ -98,6 +98,43 @@ test('composed codex agents resolve placeholders to codex subagent names', async
   assert.doesNotMatch(composed, /\{\{[a-z0-9_]+\}\}/);
 });
 
+test('composed grok agents resolve placeholders to built-in agent names', async () => {
+  const dir = await tempDir('skf-compose-grok-');
+  const target = path.join(dir, 'AGENTS.md');
+  await run('node', [CLI, 'install', 'grok-agents', '--type', 'agent', '--target', 'grok', '--path', target, '--yes'], { cwd: REPO_ROOT });
+  const composed = await fs.readFile(target, 'utf8');
+  assert.match(composed, /`explore`, `plan`, or `reviewer`/);
+  assert.doesNotMatch(composed, /\{\{[a-z0-9_]+\}\}/);
+});
+
+test('grok stats hook script accepts camelCase payloads and records metadata only', async () => {
+  const home = await tempDir('skf-stats-grok-');
+  const hook = path.join(REPO_ROOT, 'inventory', 'hooks', 'grok', 'skill-forge-stats.mjs');
+  const payload = JSON.stringify({
+    hookEventName: 'PostToolUse',
+    sessionId: 'grok-session',
+    cwd: '/tmp/grok-project',
+    toolName: 'spawn_subagent',
+    prompt: 'SECRET GROK PROMPT MUST NOT BE RECORDED',
+    toolInput: { subagent_type: 'explore', model: 'grok-4.5', description: 'trace flow', prompt: 'ALSO SECRET' }
+  });
+  const child = run('node', [hook], { env: { ...process.env, SKILL_FORGE_HOME: home } });
+  child.child.stdin.end(payload);
+  await child;
+
+  const files = await fs.readdir(path.join(home, 'stats'));
+  assert.equal(files.length, 1);
+  const line = (await fs.readFile(path.join(home, 'stats', files[0]), 'utf8')).trim();
+  const record = JSON.parse(line);
+  assert.equal(record.schema, 1);
+  assert.equal(record.tool, 'grok');
+  assert.equal(record.event, 'PostToolUse');
+  assert.equal(record.agent_type, 'explore');
+  assert.equal(record.model, 'grok-4.5');
+  assert.equal(record.project, 'grok-project');
+  assert.doesNotMatch(line, /SECRET/);
+});
+
 test('stats hook script appends metadata-only JSONL records', async () => {
   const home = await tempDir('skf-stats-');
   const payload = JSON.stringify({

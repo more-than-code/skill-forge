@@ -6,11 +6,11 @@ cost), and evolves those artifacts based on the evidence. Its substrate is a
 local registry and installer for agent-facing artifacts:
 
 - Skills for reusable task guidance.
-- Managed agent instruction overlays for Codex, Copilot CLI, and Claude Code.
+- Managed agent instruction overlays for Codex, Copilot CLI, Claude Code, and Grok.
 - Managed subagent definitions for supported tools.
 
 The repository is the source of truth. Runtime locations such as `~/.codex/skills`,
-`~/.copilot/skills`, and `~/.claude/skills` are deployment targets.
+`~/.copilot/skills`, `~/.claude/skills`, and `~/.grok/skills` are deployment targets.
 
 ## Features
 
@@ -138,6 +138,7 @@ Supported target names:
 - `codex`
 - `copilot-cli`
 - `claude-code`
+- `grok`
 
 Use `--path` to override the default runtime target:
 

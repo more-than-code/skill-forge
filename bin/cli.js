@@ -34,12 +34,14 @@ const ARTIFACT_TYPES = ['skills', 'agents', 'subagents', 'hooks'];
 const TOOL_LABELS = {
   codex: 'Codex',
   'copilot-cli': 'Copilot CLI',
-  'claude-code': 'Claude Code'
+  'claude-code': 'Claude Code',
+  grok: 'Grok'
 };
 const TOOL_SKILL_TARGETS = {
   codex: '~/.codex/skills',
   'copilot-cli': '~/.copilot/skills',
-  'claude-code': '~/.claude/skills'
+  'claude-code': '~/.claude/skills',
+  grok: '~/.grok/skills'
 };
 const ARTIFACT_TYPE_ALIASES = {
   skill: 'skills',
@@ -1228,7 +1230,7 @@ function registerInstallCommand() {
     .command('install [artifactName]')
     .description('Install skills, agents, or subagents with target selection and overwrite confirmation')
     .option('-t, --type <type>', 'Artifact type: skill, agent, or subagent')
-    .option('--target <tool>', 'Target tool: codex, copilot-cli, or claude-code')
+    .option('--target <tool>', 'Target tool: codex, copilot-cli, claude-code, or grok')
     .option('-p, --path <path>', 'Custom target path')
     .option('-y, --yes', 'Overwrite existing target paths without prompting')
     .action(async (artifactName, options) => {
@@ -1492,7 +1494,7 @@ ${vars ? `<p><small>Vars: ${escapeHtml(vars)}</small></p>` : ''}
 
   const stats = await collectStats();
   if (stats.projects.length === 0) {
-    sections.push(`<section><h2>Usage Stats</h2><p>No usage stats recorded yet in <code>${escapeHtml(stats.statsDir)}</code>. Install the claude-code-hooks artifact and merge the settings snippet to start recording.</p></section>`);
+    sections.push(`<section><h2>Usage Stats</h2><p>No usage stats recorded yet in <code>${escapeHtml(stats.statsDir)}</code>. Install <code>claude-code-hooks</code> (merge the settings snippet) or <code>grok-hooks</code> (loads JSON under <code>~/.grok/hooks/</code>) to start recording.</p></section>`);
   } else {
     const statRows = stats.projects.map((entry) => `<tr><td>${escapeHtml(entry.project)}</td><td>${entry.events}</td><td>${escapeHtml(countMapToText(entry.agents))}</td><td>${escapeHtml(countMapToText(entry.models))}</td><td>${escapeHtml(entry.lastTs)}</td></tr>`).join('\n');
     sections.push(`<section><h2>Usage Stats</h2><p><small>Aggregated from ${escapeHtml(stats.statsDir)} — metadata only.</small></p>

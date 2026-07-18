@@ -10,7 +10,7 @@ This repository evaluates and evolves agent artifacts (instructions, skills, sub
 
 ## Authoring Paths
 
-- Managed agent instructions are composed from `inventory/agents/core.md` plus `inventory/agents/<tool>/` overlays. Runtime files (`~/.codex/AGENTS.md`, `~/.copilot/instructions/agents.instructions.md`, `~/.claude/CLAUDE.md`) are deployment targets, not the source of truth — edit inventory, then reinstall.
+- Managed agent instructions are composed from `inventory/agents/core.md` plus `inventory/agents/<tool>/` overlays. Runtime files (`~/.codex/AGENTS.md`, `~/.copilot/instructions/agents.instructions.md`, `~/.claude/CLAUDE.md`, `~/.grok/AGENTS.md`) are deployment targets, not the source of truth — edit inventory, then reinstall.
 - Tool-specific subagent definitions are authored under `inventory/subagents/<tool>/` and install to each tool's runtime agents directory. Role sets intentionally differ per tool; do not copy definitions between tool directories.
 - Keep shared process in `core.md`; put tool/runtime specifics in the matching overlay.
 

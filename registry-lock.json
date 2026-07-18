@@ -182,15 +182,15 @@
     },
     "inventory/skills/skill-forge-cli": {
       "name": "skill-forge-cli",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/skill-forge-cli",
-      "integrity": "sha256-m7ZMDCXEsqSKghKDpohRFm5zGMgOOcGJwyMKHPQp1fI=",
+      "integrity": "sha256-GD+1T7wEB87w9hdQH4nV/CRHdr4+Rc57Evn/GF+0ypA=",
       "files": {
-        "EXAMPLES.md": "sha256-K3pCJnI/dAJXNhnJzenmJf1CMNaquJlLdQUUa5gJPfs=",
-        "SKILL.md": "sha256-E/9eYag6I7B0avn70pkWIPaTSvWybfUV/RMspnoqURo="
+        "EXAMPLES.md": "sha256-f2SMMNcxRHOdghoZ0QTtAMvqalyYp8gLG1MdV/ypg/U=",
+        "SKILL.md": "sha256-MvndRPjdTih2eqqeZJ/FDm2PjqKkx5ML+KAfXqpkE4I="
       }
     },
     "inventory/skills/testing-strategy": {
@@ -265,6 +265,18 @@
         "CLAUDE.md": "sha256-Jnagp9FvHerccDrRttwlKX8J7rhvqRAvP68d/2ytac0="
       }
     },
+    "inventory/agents/grok": {
+      "name": "grok-agents",
+      "version": "0.1.0",
+      "type": "agents",
+      "scope": "grok",
+      "installable": false,
+      "runtimeTarget": "~/.grok/AGENTS.md",
+      "integrity": "sha256-k+6xNvO4kikyQA1ZHmNKSVMnr7cs0gmQvRXcv/+2mfM=",
+      "files": {
+        "AGENTS.md": "sha256-Iz0MWNaAFon6cvvWAGwfsc/wC0pCr0vOeeGoXWE/+aQ="
+      }
+    },
     "inventory/subagents/codex": {
       "name": "codex-subagents",
       "version": "0.1.0",
@@ -311,6 +323,20 @@
         "validator.md": "sha256-tWiDBcC1gdf/e9ydSx6Lm0GCCdiqKJaAVSL+ZDaADV0="
       }
     },
+    "inventory/subagents/grok": {
+      "name": "grok-subagents",
+      "version": "0.1.0",
+      "type": "subagents",
+      "scope": "grok",
+      "installable": false,
+      "runtimeTarget": "~/.grok/agents",
+      "integrity": "sha256-JBkAhWQKRKSRTHGU+l3vNz+CpFlzIZ7WlQq5IpddTqo=",
+      "files": {
+        "bulk-worker.md": "sha256-6II8dmnNEHl6j/AFdhz/N4rsXcZnNyClRK31WChyy7M=",
+        "reviewer.md": "sha256-1bJo/gP5kH/v0tNzwUJdYssTg8uIoWuWFPHRQj+g9M0=",
+        "validator.md": "sha256-Ptovh9016SAMFtM4CbfSWbsFh7sRdEHzjt0p6nHBVTo="
+      }
+    },
     "inventory/hooks/claude-code": {
       "name": "claude-code-hooks",
       "version": "0.1.0",
@@ -322,6 +348,19 @@
       "files": {
         "settings-snippet.json": "sha256-jJ+IhkuXFQNLlGsGf719ZqLlbpfrnnZpvdMi9R6fhPI=",
         "skill-forge-stats.mjs": "sha256-lhblGEumHBUbOwDCfLxNqP5M6QZaA8Z0fBaco6yWU8A="
+      }
+    },
+    "inventory/hooks/grok": {
+      "name": "grok-hooks",
+      "version": "0.1.0",
+      "type": "hooks",
+      "scope": "grok",
+      "installable": false,
+      "runtimeTarget": "~/.grok/hooks",
+      "integrity": "sha256-4lx7B+40UI85otkDQT1HEnCiiEas2iNPe1y2bCT/kD8=",
+      "files": {
+        "skill-forge-stats.json": "sha256-FVSG1EMeGNl4UBbWhLDNGvZoSIGG3kg4T/E/SaBVp6Q=",
+        "skill-forge-stats.mjs": "sha256-4019n6BsEwDqjR4mJ31J9XaTn5YNLHn9+J6gqJhZdDQ="
       }
     }
   }

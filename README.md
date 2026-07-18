@@ -237,15 +237,16 @@ entry is written, the just-created skill directory is removed. Multi-file
 partially updated skill tree. With `--json`, those failures include
 `"partial": true` so callers can re-issue a full `skill write`.
 `--remove-file` refuses to target a directory (no recursive delete via a
-typo) and refuses `SKILL.md`. If registry validation still fails *after* a
-successful write/delete (e.g. an unrelated pre-existing registry problem),
-that change is left in place (no automatic rollback at that stage) and the
-command exits non-zero with `"partial": true` on `--json` — run `validate`
-again after fixing. With `--json`, failures also emit a JSON object
-(`{"error": "..."}`, optionally `"partial": true`, or
-`{"error", "errors", "warnings", "partial"}` for a post-write validation
-failure) to stdout instead of leaving it empty, so callers can always
-`JSON.parse(stdout)` regardless of exit code.
+typo) and refuses `SKILL.md`. If registry validation still fails *after* a successful write/delete/
+set-version/bump (e.g. an unrelated pre-existing registry problem), that
+change is left in place (no automatic rollback at that stage) and the command
+exits non-zero with `"partial": true` on `--json` — run `validate` again after
+fixing. For version commands the version change already landed; agents should
+fix validation errors rather than re-issuing a content write. With `--json`,
+failures also emit a JSON object (`{"error": "..."}`, optionally
+`"partial": true`, or `{"error", "errors", "warnings", "partial"}` for a
+post-mutation validation failure) to stdout instead of leaving it empty, so
+callers can always `JSON.parse(stdout)` regardless of exit code.
 
 ## Managed Agents
 

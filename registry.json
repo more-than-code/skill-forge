@@ -211,6 +211,20 @@
         "frontend",
         "review-lens"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "skill-forge-cli",
+      "version": "0.1.1",
+      "scope": "custom",
+      "path": "inventory/skills/skill-forge-cli",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/skill-forge-cli",
+      "tags": [
+        "skill-forge",
+        "agent-facing",
+        "inventory"
+      ]
     }
   ],
   "managedAgents": [

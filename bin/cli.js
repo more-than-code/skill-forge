@@ -1127,9 +1127,17 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
   if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
 
   if (errors.length > 0) {
+    // Version is already written + locked; partial signals durable mutation before validate failed.
     const message = `Skill "${name}" version was set to ${nextVersion} but registry validation failed; fix and re-run "skill-forge validate".`;
     if (options.json) {
-      console.log(JSON.stringify({ error: message, errors, warnings, previousVersion: from, version: nextVersion }, null, 2));
+      console.log(JSON.stringify({
+        error: message,
+        errors,
+        warnings,
+        previousVersion: from,
+        version: nextVersion,
+        partial: true
+      }, null, 2));
     } else {
       for (const error of errors) console.error(chalk.red(`Error: ${error}`));
       console.error(chalk.red(message));

@@ -278,6 +278,48 @@ test('skill delete post-validation failure JSON includes partial: true', async (
   assert.equal(await fs.access(fx.skillDir(name)).then(() => true, () => false), false, 'delete must still remove the skill dir');
 });
 
+test('skill set-version/bump post-validation failure JSON includes partial: true', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'version-partial';
+  await fx.runWithStdin(
+    ['skill', 'write', name, '--set-version', '0.1.0', '--json'],
+    `---\nname: ${name}\ndescription: Version partial test.\n---\n\nBody.\n`
+  );
+
+  const brokenDir = fx.skillDir('broken-sibling');
+  await fs.mkdir(brokenDir, { recursive: true });
+  await fs.writeFile(path.join(brokenDir, 'SKILL.md'), 'no frontmatter here\n');
+  const registry = await fx.readRegistry();
+  registry.skills.push({
+    type: 'skill',
+    name: 'broken-sibling',
+    version: '0.1.0',
+    scope: 'custom',
+    path: 'inventory/skills/broken-sibling',
+    installable: true,
+    runtimeTarget: '~/.codex/skills/broken-sibling',
+    tags: []
+  });
+  await fx.writeRegistry(registry);
+
+  const failedSet = await fx.run(['skill', 'set-version', name, '0.2.0', '--json']).catch((error) => error);
+  assert.ok(failedSet instanceof Error);
+  const setPayload = JSON.parse(failedSet.stdout);
+  assert.equal(setPayload.partial, true);
+  assert.equal(setPayload.previousVersion, '0.1.0');
+  assert.equal(setPayload.version, '0.2.0');
+  assert.match(setPayload.error, /version was set to 0\.2\.0 but registry validation failed/);
+  assert.equal((await fx.readRegistry()).skills.find((s) => s.name === name).version, '0.2.0');
+
+  const failedBump = await fx.run(['skill', 'bump', name, '--json']).catch((error) => error);
+  assert.ok(failedBump instanceof Error);
+  const bumpPayload = JSON.parse(failedBump.stdout);
+  assert.equal(bumpPayload.partial, true);
+  assert.equal(bumpPayload.previousVersion, '0.2.0');
+  assert.equal(bumpPayload.version, '0.2.1');
+  assert.equal((await fx.readRegistry()).skills.find((s) => s.name === name).version, '0.2.1');
+});
+
 test('skill write rejects a frontmatter/name mismatch and an unsafe name, leaving no orphaned directory', async () => {
   const fx = await skillForgeFixture();
   const skillDir = fx.skillDir('name-mismatch');
@@ -552,7 +594,7 @@ test('site command generates a catalog with all sections and stats aggregation',
   const out = await tempDir('skf-site-out-');
   await run('node', [CLI, 'site', '--out', out], { cwd: REPO_ROOT, env: { ...process.env, SKILL_FORGE_HOME: home } });
   const html = await fs.readFile(path.join(out, 'index.html'), 'utf8');
-  for (const heading of ['Skills (16)', 'Managed Agents', 'Managed Subagents', 'Managed Hooks', 'Usage Stats']) {
+  for (const heading of ['Skills (17)', 'Managed Agents', 'Managed Subagents', 'Managed Hooks', 'Usage Stats']) {
     assert.ok(html.includes(heading), `missing section: ${heading}`);
   }
   assert.match(html, /Explore \(1\)/);

@@ -180,6 +180,19 @@
         "SKILL.md": "sha256-TmQqkT9LCc6dfrnEBO9fqvWVq8O/SKmyp0gucm55MGE="
       }
     },
+    "inventory/skills/skill-forge-cli": {
+      "name": "skill-forge-cli",
+      "version": "0.1.1",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/skill-forge-cli",
+      "integrity": "sha256-m7ZMDCXEsqSKghKDpohRFm5zGMgOOcGJwyMKHPQp1fI=",
+      "files": {
+        "EXAMPLES.md": "sha256-K3pCJnI/dAJXNhnJzenmJf1CMNaquJlLdQUUa5gJPfs=",
+        "SKILL.md": "sha256-E/9eYag6I7B0avn70pkWIPaTSvWybfUV/RMspnoqURo="
+      }
+    },
     "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
       "version": "0.1.1",

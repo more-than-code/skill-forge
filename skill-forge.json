@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "extends": [],
+  "skills": {
+    "dependencies": {
+      "security-baseline": "^0.1.0",
+      "coding-discipline": "^0.1.1",
+      "code-quality": "^0.1.1",
+      "podman-utilization": "^0.1.0",
+      "skill-forge-cli": "^0.1.2",
+      "testing-strategy": "^0.1.1"
+    }
+  },
+  "tools": {
+    "claude-code": true
+  }
+}

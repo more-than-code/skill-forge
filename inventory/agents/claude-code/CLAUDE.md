@@ -4,17 +4,14 @@ This overlay extends the shared core instructions with Claude Code-specific beha
 
 ## Claude Code Skill Paths
 
-Claude Code-specific skill discovery extends the core skill activation protocol with:
+Claude Code surfaces skills natively from two directories, both written by Skill Forge sync (never by hand):
 
-- Claude Code shared skills: `~/.claude/skills/*/SKILL.md`
+- Project skills: `.claude/skills/*/SKILL.md` — written by `skf sync` from the repo's `skill-forge.json`.
+- User-level skills: `~/.claude/skills/*/SKILL.md` — written by `skf home sync` from the `$HOME` profile.
 
-Claude Code-specific precedence after tool-neutral shared skills:
+These carry the same content as the core protocol's `.agents/skills`/`~/.agents/skills` paths (a Claude-Code-only project may have just `.claude/skills/`); apply the same project-over-home precedence and never activate two copies of one name.
 
-1. `~/.claude/skills/<name>/SKILL.md` for Claude Code global shared skills.
-
-Put Claude-specific skills in `~/.claude/skills/` only when they rely on Claude Code behavior.
-
-For concrete before/after examples of common failure modes, also check `~/.claude/skills/coding-discipline/EXAMPLES.md` when that skill is selected from Claude Code global skills.
+For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 
 ## Claude Code Delegation
 

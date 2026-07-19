@@ -51,4 +51,4 @@ Use the **same order** on success, cancel, error, and unmount. Capture `const re
 
 ## Project overlays
 
-Projects should keep a thin skill or AGENTS note with **local file references** (example: Tutored `ttd-webapp` skill `audio-resource-cleanup`). Use this portable skill when the failure mode appears in a new web app.
+This skill reaches consumer repos as a registry dependency, vendored by `skf sync`. For app-specific file paths and helper names, add a thin companion skill under a **different name** (e.g. `audio-resource-cleanup`) declared in `skill-forge.json` `skills.local`, holding the local references and pointing back to this skill for the rules. Same-name shadowing is not possible — a name cannot be both a dependency and a local skill.

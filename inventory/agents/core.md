@@ -4,21 +4,20 @@ This file contains shared process instructions for agentic coding tools. It is a
 
 Tool-specific files should include these rules and add only the runtime paths, delegation model, and instruction-loading behavior for that tool.
 
-Domain expertise is packaged as Agent Skills in global and project-local skill directories. This file references them by name.
+Domain expertise is packaged as Agent Skills in project and home-profile skill directories managed by Skill Forge (`skill-forge.json` + `skf sync`). This file references them by name.
 
 ### Skill Activation Protocol
 1. **Discovery:** At session start, scan skill metadata only. Do not load full skill bodies during discovery.
 2. **Discovery paths:**
-   - Tool-neutral shared skills: `~/.agents/skills/*/SKILL.md`
-   - Tool-neutral project-local skills: `.agents/skills/*/SKILL.md`
-   - Tool-specific global/shared skill directories configured by the active coding tool.
+   - Project skills: `.agents/skills/*/SKILL.md` — vendored by `skf sync` or hand-authored via `skill-forge.json` `skills.local`.
+   - Home-profile skills (machine-wide): `~/.agents/skills/*/SKILL.md` — vendored by `skf home sync`.
+   - Tool-specific project/user skill directories listed in the active tool's overlay.
 3. **Metadata load:** Read frontmatter (`name`, `description`, and small metadata fields) only. These fields decide activation.
 4. **Precedence and duplicates:**
    - Resolve same-name skills in this order:
-     1. `.agents/skills/<name>/SKILL.md` for project-local overrides.
-     2. `~/.agents/skills/<name>/SKILL.md` for tool-neutral global shared skills.
-     3. The active tool's configured global/shared skill directory.
-     4. The active tool's system/platform skills, only when they are relevant to the requested workflow.
+     1. `.agents/skills/<name>/SKILL.md` (and the tool's project skill directory) for project skills.
+     2. `~/.agents/skills/<name>/SKILL.md` (and the tool's user-level skill directory) for home-profile skills.
+     3. The active tool's system/platform skills, only when they are relevant to the requested workflow.
    - Never activate more than one copy of the same skill name.
    - Mention duplicates briefly only when the selected copy affects the task.
 5. **Activation priority:** Activate the minimal useful set, in this order:
@@ -33,20 +32,19 @@ Domain expertise is packaged as Agent Skills in global and project-local skill d
 7. **Frontend overlap rule:** Use `ui-portability-baseline` for lightweight UI maintainability, primitive reuse, tokens, themes, and basic accessibility. Use `frontend-engineering` for frontend architecture, state ownership, routing, data flow, layout complexity, accessibility architecture, or complex component design. Load framework companion files only when the stack-specific details matter.
 8. **Full load:** Read complete `SKILL.md` only after activation. When a skill points to references, scripts, assets, or companion files, load or run only the pieces needed for the current task.
 9. **Missing or stale skill:** If an activated skill is missing, malformed, or references stale paths, state that briefly, continue with the next-best guidance, and do not silently rely on broken instructions.
+10. **Project skill selection:** If the repo contains `skill-forge.json`, or the user asks which skills a project should use, activate `skill-forge-project` and manage project skills via the `skf` CLI (`project add`/`sync`) — never by hand-copying skill directories.
 
 ### Skill Location Policy
-- Prefer `~/.agents/skills/` for reusable skills that should work across multiple coding tools.
-- Put tool-specific global skills in that tool's global skill directory only when they rely on that tool's platform behavior.
+- Skill placement is managed by Skill Forge profiles: the repo's `skill-forge.json` + `skf sync` for project skills, and the `$HOME` profile (`skf home init|add|sync`) for machine-wide skills.
+- Never hand-copy skills into skill directories; change the owning profile and re-sync (the `skill-forge-project` skill covers the workflow).
+- Hand-authored project-specific skills are declared under `skill-forge.json` `skills.local` with their own name (a name cannot be both a registry dependency and a local skill); keep the delta narrow and point back to the registry skill it refines.
 - Keep platform workflow skills in the owning tool's system directory.
-- Put project-specific overrides in `.agents/skills/` when the project wants to change behavior for a shared skill name.
-- Do not duplicate shared skills into every repository unless the project intentionally needs a forked version.
-- If a project needs to customize a shared skill, create a same-named local override in `.agents/skills/` and keep the delta narrow.
 
 **Goal:** Maximize quality per unit time. Rigor where risk is high, speed where risk is low.
 
 **Philosophy:** Spec-driven development. Explore → Spec → Implement. Code is the last step.
 
-For concrete before/after examples of common failure modes, see the activated `coding-discipline` skill's `EXAMPLES.md` (project-local override, `~/.agents/skills/coding-discipline/EXAMPLES.md`, or the active tool's global skill directory).
+For concrete before/after examples of common failure modes, see the activated `coding-discipline` skill's `EXAMPLES.md` companion (in whichever directory the skill was activated from).
 
 ---
 

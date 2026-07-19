@@ -9,15 +9,19 @@ local registry and installer for agent-facing artifacts:
 - Managed agent instruction overlays for Codex, Copilot CLI, Claude Code, and Grok.
 - Managed subagent definitions for supported tools.
 
-The repository is the source of truth. Runtime locations such as `~/.codex/skills`,
-`~/.copilot/skills`, `~/.claude/skills`, and `~/.grok/skills` are deployment targets.
+The repository is the source of truth. Skills are project-scoped: consumer
+repositories (and `$HOME` for machine-wide skills) declare a profile in
+`skill-forge.json`, and `skf sync` vendors exact copies into the repo. Managed
+instructions, subagents, and hooks deploy to per-tool runtime files. All
+runtime locations are deployment targets, never the source of truth.
 
 ## Features
 
 - Tracks all artifacts in `registry.json`.
 - Locks artifact integrity in `registry-lock.json` using package-lock-style
   `packages` entries with SHA-256 integrity hashes.
-- Installs skills, agents, and subagents to supported local agent runtimes.
+- Syncs project and `$HOME` skill profiles (manifest + lockfile + vendored
+  copies) and installs agents, subagents, and hooks to per-tool runtimes.
 - Composes managed agent instructions from `inventory/agents/core.md` plus a
   tool-specific overlay.
 - Validates registry metadata, skill frontmatter, managed artifact paths, and
@@ -42,6 +46,9 @@ otel/                      # local observability stack configs (see otel/README.
 docker-compose.yml         # container stack definition (docker/podman compose)
 registry.json              # human-maintained registry manifest
 registry-lock.json         # generated integrity lockfile
+skill-forge.json           # this repo's own skill profile (it is also a consumer)
+skill-forge.lock.json      # generated profile lockfile
+.claude/skills/            # vendored profile skills (committed)
 ```
 
 ## Install Dependencies
@@ -61,6 +68,21 @@ If installed as a package, the binary names are:
 ```bash
 skill-forge
 skf
+```
+
+Until the package is published to npm, install it globally straight from git
+(registry and inventory travel inside the package), or link a checkout for
+development:
+
+```bash
+npm install -g git+https://github.com/more-than-code/skill-forge.git   # consumers
+npm install && npm link                                                # contributors
+```
+
+New-machine bootstrap after install:
+
+```bash
+skf home init && skf home sync
 ```
 
 ## Common Commands
@@ -92,10 +114,11 @@ node bin/cli.js lock
 Diff canonical artifacts against runtime targets without writing:
 
 ```bash
-node bin/cli.js diff-global
-node bin/cli.js diff-agents
-node bin/cli.js diff-subagents
-node bin/cli.js diff-hooks
+node bin/cli.js agent diff
+node bin/cli.js subagent diff
+node bin/cli.js hook diff
+node bin/cli.js sync --check        # this repo's skill profile
+node bin/cli.js home sync --check   # the $HOME profile
 ```
 
 Run the test suite:
@@ -111,55 +134,56 @@ agent previews, and local usage stats when present) into `site/`:
 node bin/cli.js site
 ```
 
-## Installing Artifacts
+## Skill Profiles (consumer workflow)
 
-Install a skill to Codex's default skill directory:
-
-```bash
-node bin/cli.js add podman-utilization --target codex
-```
-
-Install a skill to a custom directory:
+Skills are project-scoped. A repository declares its dependencies in
+`skill-forge.json`; `skf sync` resolves them against the registry, vendors
+exact copies into the repo, and pins versions and integrity hashes in
+`skill-forge.lock.json`. Manifest, lockfile, and vendored directories are
+committed together.
 
 ```bash
-node bin/cli.js add podman-utilization --target codex --dir .agents/skills
+skf project init [--tools codex,claude-code,copilot-cli,grok]  # default: all
+skf project add [<skill>...]     # interactive search when no names are given
+skf sync [--check]               # vendor + lock; --check is the CI drift gate
+skf project status [--json]
 ```
 
-Use the general installer for skills, agents, or subagents:
+The `tools` map decides the sync targets: `.agents/skills/` when a tool
+without native project-skill support (codex, copilot-cli, grok) is enabled,
+`.claude/skills/` when `claude-code` is.
+
+`$HOME` is the same mechanism for machine-wide skills, with its own spelling:
 
 ```bash
-node bin/cli.js install podman-utilization --type skill --target codex
-node bin/cli.js install codex-agents --type agent --target codex
-node bin/cli.js install codex-subagents --type subagent --target codex
+skf home init                    # seeds only skill-forge-project
+skf home add <skill>... && skf home sync
+skf home status
 ```
 
-Supported target names:
+Per-tool global skill directories (`~/.codex/skills`, `~/.claude/skills`, …)
+are retired. The legacy `add` command is deprecated, and `skf install` for
+skills remains only as a low-level escape hatch that requires an explicit
+`--path`.
 
-- `codex`
-- `copilot-cli`
-- `claude-code`
-- `grok`
+## Installing Agents, Subagents, Hooks (global)
 
-Use `--path` to override the default runtime target:
+Managed instructions, subagents, and hooks stay push-based, one namespace per
+artifact type:
 
 ```bash
-node bin/cli.js install codex-agents --type agent --target codex --path /tmp/AGENTS.md
+node bin/cli.js agent install codex-agents --target codex --path '~/.codex/AGENTS.md' --yes
+node bin/cli.js subagent install codex-subagents --target codex
+node bin/cli.js hook install claude-code-hooks --target claude-code \
+  --path '~/.claude/hooks/skill-forge' --yes
 ```
 
-Use `--yes` only when overwriting existing target files is intended:
-
-```bash
-node bin/cli.js install codex-subagents --type subagent --target codex --yes
-```
+Supported target names: `codex`, `copilot-cli`, `claude-code`, `grok`.
 
 `--yes` only skips overwrite confirmation. The CLI still prompts interactively
 for the target path, so non-interactive runs (scripts, CI) must also pass
-`--path` (or `--dir` for `add`):
-
-```bash
-node bin/cli.js install claude-code-agents --type agent --target claude-code \
-  --path '~/.claude/CLAUDE.md' --yes
-```
+`--path`. Bare `skf install` remains as an interactive picker across all
+artifact types.
 
 ## Adding Or Updating A Skill
 
@@ -264,7 +288,7 @@ The CLI writes the composed result to the runtime target declared in
 Run a read-only drift check before installing:
 
 ```bash
-node bin/cli.js diff-agents
+node bin/cli.js agent diff
 ```
 
 ## Managed Subagents
@@ -275,18 +299,19 @@ Subagent definitions live under:
 inventory/subagents/codex/
 inventory/subagents/copilot-cli/
 inventory/subagents/claude-code/
+inventory/subagents/grok/
 ```
 
 Role sets intentionally differ per tool. Codex and Copilot CLI define five roles
 (`bulk_worker`/`bulk-worker`, `researcher`, `validator`, `planner`, `reviewer`).
-Claude Code defines only `bulk-worker`, `reviewer`, and `validator`; exploration
-and planning map to Claude Code's built-in `Explore` and `Plan` agents, as
-documented in the Claude Code overlay.
+Claude Code and Grok define only `bulk-worker`, `reviewer`, and `validator`;
+exploration and planning map to their built-in agents (`Explore`/`Plan`,
+`explore`/`plan`), as documented in each overlay.
 
 Install them with:
 
 ```bash
-node bin/cli.js install codex-subagents --type subagent --target codex
+node bin/cli.js subagent install codex-subagents --target codex
 ```
 
 ## Managed Agent Placeholders
@@ -304,7 +329,7 @@ on unresolved placeholders and warns on unused vars.
 Claude Code:
 
 ```bash
-node bin/cli.js install claude-code-hooks --type hook --target claude-code \
+node bin/cli.js hook install claude-code-hooks --target claude-code \
   --path '~/.claude/hooks/skill-forge' --yes
 ```
 
@@ -328,7 +353,9 @@ session ID.
 
 ## Safety Notes
 
-- `diff-*` commands are read-only.
-- `install` and `add` write to runtime target directories.
-- Existing files are not overwritten without confirmation unless `--yes` is set.
-- Runtime global files are deployment targets, not the source of truth.
+- `<type> diff`, `sync --check`, and `project|home status` are read-only.
+- `sync` writes only the profile's own targets and never overwrites an
+  unmanaged directory (declare hand-authored skills in `skills.local`).
+- `agent|subagent|hook install` write to runtime targets; existing files are
+  not overwritten without confirmation unless `--yes` is set.
+- Runtime files are deployment targets, not the source of truth.

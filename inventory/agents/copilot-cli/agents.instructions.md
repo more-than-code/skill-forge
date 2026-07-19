@@ -4,17 +4,11 @@ This overlay extends the shared core instructions with Copilot CLI-specific beha
 
 ## Copilot CLI Skill Paths
 
-Copilot CLI-specific skill discovery extends the core skill activation protocol with:
+Copilot CLI adds no skill paths beyond the core protocol: project skills at `.agents/skills/` and home-profile skills at `~/.agents/skills/`.
 
-- Copilot CLI shared skills: `~/.copilot/skills/*/SKILL.md`
+`~/.copilot/skills/` is retired as a shared-skill location — do not place or expect Skill Forge skills there.
 
-Copilot CLI-specific precedence after tool-neutral shared skills:
-
-1. `~/.copilot/skills/<name>/SKILL.md` for Copilot CLI global shared skills.
-
-Put Copilot-specific skills in `~/.copilot/skills/` only when they rely on Copilot behavior.
-
-For concrete before/after examples of common failure modes, also check `~/.copilot/skills/coding-discipline/EXAMPLES.md` when that skill is selected from Copilot CLI global skills.
+For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 
 ## Copilot CLI Delegation
 

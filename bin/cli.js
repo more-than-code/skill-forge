@@ -4,10 +4,14 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import crypto from 'crypto';
 import fs from 'fs-extra';
+import os from 'os';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import inquirer from 'inquirer';
 import {
+  RANGE_PATTERN,
   SEMVER_PATTERN,
   assertNoDuplicateRelPaths,
   assertPathWithinInventorySkills as assertPathWithinInventorySkillsAt,
@@ -16,8 +20,11 @@ import {
   bumpSemver,
   canonicalizeSkillRelPath,
   isSkillMdRelPath,
-  parseSemver
+  parseSemver,
+  satisfiesRange
 } from '../lib/skill-helpers.js';
+
+const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,12 +44,6 @@ const TOOL_LABELS = {
   'claude-code': 'Claude Code',
   grok: 'Grok'
 };
-const TOOL_SKILL_TARGETS = {
-  codex: '~/.codex/skills',
-  'copilot-cli': '~/.copilot/skills',
-  'claude-code': '~/.claude/skills',
-  grok: '~/.grok/skills'
-};
 const ARTIFACT_TYPE_ALIASES = {
   skill: 'skills',
   skills: 'skills',
@@ -54,13 +55,22 @@ const ARTIFACT_TYPE_ALIASES = {
   hooks: 'hooks'
 };
 const SKILL_NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+// Present as the invoked bin name; default to the short alias for hints.
+const CLI_NAME = ['skill-forge', 'skf'].includes(path.basename(process.argv[1] || ''))
+  ? path.basename(process.argv[1])
+  : 'skf';
+const PROJECT_MANIFEST_NAME = 'skill-forge.json';
+const PROJECT_LOCK_NAME = 'skill-forge.lock.json';
+const PROJECT_TOOLS = ['codex', 'claude-code', 'copilot-cli', 'grok'];
+const PROJECT_NEUTRAL_SKILL_DIR = path.join('.agents', 'skills');
+const TOOL_PROJECT_SKILL_DIRS = { 'claude-code': path.join('.claude', 'skills') };
 
 const program = new Command();
 
 program
-  .name('skill-forge')
+  .name(CLI_NAME)
   .description('CLI to manage skills from the skill-forge registry')
-  .version('1.1.0');
+  .version('1.3.0');
 
 function expandHome(targetPath) {
   if (!targetPath) return targetPath;
@@ -97,6 +107,12 @@ function toSkillSummary(skill) {
     path: skill.path,
     runtimeTarget: skill.runtimeTarget
   };
+}
+
+async function readSkillDescription(skill) {
+  const body = await fs.readFile(path.join(REPO_ROOT, skill.path, 'SKILL.md'), 'utf8').catch(() => '');
+  const frontmatter = parseFrontmatter(body) || {};
+  return frontmatter.description || '';
 }
 
 function parseFileAssignment(raw) {
@@ -235,8 +251,7 @@ async function hashFile(filePath) {
   return `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
 }
 
-async function buildPackageEntry(artifact) {
-  const absolutePath = path.join(REPO_ROOT, artifact.path);
+async function hashTree(absolutePath) {
   const stat = await fs.stat(absolutePath);
   const files = {};
 
@@ -253,6 +268,11 @@ async function buildPackageEntry(artifact) {
     .map(([file, hash]) => `${file}\0${hash}`)
     .join('\n');
   const integrity = `sha256-${crypto.createHash('sha256').update(treeInput).digest('base64')}`;
+  return { files, integrity };
+}
+
+async function buildPackageEntry(artifact) {
+  const { files, integrity } = await hashTree(path.join(REPO_ROOT, artifact.path));
 
   const entry = {
     name: artifact.name,
@@ -399,6 +419,28 @@ async function validateRegistry() {
       const source = coreSource + await fs.readFile(path.join(REPO_ROOT, artifact.path), 'utf8');
       for (const varName of Object.keys(artifact.vars || {})) {
         if (!source.includes(`{{${varName}}}`)) warnings.push(`${artifact.name} defines unused var ${varName}`);
+      }
+    }
+  }
+
+  if (registry.profiles !== undefined) {
+    if (typeof registry.profiles !== 'object' || Array.isArray(registry.profiles)) {
+      reportValidationError(errors, 'registry.json profiles must be an object of profile name -> { skill: range }');
+    } else {
+      for (const [profileName, entries] of Object.entries(registry.profiles)) {
+        if (typeof entries !== 'object' || Array.isArray(entries)) {
+          reportValidationError(errors, `profile "${profileName}" must map skill names to ranges`);
+          continue;
+        }
+        for (const [name, range] of Object.entries(entries)) {
+          const { skill } = resolveSkill(registry, name);
+          if (!skill || !skill.installable) {
+            reportValidationError(errors, `profile "${profileName}" references unknown or non-installable skill "${name}"`);
+          }
+          if (typeof range !== 'string' || !RANGE_PATTERN.test(range)) {
+            reportValidationError(errors, `profile "${profileName}" skill "${name}" has invalid range "${range}"`);
+          }
+        }
       }
     }
   }
@@ -589,7 +631,8 @@ async function chooseTargetPath(defaultPath, providedPath) {
       type: 'input',
       name: 'targetPath',
       message: 'Target path:',
-      default: defaultPath
+      default: defaultPath,
+      validate: (value) => value?.trim() ? true : 'Enter a target path.'
     }
   ]);
   return answer.targetPath;
@@ -622,8 +665,10 @@ async function chooseArtifacts(type, artifacts, requestedName) {
   return answer.selected.map((selected) => resolveArtifactFromList(type, artifacts, selected).artifact);
 }
 
-function defaultTargetPath(type, artifacts, target) {
-  if (type === 'skills') return TOOL_SKILL_TARGETS[target];
+function defaultTargetPath(type, artifacts) {
+  // Skills get no global default: writing outside a project profile must be a
+  // deliberate, explicitly typed path.
+  if (type === 'skills') return undefined;
   return artifacts[0]?.runtimeTarget;
 }
 
@@ -748,11 +793,14 @@ async function installArtifacts({
   if (availableTypes.length === 0) throw new Error(`No artifacts are available for target "${target}".`);
 
   const type = await chooseArtifactType(providedType, availableTypes);
+  if (type === 'skills') {
+    console.log(chalk.yellow(`Note: skills are project-scoped; prefer "${CLI_NAME} project add" + "${CLI_NAME} sync". Continuing as a low-level copy to an explicit path.`));
+  }
   const allArtifacts = getArtifactsByType(registry, type);
   const targetArtifacts = filterArtifactsForTarget(type, allArtifacts, target);
   if (targetArtifacts.length === 0) throw new Error(`No ${type} artifacts match target "${target}".`);
 
-  const targetDefault = defaultTargetPath(type, targetArtifacts, target);
+  const targetDefault = defaultTargetPath(type, targetArtifacts);
   const targetPath = await chooseTargetPath(targetDefault, providedPath);
   if (!targetPath) throw new Error(`No target path available for ${type}.`);
 
@@ -765,6 +813,282 @@ async function installArtifacts({
   }
 
   return { type, copied, total: artifacts.length };
+}
+
+// --- Project skill profiles (skill-forge.json / skill-forge.lock.json) ---
+
+function projectManifestPath(projectRoot) {
+  return path.join(projectRoot, PROJECT_MANIFEST_NAME);
+}
+
+function projectLockPath(projectRoot) {
+  return path.join(projectRoot, PROJECT_LOCK_NAME);
+}
+
+async function readProjectManifest(projectRoot) {
+  const manifestPath = projectManifestPath(projectRoot);
+  if (!await fs.pathExists(manifestPath)) {
+    throw new Error(`No ${PROJECT_MANIFEST_NAME} in ${projectRoot}. Run "${CLI_NAME} project init" first.`);
+  }
+  const manifest = await fs.readJson(manifestPath);
+  if (manifest.schemaVersion !== 1) {
+    throw new Error(`Unsupported ${PROJECT_MANIFEST_NAME} schemaVersion ${manifest.schemaVersion}; expected 1.`);
+  }
+  if (manifest.extends !== undefined && !Array.isArray(manifest.extends)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "extends" must be an array of profile names.`);
+  }
+  for (const section of ['dependencies', 'local']) {
+    const value = manifest.skills?.[section];
+    if (value !== undefined && (typeof value !== 'object' || Array.isArray(value))) {
+      throw new Error(`${PROJECT_MANIFEST_NAME} "skills.${section}" must be an object.`);
+    }
+  }
+  for (const tool of Object.keys(manifest.tools || {})) {
+    if (!PROJECT_TOOLS.includes(tool)) {
+      throw new Error(`${PROJECT_MANIFEST_NAME} "tools" has unknown tool "${tool}". Use: ${PROJECT_TOOLS.join(', ')}.`);
+    }
+  }
+  return manifest;
+}
+
+async function writeProjectManifest(projectRoot, manifest) {
+  await fs.writeJson(projectManifestPath(projectRoot), manifest, { spaces: 2 });
+}
+
+function resolveProjectProfile(registry, manifest) {
+  const rangesByName = new Map();
+  const addRange = (name, range, origin) => {
+    if (!rangesByName.has(name)) rangesByName.set(name, []);
+    rangesByName.get(name).push({ range, origin });
+  };
+
+  for (const profileName of manifest.extends || []) {
+    const profile = (registry.profiles || {})[profileName];
+    if (!profile) {
+      const known = Object.keys(registry.profiles || {}).join(', ') || 'none';
+      throw new Error(`Unknown profile "${profileName}" in extends; registry.json defines: ${known}.`);
+    }
+    for (const [name, range] of Object.entries(profile)) addRange(name, range, `profile "${profileName}"`);
+  }
+  for (const [name, range] of Object.entries(manifest.skills?.dependencies || {})) {
+    addRange(name, range, PROJECT_MANIFEST_NAME);
+  }
+
+  const locals = [];
+  for (const [name, relPath] of Object.entries(manifest.skills?.local || {})) {
+    if (rangesByName.has(name)) {
+      throw new Error(`"${name}" is declared as both a dependency and a local skill; pick one.`);
+    }
+    locals.push({ name, relPath: assertSafeRelativePath(relPath, `skills.local["${name}"]`) });
+  }
+
+  const resolved = [];
+  for (const [name, ranges] of [...rangesByName.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const { skill } = resolveSkill(registry, name);
+    if (!skill || !skill.installable) {
+      throw new Error(`Skill "${name}" is not an installable registry skill. See "${CLI_NAME} list".`);
+    }
+    for (const { range, origin } of ranges) {
+      if (!satisfiesRange(skill.version, range)) {
+        throw new Error(`Skill "${name}"@${skill.version} does not satisfy range "${range}" (${origin}). Update the range or the registry.`);
+      }
+    }
+    resolved.push({ name, skill });
+  }
+  return { resolved, locals };
+}
+
+/**
+ * The tool-neutral dir serves the tools without native project-skill support
+ * (instruction-protocol discovery); a Claude-Code-only profile skips it so
+ * skills aren't committed twice for a single reader.
+ */
+function projectSkillDirs(manifest) {
+  const dirs = [];
+  const needsNeutralDir = PROJECT_TOOLS.some((tool) => !TOOL_PROJECT_SKILL_DIRS[tool] && manifest.tools?.[tool]);
+  if (needsNeutralDir) dirs.push(PROJECT_NEUTRAL_SKILL_DIR);
+  for (const [tool, dir] of Object.entries(TOOL_PROJECT_SKILL_DIRS)) {
+    if (manifest.tools?.[tool]) dirs.push(dir);
+  }
+  if (dirs.length === 0) {
+    throw new Error(`No tools enabled in ${PROJECT_MANIFEST_NAME}; enable at least one under "tools".`);
+  }
+  return dirs;
+}
+
+function allCandidateSkillDirs() {
+  return [PROJECT_NEUTRAL_SKILL_DIR, ...Object.values(TOOL_PROJECT_SKILL_DIRS)];
+}
+
+async function getRegistryCommit() {
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', REPO_ROOT, 'rev-parse', 'HEAD']);
+    return stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
+async function buildProjectLock(projectRoot, registry, resolution) {
+  if (!await fs.pathExists(REGISTRY_LOCK_PATH)) {
+    throw new Error(`registry-lock.json is missing in the Skill Forge repo; run "${CLI_NAME} lock" there first.`);
+  }
+  const lockIntegrity = await hashBytes(await fs.readFile(REGISTRY_LOCK_PATH));
+
+  const skills = {};
+  for (const { name, skill } of resolution.resolved) {
+    const { integrity } = await hashTree(assertPathWithinInventorySkills(skill.path));
+    skills[name] = { version: skill.version, integrity, source: 'registry' };
+  }
+  for (const { name, relPath } of resolution.locals) {
+    const absPath = path.join(projectRoot, relPath);
+    if (!await fs.pathExists(absPath)) {
+      throw new Error(`skills.local["${name}"] path "${relPath}" does not exist.`);
+    }
+    const { integrity } = await hashTree(absPath);
+    skills[name] = { path: relPath, integrity, source: 'local' };
+  }
+
+  return {
+    schemaVersion: 1,
+    registry: {
+      name: registry.name,
+      version: registry.version,
+      commit: await getRegistryCommit(),
+      lockIntegrity
+    },
+    skills: Object.fromEntries(Object.entries(skills).sort(([a], [b]) => a.localeCompare(b)))
+  };
+}
+
+/** registry.commit moves with unrelated registry commits; drift compares content only. */
+function comparableProjectLock(lock) {
+  if (!lock) return null;
+  return JSON.stringify({ ...lock, registry: { ...lock.registry, commit: null } }, null, 2);
+}
+
+async function computeProjectState(projectRoot) {
+  const registry = await readRegistry();
+  const manifest = await readProjectManifest(projectRoot);
+  const resolution = resolveProjectProfile(registry, manifest);
+  const targetDirs = projectSkillDirs(manifest);
+  const expectedLock = await buildProjectLock(projectRoot, registry, resolution);
+  const lockPath = projectLockPath(projectRoot);
+  const storedLock = await fs.pathExists(lockPath) ? await fs.readJson(lockPath) : null;
+
+  const issues = [];
+  if (!storedLock) {
+    issues.push(`${PROJECT_LOCK_NAME} is missing; run "${CLI_NAME} sync".`);
+  } else if (comparableProjectLock(storedLock) !== comparableProjectLock(expectedLock)) {
+    issues.push(`${PROJECT_LOCK_NAME} is stale (manifest, registry, or local skill changed); run "${CLI_NAME} sync".`);
+  }
+
+  const vendored = [];
+  for (const { name } of resolution.resolved) {
+    const expected = expectedLock.skills[name];
+    for (const dir of targetDirs) {
+      const destPath = path.join(projectRoot, dir, name);
+      if (!await fs.pathExists(destPath)) {
+        vendored.push({ name, dir, status: 'missing' });
+        issues.push(`${path.join(dir, name)} is missing; run "${CLI_NAME} sync".`);
+      } else {
+        const { integrity } = await hashTree(destPath);
+        const status = integrity === expected.integrity ? 'clean' : 'differs';
+        vendored.push({ name, dir, status });
+        if (status === 'differs') issues.push(`${path.join(dir, name)} differs from the resolved skill; run "${CLI_NAME} sync".`);
+      }
+    }
+  }
+
+  const resolvedNames = new Set(resolution.resolved.map(({ name }) => name));
+  const staleNames = Object.entries(storedLock?.skills || {})
+    .filter(([name, entry]) => entry.source === 'registry' && !resolvedNames.has(name))
+    .map(([name]) => name);
+  for (const name of staleNames) {
+    for (const dir of targetDirs) {
+      if (await fs.pathExists(path.join(projectRoot, dir, name))) {
+        issues.push(`${path.join(dir, name)} is no longer in the profile; run "${CLI_NAME} sync" to prune it.`);
+      }
+    }
+  }
+
+  // Copies left in dirs the current tool set no longer targets (e.g. after
+  // narrowing tools to claude-code only). Declared local paths are exempt.
+  const inactiveDirs = allCandidateSkillDirs().filter((dir) => !targetDirs.includes(dir));
+  const localPaths = new Set(resolution.locals.map(({ relPath }) => path.normalize(relPath)));
+  const registryNames = new Set([
+    ...resolvedNames,
+    ...Object.entries(storedLock?.skills || {})
+      .filter(([, entry]) => entry.source === 'registry')
+      .map(([name]) => name)
+  ]);
+  const orphaned = [];
+  for (const name of registryNames) {
+    for (const dir of inactiveDirs) {
+      const relPath = path.join(dir, name);
+      if (localPaths.has(path.normalize(relPath))) continue;
+      if (await fs.pathExists(path.join(projectRoot, relPath))) {
+        orphaned.push(relPath);
+        issues.push(`${relPath} is not a sync target for the enabled tools; run "${CLI_NAME} sync" to prune it.`);
+      }
+    }
+  }
+
+  return { registry, manifest, resolution, targetDirs, expectedLock, storedLock, staleNames, orphaned, vendored, issues };
+}
+
+async function syncProject(projectRoot) {
+  const state = await computeProjectState(projectRoot);
+  const { resolution, targetDirs, expectedLock, storedLock } = state;
+
+  for (const { name, skill } of resolution.resolved) {
+    const sourcePath = assertPathWithinInventorySkills(skill.path);
+    for (const dir of targetDirs) {
+      const destPath = path.join(projectRoot, dir, name);
+      if (await fs.pathExists(destPath)) {
+        const owned = storedLock?.skills?.[name]?.source === 'registry';
+        const { integrity } = await hashTree(destPath);
+        if (!owned && integrity !== expectedLock.skills[name].integrity) {
+          throw new Error(`${path.join(dir, name)} exists but is not managed by Skill Forge. Declare it in skills.local, rename it, or remove it.`);
+        }
+        await fs.remove(destPath);
+      }
+      await fs.ensureDir(path.dirname(destPath));
+      await fs.copy(sourcePath, destPath);
+    }
+    console.log(chalk.green(`  ${name}@${skill.version} -> ${targetDirs.join(', ')}`));
+  }
+
+  for (const name of state.staleNames) {
+    for (const dir of targetDirs) {
+      const destPath = path.join(projectRoot, dir, name);
+      if (await fs.pathExists(destPath)) {
+        await fs.remove(destPath);
+        console.log(chalk.yellow(`  pruned ${path.join(dir, name)}`));
+      }
+    }
+  }
+
+  for (const relPath of state.orphaned) {
+    await fs.remove(path.join(projectRoot, relPath));
+    console.log(chalk.yellow(`  pruned ${relPath} (not a target for the enabled tools)`));
+  }
+
+  // A narrowed tool set shouldn't leave husk directories behind: drop inactive
+  // candidate dirs (and their parents) once they are empty.
+  for (const dir of allCandidateSkillDirs()) {
+    if (targetDirs.includes(dir)) continue;
+    let current = path.join(projectRoot, dir);
+    while (current !== projectRoot) {
+      const entries = await fs.readdir(current).catch(() => null);
+      if (!entries || entries.length > 0) break;
+      await fs.remove(current);
+      current = path.dirname(current);
+    }
+  }
+
+  await fs.writeJson(projectLockPath(projectRoot), expectedLock, { spaces: 2 });
+  console.log(chalk.green(`Wrote ${PROJECT_LOCK_NAME} (${resolution.resolved.length} registry, ${resolution.locals.length} local skill(s)).`));
 }
 
 program
@@ -809,7 +1133,11 @@ skillCommand
       const skills = getSkillEntries(registry, { installableOnly: !options.all });
 
       if (options.json) {
-        console.log(JSON.stringify(skills.map(toSkillSummary), null, 2));
+        const summaries = await Promise.all(skills.map(async (skill) => ({
+          ...toSkillSummary(skill),
+          description: await readSkillDescription(skill)
+        })));
+        console.log(JSON.stringify(summaries, null, 2));
         return;
       }
 
@@ -1017,7 +1345,7 @@ skillCommand
         if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
 
         if (errors.length > 0) {
-          const message = `Skill "${name}" was written but registry validation failed; fix and re-run "skill-forge validate".`;
+          const message = `Skill "${name}" was written but registry validation failed; fix and re-run "${CLI_NAME} validate".`;
           if (options.json) {
             console.log(JSON.stringify({ error: message, errors, warnings, partial: true }, null, 2));
           } else {
@@ -1074,7 +1402,7 @@ skillCommand
       if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
 
       if (errors.length > 0) {
-        const message = `Skill "${name}" was deleted but registry validation failed; fix and re-run "skill-forge validate".`;
+        const message = `Skill "${name}" was deleted but registry validation failed; fix and re-run "${CLI_NAME} validate".`;
         if (options.json) {
           console.log(JSON.stringify({ error: message, errors, warnings, partial: true }, null, 2));
         } else {
@@ -1130,7 +1458,7 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
 
   if (errors.length > 0) {
     // Version is already written + locked; partial signals durable mutation before validate failed.
-    const message = `Skill "${name}" version was set to ${nextVersion} but registry validation failed; fix and re-run "skill-forge validate".`;
+    const message = `Skill "${name}" version was set to ${nextVersion} but registry validation failed; fix and re-run "${CLI_NAME} validate".`;
     if (options.json) {
       console.log(JSON.stringify({
         error: message,
@@ -1203,14 +1531,349 @@ skillCommand
     }
   });
 
+// The $HOME profile is the same mechanism as a project profile, rooted at the
+// home directory; "skf home <verb>" is the ergonomic spelling for it.
+const HOME_SEED_SKILLS = ['skill-forge-project'];
+
+const projectCommand = program
+  .command('project')
+  .description(`Manage this repository's Skill Forge profile (${PROJECT_MANIFEST_NAME})`);
+
+const homeCommand = program
+  .command('home')
+  .description(`Manage the machine-wide $HOME profile (same mechanism as "project", rooted at your home directory)`);
+
+async function runProjectInit(projectRoot, options, { namespace, seedSkills = [] }) {
+  if (await fs.pathExists(projectManifestPath(projectRoot))) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} already exists in ${projectRoot}.`);
+  }
+
+  let enabledTools;
+  if (options.tools) {
+    enabledTools = splitTags(options.tools);
+    const unknown = enabledTools.filter((tool) => !PROJECT_TOOLS.includes(tool));
+    if (unknown.length > 0) throw new Error(`Unknown tool(s): ${unknown.join(', ')}. Use: ${PROJECT_TOOLS.join(', ')}.`);
+  } else {
+    enabledTools = [...PROJECT_TOOLS];
+  }
+
+  const dependencies = {};
+  if (seedSkills.length > 0) {
+    const registry = await readRegistry();
+    for (const name of seedSkills) {
+      const { skill } = resolveSkill(registry, name);
+      if (!skill || !skill.installable) {
+        throw new Error(`Seed skill "${name}" is not in the registry; the Skill Forge install looks broken.`);
+      }
+      dependencies[skill.name] = `^${skill.version}`;
+    }
+  }
+
+  const manifest = {
+    schemaVersion: 1,
+    extends: [],
+    skills: { dependencies },
+    tools: Object.fromEntries(PROJECT_TOOLS.map((tool) => [tool, enabledTools.includes(tool)]))
+  };
+  await writeProjectManifest(projectRoot, manifest);
+  console.log(chalk.green(`Wrote ${path.join(projectRoot, PROJECT_MANIFEST_NAME)}.`));
+  if (seedSkills.length > 0) {
+    console.log(chalk.gray(`Seeded: ${Object.entries(dependencies).map(([name, range]) => `${name} ${range}`).join(', ')}.`));
+    console.log(chalk.gray(`Next: "${CLI_NAME} ${namespace} sync"; "${CLI_NAME} ${namespace} add <skills...>" for more.`));
+  } else {
+    console.log(chalk.gray(`Next: "${CLI_NAME} ${namespace} add <skills...>" then "${CLI_NAME} ${namespace === 'project' ? 'sync' : `${namespace} sync`}".`));
+  }
+}
+
+projectCommand
+  .command('init')
+  .description(`Create ${PROJECT_MANIFEST_NAME} in the current directory (all tools enabled unless narrowed with --tools)`)
+  .option('--tools <list>', `Comma-separated tools to enable: ${PROJECT_TOOLS.join(', ')} (default: all)`)
+  .action(async (options) => {
+    try {
+      await runProjectInit(process.cwd(), options, { namespace: 'project' });
+    } catch (error) {
+      console.error(chalk.red('Error initializing project:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+homeCommand
+  .command('init')
+  .description(`Create the $HOME profile, seeded with ${HOME_SEED_SKILLS.join(', ')} only; baseline/process skills belong in each repo's own profile`)
+  .option('--tools <list>', `Comma-separated tools to enable: ${PROJECT_TOOLS.join(', ')} (default: all)`)
+  .action(async (options) => {
+    try {
+      await runProjectInit(os.homedir(), options, { namespace: 'home', seedSkills: HOME_SEED_SKILLS });
+    } catch (error) {
+      console.error(chalk.red('Error initializing home profile:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+const PROMPT_ESCAPED = Symbol('prompt-escaped');
+
+/**
+ * Run one inquirer prompt, resolving to PROMPT_ESCAPED when the user presses
+ * Esc (the go-back convention in agent tool CLIs). Piggybacks on the keypress
+ * events inquirer already enables on stdin while a prompt is active.
+ */
+async function promptWithEscape(question) {
+  const promptPromise = inquirer.prompt([question]);
+  let onKeypress;
+  const escaped = new Promise((resolve) => {
+    onKeypress = (_char, key) => {
+      if (key?.name === 'escape') resolve(PROMPT_ESCAPED);
+    };
+    process.stdin.on('keypress', onKeypress);
+  });
+
+  try {
+    const result = await Promise.race([promptPromise, escaped]);
+    if (result === PROMPT_ESCAPED) {
+      promptPromise.ui.close();
+      process.stdout.write('\n');
+      return PROMPT_ESCAPED;
+    }
+    return result;
+  } finally {
+    process.stdin.removeListener('keypress', onKeypress);
+  }
+}
+
+/** Interactive search/select; resolves to null when the user cancels with Esc. */
+async function promptForRegistrySkills(registry) {
+  const entries = [];
+  for (const skill of getSkillEntries(registry, { installableOnly: true })) {
+    entries.push({ skill, description: await readSkillDescription(skill) });
+  }
+
+  for (;;) {
+    const queryAnswer = await promptWithEscape({
+      type: 'input',
+      name: 'query',
+      message: 'Search skills (name/tag/description; empty lists all, esc cancels):'
+    });
+    if (queryAnswer === PROMPT_ESCAPED) return null;
+
+    const needle = queryAnswer.query.trim().toLowerCase();
+    const matches = needle
+      ? entries.filter(({ skill, description }) =>
+          [skill.name, description, ...(skill.tags || [])].join(' ').toLowerCase().includes(needle))
+      : entries;
+    if (matches.length === 0) {
+      console.log(chalk.yellow(`No skills match "${queryAnswer.query}".`));
+      continue;
+    }
+
+    const selectAnswer = await promptWithEscape({
+      type: 'checkbox',
+      name: 'selected',
+      message: `Select skills to add (${matches.length} match${matches.length === 1 ? '' : 'es'}; esc goes back to search):`,
+      pageSize: 15,
+      choices: matches.map(({ skill, description }) => ({
+        name: `${skill.name}@${skill.version} — ${description.length > 80 ? `${description.slice(0, 80)}…` : description}`,
+        value: skill.name,
+        short: skill.name
+      }))
+    });
+    if (selectAnswer === PROMPT_ESCAPED || selectAnswer.selected.length === 0) continue;
+    return selectAnswer.selected;
+  }
+}
+
+async function runProjectAdd(projectRoot, skillNames, { syncHint }) {
+  const registry = await readRegistry();
+  const manifest = await readProjectManifest(projectRoot);
+
+  let names = skillNames;
+  if (names.length === 0) {
+    if (!process.stdin.isTTY) {
+      throw new Error('Provide skill names, e.g. "project add frontend-engineering"; interactive search needs a terminal.');
+    }
+    names = await promptForRegistrySkills(registry);
+    if (names === null) {
+      console.log(chalk.gray('Cancelled; nothing added.'));
+      return;
+    }
+  }
+
+  manifest.skills = manifest.skills || {};
+  manifest.skills.dependencies = manifest.skills.dependencies || {};
+
+  for (const name of names) {
+    const { skill } = resolveSkill(registry, name);
+    if (!skill || !skill.installable) {
+      throw new Error(`Skill "${name}" is not an installable registry skill. See "${CLI_NAME} list".`);
+    }
+    if (manifest.skills.local?.[skill.name]) {
+      throw new Error(`"${skill.name}" is already declared in skills.local; a name cannot be both.`);
+    }
+    const range = `^${skill.version}`;
+    manifest.skills.dependencies[skill.name] = range;
+    const tags = (skill.tags || []).join(', ') || '—';
+    console.log(chalk.green(`+ ${skill.name} ${range}`) + chalk.gray(` (tags: ${tags})`));
+  }
+
+  await writeProjectManifest(projectRoot, manifest);
+  console.log(chalk.gray(`Run "${syncHint}" to vendor and lock.`));
+}
+
+projectCommand
+  .command('add [skills...]')
+  .description(`Add registry skills as project dependencies in ${PROJECT_MANIFEST_NAME}; with no names, search interactively`)
+  .action(async (skillNames) => {
+    try {
+      await runProjectAdd(process.cwd(), skillNames, { syncHint: `${CLI_NAME} sync` });
+    } catch (error) {
+      console.error(chalk.red('Error adding project skill:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+homeCommand
+  .command('add [skills...]')
+  .description('Add registry skills to the $HOME profile; with no names, search interactively')
+  .action(async (skillNames) => {
+    try {
+      await runProjectAdd(os.homedir(), skillNames, { syncHint: `${CLI_NAME} home sync` });
+    } catch (error) {
+      console.error(chalk.red('Error adding home profile skill:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+function buildProjectStatusJson(state) {
+  const enabledTools = PROJECT_TOOLS.filter((tool) => state.manifest.tools?.[tool]);
+  const skills = [];
+  for (const { name, skill } of state.resolution.resolved) {
+    const states = state.vendored.filter((entry) => entry.name === name);
+    const worst = states.find((entry) => entry.status !== 'clean');
+    skills.push({ name, version: skill.version, source: 'registry', state: worst ? worst.status : 'clean' });
+  }
+  for (const { name, relPath } of state.resolution.locals) {
+    skills.push({ name, path: relPath, source: 'local', state: 'clean' });
+  }
+  return {
+    tools: enabledTools,
+    targets: state.targetDirs,
+    extends: state.manifest.extends || [],
+    skills,
+    staleNames: state.staleNames,
+    issues: state.issues
+  };
+}
+
+async function runProjectStatus(projectRoot, options) {
+  const state = await computeProjectState(projectRoot);
+  const enabledTools = PROJECT_TOOLS.filter((tool) => state.manifest.tools?.[tool]);
+
+  if (options.json) {
+    console.log(JSON.stringify(buildProjectStatusJson(state), null, 2));
+    return;
+  }
+
+  console.log(chalk.blue.bold('\nProject profile'));
+  console.log(chalk.gray(`tools: ${enabledTools.join(', ') || '—'} | targets: ${state.targetDirs.join(', ')} | registry: ${state.registry.name} v${state.registry.version}`));
+  if ((state.manifest.extends || []).length > 0) console.log(chalk.gray(`extends: ${state.manifest.extends.join(', ')}`));
+
+  for (const { name, skill } of state.resolution.resolved) {
+    const states = state.vendored.filter((entry) => entry.name === name);
+    const worst = states.find((entry) => entry.status !== 'clean');
+    const marker = worst ? chalk.yellow(worst.status) : chalk.green('clean');
+    console.log(`- ${name}@${skill.version} (registry) ${marker}`);
+  }
+  for (const { name, relPath } of state.resolution.locals) {
+    console.log(`- ${name} (local: ${relPath})`);
+  }
+  for (const name of state.staleNames) {
+    console.log(chalk.yellow(`- ${name} (no longer in profile; sync will prune)`));
+  }
+  if (state.resolution.resolved.length === 0 && state.resolution.locals.length === 0) {
+    console.log(chalk.yellow(`No skills declared. Use "${CLI_NAME} project add <skills...>".`));
+  }
+
+  console.log();
+  if (state.issues.length === 0) {
+    console.log(chalk.green('In sync.'));
+  } else {
+    for (const issue of state.issues) console.log(chalk.yellow(`! ${issue}`));
+  }
+}
+
+projectCommand
+  .command('status')
+  .description('Show the active project profile: skills, sources, and sync state')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      await runProjectStatus(process.cwd(), options);
+    } catch (error) {
+      printSkillError(options, `Error reading project status: ${error.message}`);
+    }
+  });
+
+homeCommand
+  .command('status')
+  .description('Show the $HOME profile: skills, sources, and sync state')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      await runProjectStatus(os.homedir(), options);
+    } catch (error) {
+      printSkillError(options, `Error reading home profile status: ${error.message}`);
+    }
+  });
+
+async function runSyncCommand(projectRoot, options) {
+  if (options.check) {
+    const state = await computeProjectState(projectRoot);
+    if (state.issues.length === 0) {
+      console.log(chalk.green('Project profile is in sync.'));
+      return;
+    }
+    for (const issue of state.issues) console.error(chalk.yellow(`! ${issue}`));
+    process.exitCode = 1;
+    return;
+  }
+  await syncProject(projectRoot);
+}
+
 program
-  .command('add [skillName]')
-  .description('Install specific skill(s); use install for agents and subagents')
+  .command('sync')
+  .description(`Make this repository match its declared profile: vendor skills and write ${PROJECT_LOCK_NAME}`)
+  .option('--check', 'Read-only; exit non-zero when manifest, lockfile, or vendored copies are stale')
+  .action(async (options) => {
+    try {
+      await runSyncCommand(process.cwd(), options);
+    } catch (error) {
+      console.error(chalk.red('Error syncing project:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+homeCommand
+  .command('sync')
+  .description('Make the $HOME profile match its manifest: vendor skills to ~/.agents/skills (+ tool user dirs)')
+  .option('--check', 'Read-only; exit non-zero when manifest, lockfile, or vendored copies are stale')
+  .action(async (options) => {
+    try {
+      await runSyncCommand(os.homedir(), options);
+    } catch (error) {
+      console.error(chalk.red('Error syncing home profile:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('add [skillName]', { hidden: true })
+  .description('Deprecated: install skill(s) to a global tool directory')
   .option('-d, --dir <path>', 'Destination directory for skills')
   .option('--target <tool>', 'Target tool for default path selection')
   .option('-y, --yes', 'Overwrite existing target paths without prompting')
   .action(async (skillName, options) => {
     try {
+      console.log(chalk.yellow('Warning: "add" is deprecated. Use "project add" + "sync" in a repository, or a $HOME profile for skills wanted everywhere.'));
       const result = await installArtifacts({
         artifactName: skillName,
         providedType: 'skills',
@@ -1252,6 +1915,53 @@ function registerInstallCommand() {
 
 registerInstallCommand();
 
+function registerArtifactNamespace(noun, type, listArtifacts) {
+  const namespace = program
+    .command(noun)
+    .description(`Manage global ${type} installs (these stay global; skills are project-scoped via "project"/"sync")`);
+
+  namespace
+    .command('install [artifactName]')
+    .description(`Install managed ${type} for a target tool`)
+    .option('--target <tool>', 'Target tool: codex, copilot-cli, claude-code, or grok')
+    .option('-p, --path <path>', 'Custom target path')
+    .option('-y, --yes', 'Overwrite existing target paths without prompting')
+    .action(async (artifactName, options) => {
+      try {
+        const result = await installArtifacts({
+          artifactName,
+          providedType: type,
+          providedTarget: options.target,
+          providedPath: options.path,
+          yes: options.yes
+        });
+        console.log(chalk.blue(`\nDone. Installed ${result.copied}/${result.total} ${result.type} artifact(s).`));
+      } catch (error) {
+        console.error(chalk.red(`Error installing ${type}:`), error.message);
+        process.exitCode = 1;
+      }
+    });
+
+  namespace
+    .command('diff')
+    .description(`Compare managed ${type} against their runtime targets without writing`)
+    .action(async () => {
+      try {
+        const registry = await readRegistry();
+        for (const artifact of listArtifacts(registry)) {
+          printDiffResult(await diffArtifact(artifact, artifact.name));
+        }
+      } catch (error) {
+        console.error(chalk.red(`Error diffing managed ${type}:`), error.message);
+        process.exitCode = 1;
+      }
+    });
+}
+
+registerArtifactNamespace('agent', 'agents', (registry) => registry.managedAgents || []);
+registerArtifactNamespace('subagent', 'subagents', (registry) => registry.managedSubagents || []);
+registerArtifactNamespace('hook', 'hooks', (registry) => registry.managedHooks || []);
+
 program
   .command('validate')
   .description('Validate registry metadata, skill frontmatter, managed artifacts, and lock freshness')
@@ -1285,50 +1995,27 @@ program
     }
   });
 
-program
-  .command('diff-agents')
-  .description('Compare managed AGENTS artifacts against their runtime targets without writing')
-  .action(async () => {
-    try {
-      const registry = await readRegistry();
-      for (const artifact of registry.managedAgents) {
-        printDiffResult(await diffArtifact(artifact, artifact.name));
+function registerLegacyDiffCommand(legacyName, replacement, listArtifacts) {
+  program
+    .command(legacyName, { hidden: true })
+    .description(`Deprecated alias for "${replacement}"`)
+    .action(async () => {
+      try {
+        console.log(chalk.gray(`Note: "${legacyName}" is deprecated; use "${replacement}".`));
+        const registry = await readRegistry();
+        for (const artifact of listArtifacts(registry)) {
+          printDiffResult(await diffArtifact(artifact, artifact.name));
+        }
+      } catch (error) {
+        console.error(chalk.red(`Error running ${legacyName}:`), error.message);
+        process.exitCode = 1;
       }
-    } catch (error) {
-      console.error(chalk.red('Error diffing managed agents:'), error.message);
-      process.exitCode = 1;
-    }
-  });
+    });
+}
 
-program
-  .command('diff-subagents')
-  .description('Compare managed subagent artifacts against their runtime targets without writing')
-  .action(async () => {
-    try {
-      const registry = await readRegistry();
-      for (const artifact of registry.managedSubagents || []) {
-        printDiffResult(await diffArtifact(artifact, artifact.name));
-      }
-    } catch (error) {
-      console.error(chalk.red('Error diffing managed subagents:'), error.message);
-      process.exitCode = 1;
-    }
-  });
-
-program
-  .command('diff-hooks')
-  .description('Compare managed hook artifacts against their runtime targets without writing')
-  .action(async () => {
-    try {
-      const registry = await readRegistry();
-      for (const artifact of registry.managedHooks || []) {
-        printDiffResult(await diffArtifact(artifact, artifact.name));
-      }
-    } catch (error) {
-      console.error(chalk.red('Error diffing managed hooks:'), error.message);
-      process.exitCode = 1;
-    }
-  });
+registerLegacyDiffCommand('diff-agents', 'agent diff', (registry) => registry.managedAgents || []);
+registerLegacyDiffCommand('diff-subagents', 'subagent diff', (registry) => registry.managedSubagents || []);
+registerLegacyDiffCommand('diff-hooks', 'hook diff', (registry) => registry.managedHooks || []);
 
 program
   .command('stats')
@@ -1371,10 +2058,11 @@ program
   });
 
 program
-  .command('diff-global')
-  .description('Compare custom inventory skills against global runtime skill targets without writing')
+  .command('diff-global', { hidden: true })
+  .description('Deprecated: compare custom inventory skills against global runtime skill targets')
   .action(async () => {
     try {
+      console.log(chalk.yellow('Warning: "diff-global" is deprecated. Skills are project-scoped now; use "sync --check" in each profiled directory (including $HOME).'));
       const registry = await readRegistry();
       const globalSkills = registry.skills.filter((skill) => skill.runtimeTarget);
       for (const skill of sortSkills(globalSkills)) {

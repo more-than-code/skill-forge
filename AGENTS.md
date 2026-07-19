@@ -5,7 +5,7 @@ This repository evaluates and evolves agent artifacts (instructions, skills, sub
 ## Inventory Skill Handling
 
 - `inventory/skills/*/SKILL.md` are installable repository artifacts, not automatically activated agent skills. Activate one only when the task is to create, review, edit, install, or explicitly use that skill.
-- In skill precedence, `inventory/skills/<name>/SKILL.md` sits between project-local `.agents/skills/<name>/` overrides and global shared skills, and only under the condition above.
+- In skill precedence, `inventory/skills/<name>/SKILL.md` sits between project-local skills (this repo vendors its own profile to `.claude/skills/`) and home-profile skills, and only under the condition above.
 - Versions live in `registry.json`, never in skill frontmatter.
 
 ## Authoring Paths
@@ -16,4 +16,7 @@ This repository evaluates and evolves agent artifacts (instructions, skills, sub
 
 ## Change Workflow
 
-After changing `registry.json` or anything under `inventory/`: run `node bin/cli.js lock`, then `node bin/cli.js validate` (a stale lockfile is an error), then reinstall affected artifacts and confirm with the read-only `diff-*` commands.
+After changing `registry.json` or anything under `inventory/`: run `node bin/cli.js lock`, then `node bin/cli.js validate` (a stale lockfile is an error). Then:
+
+- **Skills** propagate pull-based: consumer directories with a `skill-forge.json` (repos and `$HOME`) pick up changes on their next `node bin/cli.js sync`; `sync --check` there detects staleness. Skills are no longer installed to per-tool global directories.
+- **Agents, subagents, hooks** stay push-based: reinstall with `node bin/cli.js <agent|subagent|hook> install` and confirm with the read-only `<agent|subagent|hook> diff` commands.

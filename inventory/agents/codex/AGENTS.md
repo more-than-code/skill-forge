@@ -6,17 +6,11 @@ This overlay extends the shared core instructions with Codex-specific behavior.
 
 Codex-specific skill discovery extends the core skill activation protocol with:
 
-- Global shared skills: `~/.codex/skills/*/SKILL.md`
-- Global system skills: `~/.codex/skills/.system/*/SKILL.md` for Codex/platform workflows only
+- Global system skills: `~/.codex/skills/.system/*/SKILL.md` for Codex/platform workflows only.
 
-Codex-specific precedence after tool-neutral shared skills:
+`~/.codex/skills/` is retired as a shared-skill location — do not place or expect Skill Forge skills there. Codex reads project skills from `.agents/skills/` and home-profile skills from `~/.agents/skills/` per the core protocol; `.system` platform skills rank after both.
 
-1. `~/.codex/skills/<name>/SKILL.md` for Codex global shared skills.
-2. `~/.codex/skills/.system/<name>/SKILL.md` for Codex/platform workflows.
-
-Put reusable, cross-project skills in `~/.codex/skills/` only when they are intended for Codex. Keep Codex/platform workflow skills in `~/.codex/skills/.system/`.
-
-For concrete before/after examples of common failure modes, also check `~/.codex/skills/coding-discipline/EXAMPLES.md` when that skill is selected from Codex global skills.
+For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 
 ## Codex Task Delegation
 

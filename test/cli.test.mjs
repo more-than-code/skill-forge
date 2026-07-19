@@ -196,7 +196,9 @@ test('skill write/read/list/delete manage an inventory skill end-to-end', async 
 
   const list = await fx.run(['skill', 'list', '--all', '--json']);
   const listPayload = JSON.parse(list.stdout);
-  assert.ok(listPayload.some((skill) => skill.name === name));
+  const listedSkill = listPayload.find((skill) => skill.name === name);
+  assert.ok(listedSkill);
+  assert.equal(listedSkill.description, 'First version.');
 
   const updated = await fx.runWithStdin(['skill', 'write', name, '--json'], frontmatter('Second version.'));
   const updatedPayload = JSON.parse(updated.stdout);
@@ -631,9 +633,261 @@ test('site command generates a catalog with all sections and stats aggregation',
   const out = await tempDir('skf-site-out-');
   await run('node', [CLI, 'site', '--out', out], { cwd: REPO_ROOT, env: { ...process.env, SKILL_FORGE_HOME: home } });
   const html = await fs.readFile(path.join(out, 'index.html'), 'utf8');
-  for (const heading of ['Skills (17)', 'Managed Agents', 'Managed Subagents', 'Managed Hooks', 'Usage Stats']) {
+  const registry = JSON.parse(await fs.readFile(path.join(REPO_ROOT, 'registry.json'), 'utf8'));
+  for (const heading of [`Skills (${registry.skills.length})`, 'Managed Agents', 'Managed Subagents', 'Managed Hooks', 'Usage Stats']) {
     assert.ok(html.includes(heading), `missing section: ${heading}`);
   }
   assert.match(html, /Explore \(1\)/);
   assert.doesNotMatch(html, /\{\{[a-z0-9_]+\}\}/);
+});
+
+// --- Project skill profiles ---
+
+const DEMO_SKILL_MD = '---\nname: demo-skill\ndescription: Demo skill for project profile tests.\n---\n\n# Demo\n';
+
+/** Registry fixture with one installable skill plus an empty consumer project dir. */
+async function projectFixture() {
+  const fx = await skillForgeFixture();
+  await fx.runWithStdin(['skill', 'write', 'demo-skill', '--set-version', '0.1.0', '--tags', 'demo'], DEMO_SKILL_MD);
+  const projectRoot = await tempDir('skf-project-');
+  return {
+    ...fx,
+    projectRoot,
+    runInProject(args, opts = {}) {
+      return run('node', [CLI, ...args], { cwd: projectRoot, env: fx.env, ...opts });
+    },
+    async readManifest() {
+      return JSON.parse(await fs.readFile(path.join(projectRoot, 'skill-forge.json'), 'utf8'));
+    },
+    async writeManifest(manifest) {
+      await fs.writeFile(path.join(projectRoot, 'skill-forge.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    },
+    async readProjectLock() {
+      return JSON.parse(await fs.readFile(path.join(projectRoot, 'skill-forge.lock.json'), 'utf8'));
+    }
+  };
+}
+
+test('satisfiesRange follows npm exact/tilde/caret semantics', async () => {
+  const { satisfiesRange } = await import('../lib/skill-helpers.js');
+  assert.equal(satisfiesRange('0.1.0', '0.1.0'), true);
+  assert.equal(satisfiesRange('0.1.1', '0.1.0'), false);
+  assert.equal(satisfiesRange('0.1.5', '~0.1.0'), true);
+  assert.equal(satisfiesRange('0.2.0', '~0.1.0'), false);
+  assert.equal(satisfiesRange('0.1.9', '^0.1.0'), true);
+  assert.equal(satisfiesRange('0.2.0', '^0.1.0'), false);
+  assert.equal(satisfiesRange('1.9.9', '^1.2.0'), true);
+  assert.equal(satisfiesRange('2.0.0', '^1.2.0'), false);
+  assert.equal(satisfiesRange('1.1.0', '^1.2.0'), false);
+  assert.equal(satisfiesRange('0.0.3', '^0.0.3'), true);
+  assert.equal(satisfiesRange('0.0.4', '^0.0.3'), false);
+  assert.throws(() => satisfiesRange('1.0.0', '>=1.0.0'), /Invalid range/);
+});
+
+test('project init + add + sync vendors skills and writes a reproducible lockfile', async () => {
+  const fx = await projectFixture();
+
+  await fx.runInProject(['project', 'init']);
+  const manifest = await fx.readManifest();
+  assert.equal(manifest.schemaVersion, 1);
+  assert.deepEqual(manifest.tools, { codex: true, 'claude-code': true, 'copilot-cli': true, grok: true });
+
+  const { stdout: addOut } = await fx.runInProject(['project', 'add', 'demo-skill']);
+  assert.match(addOut, /\+ demo-skill \^0\.1\.0/);
+  assert.equal((await fx.readManifest()).skills.dependencies['demo-skill'], '^0.1.0');
+  await assert.rejects(fx.runInProject(['project', 'add', 'missing-skill']), /not an installable registry skill/);
+  await assert.rejects(fx.runInProject(['project', 'add']), /interactive search needs a terminal/);
+  await assert.rejects(fx.runInProject(['project', 'init']), /already exists/);
+
+  await fx.runInProject(['sync']);
+  for (const dir of ['.agents/skills', '.claude/skills']) {
+    const body = await fs.readFile(path.join(fx.projectRoot, dir, 'demo-skill', 'SKILL.md'), 'utf8');
+    assert.equal(body, DEMO_SKILL_MD);
+  }
+  const lock = await fx.readProjectLock();
+  assert.equal(lock.schemaVersion, 1);
+  assert.equal(lock.registry.name, 'skill-forge-test');
+  assert.match(lock.registry.lockIntegrity, /^sha256-/);
+  assert.deepEqual(Object.keys(lock.skills), ['demo-skill']);
+  assert.equal(lock.skills['demo-skill'].version, '0.1.0');
+  assert.equal(lock.skills['demo-skill'].source, 'registry');
+  assert.match(lock.skills['demo-skill'].integrity, /^sha256-/);
+
+  const { stdout: checkOut } = await fx.runInProject(['sync', '--check']);
+  assert.match(checkOut, /in sync/);
+  const { stdout: statusOut } = await fx.runInProject(['project', 'status']);
+  assert.match(statusOut, /demo-skill@0\.1\.0 \(registry\)/);
+  assert.match(statusOut, /In sync\./);
+
+  const { stdout: statusJsonOut } = await fx.runInProject(['project', 'status', '--json']);
+  const statusJson = JSON.parse(statusJsonOut);
+  assert.deepEqual(statusJson.tools, ['codex', 'claude-code', 'copilot-cli', 'grok']);
+  assert.deepEqual(statusJson.targets, ['.agents/skills', '.claude/skills']);
+  assert.deepEqual(statusJson.extends, []);
+  assert.deepEqual(statusJson.skills, [{ name: 'demo-skill', version: '0.1.0', source: 'registry', state: 'clean' }]);
+  assert.deepEqual(statusJson.staleNames, []);
+  assert.deepEqual(statusJson.issues, []);
+});
+
+test('sync --check flags vendored drift, manifest drift, and registry bumps; sync repairs', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init']);
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  await fx.runInProject(['sync']);
+
+  const vendoredPath = path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md');
+  await fs.appendFile(vendoredPath, 'tampered\n');
+  await assert.rejects(fx.runInProject(['sync', '--check']), /differs from the resolved skill/);
+
+  const { stdout: driftedStatusOut } = await fx.runInProject(['project', 'status', '--json']);
+  const driftedStatus = JSON.parse(driftedStatusOut);
+  assert.deepEqual(driftedStatus.skills, [{ name: 'demo-skill', version: '0.1.0', source: 'registry', state: 'differs' }]);
+  assert.ok(driftedStatus.issues.some((issue) => issue.includes('differs from the resolved skill')));
+
+  await fx.runInProject(['sync']);
+  assert.equal(await fs.readFile(vendoredPath, 'utf8'), DEMO_SKILL_MD);
+  await fx.runInProject(['sync', '--check']);
+
+  // Compatible registry bump: lockfile is now stale until the next sync.
+  await fx.run(['skill', 'bump', 'demo-skill']);
+  await assert.rejects(fx.runInProject(['sync', '--check']), /stale/);
+  await fx.runInProject(['sync']);
+  assert.equal((await fx.readProjectLock()).skills['demo-skill'].version, '0.1.1');
+
+  // Incompatible bump: resolution fails the declared range.
+  await fx.run(['skill', 'set-version', 'demo-skill', '1.0.0']);
+  await assert.rejects(fx.runInProject(['sync']), /does not satisfy range "\^0\.1\.0"/);
+});
+
+test('sync refuses undeclared collisions, prunes removed deps, and records local skills', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init', '--tools', 'codex']);
+
+  // Undeclared pre-existing dir at the vendor path is a hard error.
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  const collisionDir = path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill');
+  await fs.mkdir(collisionDir, { recursive: true });
+  await fs.writeFile(path.join(collisionDir, 'SKILL.md'), 'hand-authored\n');
+  await assert.rejects(fx.runInProject(['sync']), /not managed by Skill Forge/);
+  await fs.rm(collisionDir, { recursive: true });
+
+  // Local skills are locked with integrity but never copied.
+  const localDir = path.join(fx.projectRoot, 'local-skills', 'my-override');
+  await fs.mkdir(localDir, { recursive: true });
+  await fs.writeFile(path.join(localDir, 'SKILL.md'), '---\nname: my-override\ndescription: Local.\n---\n');
+  const manifest = await fx.readManifest();
+  manifest.skills.local = { 'my-override': 'local-skills/my-override' };
+  await fx.writeManifest(manifest);
+
+  await fx.runInProject(['sync']);
+  let lock = await fx.readProjectLock();
+  assert.equal(lock.skills['my-override'].source, 'local');
+  assert.equal(lock.skills['my-override'].path, 'local-skills/my-override');
+  assert.equal(await fs.access(path.join(fx.projectRoot, '.claude')).then(() => true, () => false), false);
+
+  // Removing the dependency prunes the vendored copy on the next sync.
+  const trimmed = await fx.readManifest();
+  delete trimmed.skills.dependencies['demo-skill'];
+  await fx.writeManifest(trimmed);
+  await assert.rejects(fx.runInProject(['sync', '--check']), /no longer in the profile/);
+  await fx.runInProject(['sync']);
+  assert.equal(await fs.access(collisionDir).then(() => true, () => false), false);
+  lock = await fx.readProjectLock();
+  assert.deepEqual(Object.keys(lock.skills), ['my-override']);
+});
+
+test('extends resolves registry profiles and enforces their ranges', async () => {
+  const fx = await projectFixture();
+  const registry = await fx.readRegistry();
+  registry.profiles = { baseline: { 'demo-skill': '^0.1.0' } };
+  await fx.writeRegistry(registry);
+  await fx.run(['lock']);
+
+  await fx.runInProject(['project', 'init']);
+  const manifest = await fx.readManifest();
+  manifest.extends = ['baseline'];
+  await fx.writeManifest(manifest);
+
+  await fx.runInProject(['sync']);
+  assert.equal((await fx.readProjectLock()).skills['demo-skill'].version, '0.1.0');
+
+  manifest.extends = ['nope'];
+  await fx.writeManifest(manifest);
+  await assert.rejects(fx.runInProject(['sync']), /Unknown profile "nope"/);
+});
+
+test('noun-verb namespaces install and diff; legacy spellings warn', async () => {
+  const dir = await tempDir('skf-nounverb-');
+  const target = path.join(dir, 'CLAUDE.md');
+  await run('node', [CLI, 'agent', 'install', 'claude-code-agents', '--target', 'claude-code', '--path', target, '--yes'], { cwd: REPO_ROOT });
+  const composed = await fs.readFile(target, 'utf8');
+  assert.doesNotMatch(composed, /\{\{[a-z0-9_]+\}\}/);
+
+  const { stdout: diffOut } = await run('node', [CLI, 'subagent', 'diff'], { cwd: REPO_ROOT });
+  assert.match(diffOut, /- .+: (clean|differs|missing)/);
+
+  const { stdout: legacyOut } = await run('node', [CLI, 'diff-subagents'], { cwd: REPO_ROOT });
+  assert.match(legacyOut, /deprecated; use "subagent diff"/);
+
+  const fx = await projectFixture();
+  const addDir = await tempDir('skf-deprecated-add-');
+  const { stdout: addOut } = await fx.run(['add', 'demo-skill', '--dir', addDir, '--yes']);
+  assert.match(addOut, /"add" is deprecated/);
+  assert.match(addOut, /skills are project-scoped/);
+});
+
+test('home namespace seeds skill-forge-project and syncs the $HOME profile from any cwd', async () => {
+  const fx = await skillForgeFixture();
+  await fx.runWithStdin(
+    ['skill', 'write', 'skill-forge-project', '--set-version', '0.1.0'],
+    '---\nname: skill-forge-project\ndescription: Meta skill for home profile tests.\n---\n\n# Meta\n'
+  );
+  const fakeHome = await tempDir('skf-home-');
+  const env = { ...fx.env, HOME: fakeHome };
+
+  const { stdout: initOut } = await run('node', [CLI, 'home', 'init'], { cwd: fx.root, env });
+  assert.match(initOut, /Seeded: skill-forge-project \^0\.1\.0/);
+  const manifest = JSON.parse(await fs.readFile(path.join(fakeHome, 'skill-forge.json'), 'utf8'));
+  assert.deepEqual(manifest.skills.dependencies, { 'skill-forge-project': '^0.1.0' });
+
+  await run('node', [CLI, 'home', 'sync'], { cwd: fx.root, env });
+  await fs.access(path.join(fakeHome, '.agents', 'skills', 'skill-forge-project', 'SKILL.md'));
+  await fs.access(path.join(fakeHome, '.claude', 'skills', 'skill-forge-project', 'SKILL.md'));
+
+  const { stdout: checkOut } = await run('node', [CLI, 'home', 'sync', '--check'], { cwd: fx.root, env });
+  assert.match(checkOut, /in sync/);
+  const { stdout: statusOut } = await run('node', [CLI, 'home', 'status', '--json'], { cwd: fx.root, env });
+  const status = JSON.parse(statusOut);
+  assert.deepEqual(status.skills.map((entry) => entry.name), ['skill-forge-project']);
+  await assert.rejects(run('node', [CLI, 'home', 'init'], { cwd: fx.root, env }), /already exists/);
+});
+
+test('claude-code-only profiles vendor to .claude/skills only; tool-set changes prune', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init', '--tools', 'claude-code']);
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  await fx.runInProject(['sync']);
+  await fs.access(path.join(fx.projectRoot, '.claude', 'skills', 'demo-skill', 'SKILL.md'));
+  assert.equal(await fs.access(path.join(fx.projectRoot, '.agents')).then(() => true, () => false), false);
+  await fx.runInProject(['sync', '--check']);
+
+  // Widening the tool set adds the neutral dir; narrowing back prunes it.
+  const manifest = await fx.readManifest();
+  manifest.tools.codex = true;
+  await fx.writeManifest(manifest);
+  await fx.runInProject(['sync']);
+  await fs.access(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
+
+  manifest.tools.codex = false;
+  await fx.writeManifest(manifest);
+  await assert.rejects(fx.runInProject(['sync', '--check']), /not a sync target/);
+  const { stdout } = await fx.runInProject(['sync']);
+  assert.match(stdout, /pruned .agents\/skills\/demo-skill/);
+  assert.equal(await fs.access(path.join(fx.projectRoot, '.agents')).then(() => true, () => false), false);
+  await fx.runInProject(['sync', '--check']);
+
+  // A profile with no tools enabled is an error, not a silent no-op.
+  manifest.tools['claude-code'] = false;
+  await fx.writeManifest(manifest);
+  await assert.rejects(fx.runInProject(['sync']), /No tools enabled/);
 });

@@ -50,4 +50,4 @@ Do **not** use provider structured output (`generateObject`, response `schema`, 
 
 ## Project overlays
 
-Repos may ship a concrete skill with local helper paths and model tiers (example: Tutored `ttd-backend` skill `llm-json-responses`). Prefer the project skill when present; use this portable skill when bootstrapping a new service or reviewing cross-repo portability.
+This skill reaches consumer repos as a registry dependency, vendored by `skf sync`. Repos that want concrete helper paths and model tiers should add a companion skill under a **different name** (e.g. `llm-json-responses`) declared in `skill-forge.json` `skills.local`, pointing back here for the portable rules. Prefer the companion for repo specifics; use this skill when bootstrapping a new service or reviewing cross-repo portability.

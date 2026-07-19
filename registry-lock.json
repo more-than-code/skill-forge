@@ -1,12 +1,12 @@
 {
   "name": "skill-forge",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "lockfileVersion": 1,
   "requires": true,
   "packages": {
     "": {
       "name": "skill-forge",
-      "version": "1.1.0"
+      "version": "1.3.0"
     },
     "inventory/skills/api-contracts": {
       "name": "api-contracts",
@@ -22,7 +22,7 @@
     },
     "inventory/skills/audio-webkit-cleanup": {
       "name": "audio-webkit-cleanup",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
@@ -173,7 +173,7 @@
     },
     "inventory/skills/llm-json-portable": {
       "name": "llm-json-portable",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
@@ -245,7 +245,7 @@
     },
     "inventory/skills/skill-forge-cli": {
       "name": "skill-forge-cli",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
@@ -254,6 +254,18 @@
       "files": {
         "EXAMPLES.md": "sha256-f2SMMNcxRHOdghoZ0QTtAMvqalyYp8gLG1MdV/ypg/U=",
         "SKILL.md": "sha256-OYCcUoR4WOkpmFKdRqPBp+SUR/5PEzvr+QO5vXnLza0="
+      }
+    },
+    "inventory/skills/skill-forge-project": {
+      "name": "skill-forge-project",
+      "version": "0.1.2",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/skill-forge-project",
+      "integrity": "sha256-OHhq6s0J3sCZWlUP6O6B9ouYRDrxUQ4gq4RMkgDM4vc=",
+      "files": {
+        "SKILL.md": "sha256-/tu46H/i0LTyla43YhEWNilXburkfV14A1+lJhStyew="
       }
     },
     "inventory/skills/testing-strategy": {
@@ -294,7 +306,7 @@
     },
     "inventory/agents": {
       "name": "agents-core",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "type": "agents",
       "scope": "source",
       "installable": false,
@@ -306,7 +318,7 @@
     },
     "inventory/agents/codex": {
       "name": "codex-agents",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "type": "agents",
       "scope": "codex",
       "installable": false,
@@ -318,7 +330,7 @@
     },
     "inventory/agents/copilot-cli": {
       "name": "copilot-cli-agents",
-      "version": "0.1.6",
+      "version": "0.1.8",
       "type": "agents",
       "scope": "copilot-cli",
       "installable": false,
@@ -330,7 +342,7 @@
     },
     "inventory/agents/claude-code": {
       "name": "claude-code-agents",
-      "version": "0.1.6",
+      "version": "0.1.8",
       "type": "agents",
       "scope": "claude-code",
       "installable": false,
@@ -342,7 +354,7 @@
     },
     "inventory/agents/grok": {
       "name": "grok-agents",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "type": "agents",
       "scope": "grok",
       "installable": false,

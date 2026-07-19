@@ -283,6 +283,34 @@
         "ios",
         "portable"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "design-sync-svelte",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/design-sync-svelte",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/design-sync-svelte",
+      "tags": [
+        "design",
+        "svelte",
+        "claude-design"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "design-sync-flutter",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/design-sync-flutter",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/design-sync-flutter",
+      "tags": [
+        "design",
+        "flutter",
+        "claude-design"
+      ]
     }
   ],
   "managedAgents": [

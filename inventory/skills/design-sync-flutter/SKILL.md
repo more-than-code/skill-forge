@@ -47,6 +47,11 @@ in `.design-sync-flutter/config.json` the moment the target settles.
 
 Record findings in `config.json` as you go (paths, exclusions, corrections):
 
+- **Toolchain first.** If the repo has a `.fvmrc` (or `.fvm/`), use **`fvm flutter` /
+  `fvm dart`** — not the system `flutter`, which is often an older global that fails
+  dependency resolution with a Dart-SDK-version error (`requires SDK version ^x, version
+  solving failed`). Record the command in `config.json`. `fvm list` shows the pinned
+  version.
 - **Theme source** — `ThemeData` construction: conventionally `lib/theme/`,
   `lib/core/theme/`, or inline in `MaterialApp`. Collect: `ColorScheme` (both
   brightnesses if defined), `TextTheme` (family/size/weight/height per role),
@@ -74,9 +79,20 @@ Everything goes into `ds-bundle/` (gitignored), laid out per `references/ds-layo
 
 One CSS file per concern, values copied from the theme — never invented:
 
-- `tokens/colors.css` — `--color-primary`, `--color-on-primary`, `--color-surface`, …
-  mirroring the `ColorScheme` role names (plus `ThemeExtension` colors under their own
-  names). Dark scheme → a `.dark` block or `prefers-color-scheme` section.
+- `tokens/colors.css` — mirror the token/`ColorScheme` role names (plus `ThemeExtension`
+  colors). Dark scheme → a `prefers-color-scheme` block AND a `:root[data-theme=dark]`
+  block (the claude.ai/design viewer stamps `data-theme`; cover both). Colors in Dart are
+  usually `Color(0xAARRGGBB)` const literals — extract them mechanically rather than
+  eyeballing hex:
+
+  ```python
+  # 0xAARRGGBB -> #rrggbb (opaque) or rgb(r g b / a) (translucent, e.g. dark borders)
+  v=int(argb,16); a,r,g,b=(v>>24)&255,(v>>16)&255,(v>>8)&255,v&255
+  css = f"#{r:02x}{g:02x}{b:02x}" if a==255 else f"rgb({r} {g} {b} / {a/255:.3f})"
+  ```
+
+  A tokens class of `static const light`/`dark = FooTokens(...)` parses cleanly with one
+  regex over `(\w+):\s*Color\(0x([0-9a-fA-F]{8})\)`.
 - `tokens/typography.css` — one custom-property cluster per `TextTheme` role
   (`--text-title-large-size`, `-weight`, `-height`, family), plus `@font-face` rules
   pointing into `fonts/`.
@@ -124,11 +140,24 @@ Spec-style cards are recreations, so verification is what makes them trustworthy
    errors, stylesheet resolves, body visually non-blank. No Playwright available and
    not installable → the run is unverified; say so and get the user's explicit OK
    before uploading.
-2. **Fidelity check against real renders, when obtainable** — best source first:
-   existing golden test images (`test/**/goldens/`), then screenshots the user can
-   provide, then `flutter run` + screenshot if a device/simulator is available.
-   Compare side by side with the card screenshot and fix material differences
-   (spacing, radius, weight, color). No reference obtainable → mark the card
+2. **Fidelity check against a real render.** Best source first: existing golden images
+   (`test/**/goldens/`), then user screenshots. If neither exists and Flutter is
+   available, **generate one** — it's the strongest reference and worth the few minutes:
+   write a throwaway golden test that renders a gallery of the themed widgets under the
+   app's real `ThemeData` and run `fvm flutter test <t> --update-goldens` (no
+   device/simulator needed — the test framework rasterizes headless). Two gotchas that
+   bit on the first run:
+   - **Load real fonts in `setUpAll` with `FontLoader`**, else golden text renders as
+     Ahem boxes (solid black rectangles) and the reference is useless for type. Read the
+     `pubspec.yaml` font assets and `..addFont` each weight.
+   - Even then, widgets whose theme sets an explicit `labelStyle` *without* a family
+     (e.g. `ChipThemeData.labelStyle`) may still fall back to Ahem in the golden — that
+     black-bar is a test artifact, not the on-device look; read the color from the theme
+     and don't "fix" the card to match the artifact.
+   Then read the golden and each card screenshot side by side; fix material differences
+   (spacing, radius, weight, color). Note that mobile themes often diverge from Material
+   defaults (e.g. **pill buttons/chips**, flat elevation) — recreate what the theme
+   actually produces, not remembered Material. No reference obtainable → mark the card
    `unverified recreation` in NOTES.md and tell the user which ones.
 3. **Vocabulary check** — every token variable, widget name, and file path named in
    the conventions header, prompt files, and guidelines must exist in `ds-bundle/` or

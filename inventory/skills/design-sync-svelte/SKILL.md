@@ -82,22 +82,49 @@ Everything goes into `ds-bundle/` (gitignored), laid out per `references/ds-layo
 
 Build the repo's actual stylesheet — never hand-write component CSS:
 
-- Tailwind 4: `npx @tailwindcss/cli -i <entry.css> -o ds-bundle/_app.css` (or take the
-  CSS asset from a `vite build`). The entry's `@source` coverage must include every
+- Tailwind 4: `npx @tailwindcss/cli -i <entry.css> -o ds-bundle/_ds_bundle.css` (or take
+  the CSS asset from a `vite build`). The entry's `@source` coverage must include every
   component dir being synced, so their utilities are all generated.
 - Tailwind 3: the CLI equivalent with the repo's config.
 - Component-scoped Svelte styles: a `vite build` of the library emits them into the CSS
   asset; use that.
 
-Emit `ds-bundle/styles.css` as the root that `@import`s `tokens/*.css`, font-face
-rules, and `_app.css`. Designs receive only this import closure — verify every token
-and class you'll later document actually appears in it.
+**Fonts must be copied and their URLs rewritten** — this bites every time. A CSS
+`@import "@fontsource-variable/inter"` (or any npm font) inlines `@font-face` rules
+whose `src: url(./files/xxx.woff2)` points into `node_modules`, which does not exist on
+claude.ai/design. Copy the *referenced* woff2 files into `ds-bundle/fonts/` and rewrite
+the paths, e.g.:
 
-**Known limit to record in NOTES.md and the conventions header**: a utility-first build
-contains only the classes the repo uses. The design agent may write valid Tailwind
-utilities that aren't in the build and silently get no styling. Mitigate in the
-conventions header: tell the agent to prefer the token variables (`var(--…)`) and the
-enumerated class vocabulary — both verified present.
+```sh
+# copy only the subsets the built CSS actually references
+for f in $(grep -oE '[a-z0-9-]+\.woff2' ds-bundle/_ds_bundle.css | sort -u); do
+  find node_modules/.pnpm -path "*/@fontsource-variable/*/files/$f" -exec cp {} ds-bundle/fonts/ \; ; done
+sed -i '' 's#url(\./files/#url(fonts/#g' ds-bundle/_ds_bundle.css   # match your source's url() prefix
+```
+
+Then confirm `grep -c 'url(fonts/' ds-bundle/_ds_bundle.css` matches the font count and
+`grep -c 'url(./files/' ` is 0.
+
+Emit `ds-bundle/styles.css` as the root that `@import`s `_ds_bundle.css` (which already
+carries the inlined `:root`/`.dark` tokens and `@font-face` rules). Designs receive only
+this import closure — verify every token and class you'll later document actually
+appears in it.
+
+**Known limit — the delivered CSS is a *closed set*, record it in NOTES.md and shape the
+conventions header around it.** A Tailwind build contains only the utility classes that
+appear in the scanned source — which is the *whole app's* union (so common
+`flex`/`grid`/`p-*`/`gap-*`/`w-full` are present), but NOT arbitrary bracket values
+(`p-[13px]`, `w-[420px]`) and NOT utilities the app never uses (`m-4`, `max-w-md`,
+`bg-card`, `bg-accent` — even when the underlying `--card`/`--accent` *variables* are
+defined). A design agent composing new layouts WILL reach for classes outside this set
+and get silently unstyled output. Two mitigations, apply both:
+  1. In the conventions header, enumerate only *verified* utilities (grep each against
+     the built CSS — see §4/§5), and tell the agent that any token beyond that list is
+     available as `var(--token)` (always defined) via inline `style`, not as a `bg-*`
+     utility.
+  2. If the design surface needs to be broad, widen the build: add a Tailwind
+     `@source inline(...)`/safelist of the common utility families to the CSS entry
+     before building, so they're baked in. Note what you safelisted in NOTES.md.
 
 ### tokens/
 
@@ -108,22 +135,39 @@ copied from the repo's real values — never invented. `@import` them from `styl
 ### Preview cards — server-render the real components
 
 For each component, generate `components/<group>/<Name>/<Name>.html` by rendering the
-actual compiled component:
+actual compiled component. **Use a real `vite build --ssr`, not middleware
+`ssrLoadModule`** — see the SSR recipe below; it's the part most likely to fight you.
 
-1. Write a small render script per batch (a `.ts`/`.js` run with `vite-node`, `tsx`, or
-   a tiny Vite SSR build — whatever the repo already supports) that imports the
-   component and calls `render()` from `svelte/server` with representative props;
-   for slot/snippet children, use `createRawSnippet` to pass realistic content.
-2. Wrap the returned HTML in the card shape from `references/ds-layout.md` (first line
+1. Author an SSR entry (`.ts`) that imports the components and, for a `props` matrix per
+   component, calls `render(Comp, { props })` from `svelte/server`, joining the returned
+   `body` strings. For components that render `{@render children()}`, pass children via
+   `createRawSnippet(() => ({ render: () => '<span>…</span>' }))`.
+2. Bundle it with `vite build --ssr` using a **standalone** config — the bare
+   `@sveltejs/vite-plugin-svelte` (NOT the full `sveltekit()` plugin), a `$lib` alias to
+   `src/lib`, and **node_modules externalized** (`ssr: { noExternal: [] }`,
+   `optimizeDeps: { noDiscovery: true }`). Then run the built `.mjs` with node to emit
+   the bodies. Two hard-won reasons for this exact shape:
+   - Middleware-mode `ssrLoadModule` compiled components in *client* mode on a
+     Vite 8 + rolldown + Svelte 5 stack, so `render()` threw
+     "Component.render is no longer valid" — a full `--ssr` build compiles in server mode.
+   - `ssr.noExternal: true` makes Vite try to re-compile *precompiled* dependency
+     `.svelte` files (e.g. `@lucide/svelte` icons) and dies on
+     `'new.target' can only be used in functions` — externalize deps so only your own
+     components compile; bits-ui / lucide load as their shipped output.
+3. Wrap each `body` in the card shape from `references/ds-layout.md` (first line
    `<!-- @dsCard group="…" -->`, stylesheet link to `../../../styles.css`), showing
    several variants/states per card where the API has them.
-3. Interactive-only components (dialogs, dropdowns, tooltips) don't SSR into a useful
-   closed state — render their open/expanded state by composing what `render()` gives,
-   or set the relevant open prop.
+4. Interactive/composed components (dialogs, popovers, command menus, input groups)
+   built from multi-part bits-ui primitives don't SSR into a useful closed state and
+   their `Root`/`Trigger`/`Content` split doesn't render standalone. Author these
+   spec-style: a hand-built card using the components' *real* class strings (read them
+   from the `.svelte` source), showing the open/expanded state. Mark them in NOTES.md as
+   spec-authored (not SSR-verified) so re-syncs know.
 
-If a component won't SSR (browser-only APIs at module scope), fall back to a
-hand-authored card using the component's real classes — and mark it in NOTES.md as
-unverified-by-render so re-syncs know.
+If a leaf component won't SSR (browser-only APIs at module scope), fall back to the same
+spec-style card and mark it unverified-by-render in NOTES.md.
+
+Keep the harness under `.design-sync-svelte/render/` — it's reusable across re-syncs.
 
 ### <Name>.prompt.md
 
@@ -145,16 +189,24 @@ handoff is mechanical.
 Off-script generation is legitimate; off-script verification is not. Gate every card:
 
 1. **Render check** — open each card with Playwright (headless chromium): fail on
-   console errors, missing stylesheet, or a visually blank body. If Playwright isn't
-   available, install it in a scratch dir; if that's impossible, the run is
-   unverified — say so and get the user's explicit OK before uploading anything.
+   console errors, a failed `.css` request, or a visually blank body (probe
+   `getComputedStyle` — e.g. confirm the body font resolved to the DS font and height
+   > 0). Playwright is usually NOT a repo dep: install it in the session scratchpad
+   (`npm i playwright && npx playwright install chromium` in a temp dir) and import it
+   by absolute path. It ships CommonJS, so from an `.mjs` harness use
+   `import pw from '<abs>/playwright/index.js'; const { chromium } = pw;` (a named
+   `import { chromium }` fails). If installing is impossible, the run is unverified —
+   say so and get the user's explicit OK before uploading anything.
 2. **Visual grade** — screenshot each card and look at it: does it show the component
    styled as the real app shows it (compare against the repo's Storybook/routes when
    available)? Broken cards get fixed or dropped to a minimal honest card — never
    uploaded pretty-but-wrong.
-3. **Vocabulary check** — every class, token, and component name in the conventions
-   header and prompt files must grep-verify against `ds-bundle/styles.css` and the
-   emitted component dirs. A name that doesn't resolve is worse than no guidance.
+3. **Vocabulary check** — every utility class, token, and component name in the
+   conventions header and prompt files must grep-verify against the built
+   `ds-bundle/_ds_bundle.css` (the closed set) and the emitted `components/<group>/<Name>/`
+   dirs. This gate reliably catches drift — e.g. `bg-card`/`bg-accent` enumerated but
+   never baked. A name that doesn't resolve is worse than no guidance: fix it, drop it,
+   or (for a defined token with no utility) rewrite it as `var(--token)`. When grepping, remember Tailwind **escapes `/` and `.` in selectors** (`bg-muted/50`→`.bg-muted\/50`, `gap-2.5`→`.gap-2\.5`), so a naive `grep -F ".bg-muted/50"` reports a false miss — match the escaped form or check with a substring test that accounts for the backslash.
 
 ## 5. Author the conventions header (README.md)
 

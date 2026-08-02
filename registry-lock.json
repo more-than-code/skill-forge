@@ -159,6 +159,18 @@
         "sveltekit.md": "sha256-e+1KU1+BezkJaEfCL+M0tvFBTqoLtXDq96LWv7fPPDo="
       }
     },
+    "inventory/skills/fvm-flutter": {
+      "name": "fvm-flutter",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/fvm-flutter",
+      "integrity": "sha256-WG2xPP8akHTV+Vn07ILMOnfVt7oK3SRvVKwn/XmVqz0=",
+      "files": {
+        "SKILL.md": "sha256-9xucwk3hNypTxdaPJQj5X4lZmPLuiA/I2oFtXPYgG5I="
+      }
+    },
     "inventory/skills/llm-integration": {
       "name": "llm-integration",
       "version": "0.1.0",
@@ -310,9 +322,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-oA24sz0NYzPo+wsiyk0cwi6siLCCqZcSmTNi1wwxy68=",
+      "integrity": "sha256-ccGGf/PlylWjDgriTaVfZ8xGbYJrb7tSbUjwy2vjlss=",
       "files": {
-        "core.md": "sha256-MXCfj0chpKSgCUH+L+BublZNPIGeOYpSo3cUnn9znrI="
+        "core.md": "sha256-KqYMPcsyy0VI9x1ZyPjSrrKekw4Px5knymuauPzW8WA="
       },
       "sourceOnly": true
     },

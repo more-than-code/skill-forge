@@ -324,6 +324,20 @@
         "meta",
         "workflow"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "fvm-flutter",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/fvm-flutter",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/fvm-flutter",
+      "tags": [
+        "flutter",
+        "fvm",
+        "toolchain"
+      ]
     }
   ],
   "managedAgents": [

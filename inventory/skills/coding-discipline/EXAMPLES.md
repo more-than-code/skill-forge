@@ -107,6 +107,20 @@ def save_preferences(db, user_id: int, preferences: dict) -> None:
 - Add only the logging lines
 - Match the surrounding code style exactly
 
+### Example: Post-Commit Documentation
+
+**User request:** "Fix inventoring so the Add panel stays open, then commit"
+
+**Bad response**
+1. Implements panel persistence in code
+2. Commits code-only when asked
+3. Updates `docs/` only after "did you update the docs?"
+
+**Better response**
+1. Implements panel persistence
+2. Updates owning docs (`agentic-chat`, webapp inventoring note, glossary) **in the same work batch**
+3. On "commit", stages **code + docs** in one per-intent commit (or one commit per repo, each including that repo's docs)
+
 ---
 
 ## 4. Goal-Driven Execution

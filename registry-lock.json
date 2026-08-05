@@ -70,15 +70,15 @@
     },
     "inventory/skills/coding-discipline": {
       "name": "coding-discipline",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/coding-discipline",
-      "integrity": "sha256-QoKanDWT7ajQbgbiUbjHEdHEdmkhjQ1gcyomd4k6gSk=",
+      "integrity": "sha256-oRWcDbXSpNyY3+y0+3rq/vvu3aKpndj4ZzXyEIswygo=",
       "files": {
-        "EXAMPLES.md": "sha256-EKe6AfKvd+grcVprdt0P0qy4htnv56XSBFmKxkOQoQk=",
-        "SKILL.md": "sha256-aVfBf564OmT6eV9luv0b3bgrZiSHpNQclHhApkwHVyw="
+        "EXAMPLES.md": "sha256-YUZL4/H68lapPAkcZ8go5wOsdsxr6qBtA6oyG9AsWKU=",
+        "SKILL.md": "sha256-gBMcWI11eHFM0E8oJ6RTjgoOnBHQYJZHwxg8XIF3HvY="
       }
     },
     "inventory/skills/data-migration": {
@@ -112,10 +112,10 @@
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-flutter",
-      "integrity": "sha256-072Jdt8SowqKKMjCrbviuV4WGzJVcgxHm8krIAxLAZ4=",
+      "integrity": "sha256-2AEwC4qFFqNzY184wtiTd8N6Sqdtt9h3VcNhJKLWXSA=",
       "files": {
-        "references/ds-layout.md": "sha256-GVK1RiFqJXqXQt3uYjBxWof7frVIuDJ4ZSoDVIWJk0o=",
-        "SKILL.md": "sha256-h+XF+Q+61sQV8EPMflHzq/ecEyL95sRk8CyPidH6hKg="
+        "references/ds-layout.md": "sha256-BogduWYJ0I0PXco3F6Z8DwgSb/m322mUBxTJJUWyUz4=",
+        "SKILL.md": "sha256-3lQQjcVpts0sakkw/8pT1UuhP7S263FpIKKcjxJe7Es="
       }
     },
     "inventory/skills/design-sync-svelte": {
@@ -125,11 +125,11 @@
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-svelte",
-      "integrity": "sha256-OHc2pCilkMv17qMkOzx3nXHerqW/v1PV6EPiguu3ldg=",
+      "integrity": "sha256-UdCod3xsRoSVE9XiwOQnIF8HZs+oh6CFpxKjOXsVZHk=",
       "files": {
         "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
-        "references/ds-layout.md": "sha256-GVK1RiFqJXqXQt3uYjBxWof7frVIuDJ4ZSoDVIWJk0o=",
-        "SKILL.md": "sha256-ipHigCqypQjMfxpX0skABP5n65OaLzixrGxzNGj9sOs="
+        "references/ds-layout.md": "sha256-HKKMHrRkBQIiHN/IvjaRlwazrlRQ3+Q1b9bkQP6rVsc=",
+        "SKILL.md": "sha256-sLXrkCq1BQAWPCsr7P9uXpUlg959OTJHFFyS0q6n1As="
       }
     },
     "inventory/skills/failure-analysis": {

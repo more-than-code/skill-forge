@@ -1,0 +1,31 @@
+{
+  "$comment": "Config for the ui-parity-mirroring tools. Place at repo root (or scripts/parity/) and run: node <skill>/scripts/parity-gate.mjs",
+  "root": ".",
+  "source": {
+    "name": "webapp",
+    "root": "web",
+    "routes": {
+      "dir": "src/routes",
+      "filename": "+page.svelte",
+      "$note": "File-router discovery. Next.js: filename 'page.tsx', dir 'app'. For anything else use \"list\": [\"/\", \"/settings\", ...]."
+    }
+  },
+  "mirror": { "name": "mobile", "root": "mobile" },
+  "manifest": "scripts/parity/parity-manifest.json",
+  "waivers": "scripts/parity/waivers.json",
+  "acceptedFindings": "scripts/parity/accepted-findings.json",
+  "out": "parity-out",
+  "i18n": {
+    "$note": "Optional. Omit the whole block to skip i18n checks.",
+    "sourceFile": "web/src/lib/i18n/en.ts",
+    "sourceFormat": "ts-object",
+    "mirrorFile": "mobile/lib/l10n/app_en.arb",
+    "mirrorFormat": "arb",
+    "generatedFile": "mobile/lib/l10n/generated/app_localizations.dart"
+  },
+  "review": {
+    "backend": "grok",
+    "model": "gpt-4.1",
+    "envFile": "backend/.env"
+  }
+}

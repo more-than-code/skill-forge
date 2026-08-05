@@ -107,7 +107,7 @@
     },
     "inventory/skills/design-sync-flutter": {
       "name": "design-sync-flutter",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
@@ -157,6 +157,31 @@
         "SKILL.md": "sha256-cayLkNDUtr1DGbid8CH49ipZyK9rcNnsTBL4SzrK0AY=",
         "svelte.md": "sha256-71TpQM0krCkZwthaaW4rcfrYe4Ptz3nDxkGNtYvqSA4=",
         "sveltekit.md": "sha256-e+1KU1+BezkJaEfCL+M0tvFBTqoLtXDq96LWv7fPPDo="
+      }
+    },
+    "inventory/skills/fvm-flutter": {
+      "name": "fvm-flutter",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/fvm-flutter",
+      "integrity": "sha256-WG2xPP8akHTV+Vn07ILMOnfVt7oK3SRvVKwn/XmVqz0=",
+      "files": {
+        "SKILL.md": "sha256-9xucwk3hNypTxdaPJQj5X4lZmPLuiA/I2oFtXPYgG5I="
+      }
+    },
+    "inventory/skills/grok-build-harness": {
+      "name": "grok-build-harness",
+      "version": "0.2.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/grok-build-harness",
+      "integrity": "sha256-d/l6Eo8PIvYaVw+nlB3KjNBh4s8XF+GmCRIB3CaHN54=",
+      "files": {
+        "EXAMPLES.md": "sha256-3cY68m58FmwQRzaVDxvlcxcbiHpAgzgHv6YKQkeqpx0=",
+        "SKILL.md": "sha256-XiTxVinC8BmI8BWL4wf69xyuGr1kx5GDfq/lXuFD9L8="
       }
     },
     "inventory/skills/llm-integration": {
@@ -278,6 +303,22 @@
       "integrity": "sha256-KsqNmZ/F+oxg+PFicC4Q/6LMl+1FtbkwoX7JCgJ8h4A=",
       "files": {
         "SKILL.md": "sha256-Nl/s8uWLK48RERQ3XKOwVV7KTqqZjzj1PG1lOuRJCp8="
+      }
+    },
+    "inventory/skills/ui-parity-mirroring": {
+      "name": "ui-parity-mirroring",
+      "version": "0.8.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
+      "integrity": "sha256-rqZ/76zDvTeBqm32PpDjZp4iRsJO2dPKLHUGBhGTj/8=",
+      "files": {
+        "RECIPES.md": "sha256-kCPGSkTa5YIKUDXttStU7dPk4alrDbs32Yl5Dicn0OI=",
+        "scripts/parity-gate.mjs": "sha256-T99A/ZtFMqQUWgrbqlwrQEkC5MJmacIFcGgpPzfXmtI=",
+        "scripts/parity-review.mjs": "sha256-pok2SvZd6/+HqC8AjG8b2oH9lqMlOGY6YiSI5hLr/ac=",
+        "scripts/parity.config.example.json": "sha256-YT1onRW33sMYQ4sxk8GnbYD+8+Q0CG1mgtSLlUf5vqw=",
+        "SKILL.md": "sha256-BSIAxoYuf2Hk/N2RC5fI+kbjZnFyySNT3xoCLo/DnLo="
       }
     },
     "inventory/skills/ui-portability-baseline": {

@@ -50,6 +50,17 @@ whether the sync can be trusted.
 
 Load the tool first if absent: `ToolSearch(query: "select:DesignSync")`.
 
+**Auth preflight — do this before any build work.** `DesignSync` rides the user's
+claude.ai login with design scopes; that access is granted outside this skill, so an
+unauthorized session fails at the *upload*, after you've already spent minutes building
+and verifying. Call `DesignSync(list_projects)` early — it's cheap and raises no
+permission prompt — purely to confirm access. If any call fails with an authorization
+error, **relay the tool's guidance to the user verbatim**: its message is
+environment-aware (an interactive terminal names `/design-login`; headless sessions get
+a path that works there), so paraphrasing it can send them somewhere that doesn't exist.
+Wait for them to act, then retry. An empty project list is a normal first-sync result,
+not an auth failure.
+
 1. **Pinned**: config file has a `projectId` → `DesignSync(get_project)` to confirm it
    still exists and `type` is `PROJECT_TYPE_DESIGN_SYSTEM`; say which project you're
    syncing to. Re-ask only if gone or the user redirects.
@@ -68,15 +79,50 @@ creating a duplicate.
 ## Upload sequence (atomic — build and verify everything locally first)
 
 1. Build the complete output dir (e.g. `ds-bundle/`) and finish all verification gates.
-2. Explain the approval in plain language (no tool jargon), then
-   `DesignSync(finalize_plan)` with `localDir` = the output dir and `writes`/`deletes`
-   globs covering it, e.g. writes:
-   `["components/**", "tokens/**", "fonts/**", "guidelines/**", "styles.css", "README.md", "_ds_needs_recompile"]`
-   and the same content globs as deletes. If the approval is denied, STOP — report the
-   local output path and ask how to proceed; denial means the session can't approve,
-   not that the arguments were wrong.
+2. **Decide the direction first — this determines the globs, and getting it wrong
+   destroys work that cannot be recovered from the repo.** `list_files` the project:
+
+   - **Bootstrap** — the project is empty, or its `tokens/`/`guidelines/` were produced
+     by a previous run of this skill. The repo is the source. Push everything:
+     `["components/**", "tokens/**", "fonts/**", "guidelines/**", "styles.css", "README.md", "_ds_needs_recompile"]`
+
+   - **Canon-upstream** — the project already holds hand-curated `tokens/**`,
+     `guidelines/**`, or a `README.md` written by a designer. **The project is now
+     upstream of the repo**, and those files are the source of record; the repo's
+     equivalents are extracted copies of one client's implementation. Push only the
+     preview surface:
+     `["components/**", "styles.css", "fonts/**", "_ds_*"]`
+
+   If you cannot tell which mode applies, **ask** — do not guess toward the broader
+   glob. Read one token file: repo-extracted files usually say so in their header
+   ("extracted from src/app.css"), curated ones read as a specification.
+
+   **Deletes are the sharper edge.** Mirroring the write globs into `deletes` means a
+   re-sync removes every remote path the local output dir no longer contains — so in
+   canon-upstream mode, `deletes` covering `tokens/**` or `guidelines/**` wipes the
+   canon even if you never write those paths. In canon-upstream mode, `deletes` must be
+   restricted to `components/**` (for components genuinely dropped from the sync).
+
+   This is not hypothetical: in the `tutored` workspace (2026-08-03) the push-side
+   `ds-bundle/tokens/colors.css` still carried the header *"Authoritative copy is in
+   `_ds_bundle.css`"* while the project's `tokens/colors.css` had become 34 light + 31
+   dark hand-curated oklch values. Re-running this skill unmodified would have silently
+   replaced the specification with one client's implementation, with no error and no
+   diff anyone would look at.
+
+   Then explain the approval in plain language (no tool jargon) and call
+   `DesignSync(finalize_plan)` with `localDir` = the output dir. If the approval is
+   denied, STOP — report the local output path and ask how to proceed; denial means the
+   session can't approve, not that the arguments were wrong.
 3. **Sentinel first**: `write_files` `_ds_needs_recompile` alone — it fences the app's
    machinery against consuming a half-uploaded state.
+   **Its CONTENT is load-bearing: `{"by":"<skill-name>"}`.** Upload it with `localPath`
+   pointing at the real file, never `data: ""`. An empty sentinel is silently accepted —
+   `write_files` reports success and `list_files` shows the path — but the self-check
+   never fires, so `_ds_manifest.json` is never rebuilt and **every uploaded card stays
+   invisible in the Design System pane**. Observed 2026-08-03: 15 components uploaded
+   correctly across four pushes, all present via `list_files`, and the pane still showed
+   the 4 cards from a much older sync. Verify with `get_file` after writing it.
 4. **Content writes**: `write_files` everything else with root-relative paths verbatim,
    using `localPath` (contents never enter context). Max 256 files per call — chunk and
    reuse the same `planId`. Batch binary-heavy dirs (fonts) into smaller chunks; on a

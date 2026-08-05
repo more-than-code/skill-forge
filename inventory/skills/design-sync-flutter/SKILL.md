@@ -132,6 +132,22 @@ the card, and the widget's file path. Under a screenful.
   widget); and the handoff rule that generated markup carries
   `data-widget="<Name>"` on any element standing in for a DS widget.
 
+**Authored prose is a durable input, not regenerated output.** `guidelines/*.md` and the
+per-component `prompt.md` files are *written by you*, not derived from source the way
+tokens and cards are — so regenerating them every sync silently discards any human
+refinement, and a user who edits one in the Design UI or the bundle loses it on the next
+run. Treat them like `conventions.md`:
+
+- Author them into the **tracked state dir** — `.design-sync-flutter/guidelines/*.md` and
+  `.design-sync-flutter/prompts/<Name>.prompt.md` — and have the build **copy** them into
+  `ds-bundle/`.
+- On a re-sync, **never overwrite an existing one.** Author only what's missing (a new
+  component's `prompt.md`, a guideline that doesn't exist yet), then re-validate the
+  existing ones against the fresh build and *propose* edits for anything whose names no
+  longer resolve. Same rule as the conventions header.
+- `ds-bundle/` stays disposable: tokens, cards, CSS, fonts regenerate freely.
+
+
 ## 4. Verify before upload
 
 Spec-style cards are recreations, so verification is what makes them trustworthy:
@@ -166,6 +182,18 @@ Spec-style cards are recreations, so verification is what makes them trustworthy
 ## 5. Author the conventions header (README.md)
 
 Inlined into the design agent's system prompt — the highest-leverage artifact here.
+
+**Precedence — put this near the top of the header.** A Design project can also have the
+repo attached as context ("Link local code"/GitHub), so the agent may read raw source.
+For a spec-style sync that is actively harmful unless ranked: source is Dart it cannot
+render, and it contains widgets that were never synced. State the order plainly:
+
+1. this conventions header — binding rules;
+2. `tokens/` + `styles.css` — the only safe styling vocabulary;
+3. `prompt.md` / `guidelines/` — widget APIs and design→Flutter mapping;
+4. attached repo source — background patterns and gaps **only**; never a source of
+   values or widgets to reference directly.
+
 Every sentence must satisfy this test: *could the agent act on this without guessing?*
 Tersely (2–4k chars):
 

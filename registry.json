@@ -301,7 +301,7 @@
     {
       "type": "skill",
       "name": "design-sync-flutter",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "scope": "custom",
       "path": "inventory/skills/design-sync-flutter",
       "installable": true,
@@ -323,6 +323,51 @@
       "tags": [
         "meta",
         "workflow"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "ui-parity-mirroring",
+      "version": "0.8.0",
+      "scope": "custom",
+      "path": "inventory/skills/ui-parity-mirroring",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
+      "tags": [
+        "parity",
+        "ui",
+        "mirroring",
+        "visual-regression"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "grok-build-harness",
+      "version": "0.2.0",
+      "scope": "custom",
+      "path": "inventory/skills/grok-build-harness",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/grok-build-harness",
+      "tags": [
+        "grok",
+        "delegation",
+        "cli",
+        "harness"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "fvm-flutter",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/fvm-flutter",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/fvm-flutter",
+      "tags": [
+        "flutter",
+        "fvm",
+        "dart",
+        "sdk"
       ]
     }
   ],

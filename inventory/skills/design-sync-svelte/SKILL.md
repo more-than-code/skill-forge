@@ -126,11 +126,29 @@ and get silently unstyled output. Two mitigations, apply both:
      `@source inline(...)`/safelist of the common utility families to the CSS entry
      before building, so they're baked in. Note what you safelisted in NOTES.md.
 
-### tokens/
+### tokens/ — check the direction before you emit these
 
 One file per concern (`colors.css`, `typography.css`, `spacing.css`, `radius.css`) as
 CSS custom properties on `:root` (plus the dark-theme block if the repo has one),
 copied from the repo's real values — never invented. `@import` them from `styles.css`.
+
+**That holds only while the repo is the source of truth.** Once the project's `tokens/`
+have been curated by a designer, the direction has reversed: the project is upstream and
+the repo is a consumer. Emitting repo-extracted tokens then overwrites the specification
+with one client's implementation. See the direction check in
+`references/ds-layout.md` § Upload sequence — in canon-upstream mode, do not emit or
+upload `tokens/**` at all, and keep them out of `deletes` too.
+
+**Cascade order matters more than most people expect.** If `styles.css` imports only the
+compiled bundle, the preview cards render entirely from the repo's compiled values and
+the curated `tokens/` are *inert* — a designer edits a token, nothing on screen changes,
+and the only visible truth in the room is still the client's. Import the canonical tokens
+**after** the bundle so they win:
+
+```css
+@import "./_ds_bundle.css";   /* utilities, layout, @font-face */
+@import "./tokens/colors.css"; /* canon — later import wins at equal specificity */
+```
 
 ### Preview cards — server-render the real components
 
@@ -184,6 +202,22 @@ import path, card variant → prop values, and the rule that the agent's generic
 should carry `data-component="<Name>"` on elements standing in for a DS component so
 handoff is mechanical.
 
+**Authored prose is a durable input, not regenerated output.** `guidelines/*.md` and the
+per-component `prompt.md` files are *written by you*, not derived from source the way
+tokens and cards are — so regenerating them every sync silently discards any human
+refinement, and a user who edits one in the Design UI or the bundle loses it on the next
+run. Treat them like `conventions.md`:
+
+- Author them into the **tracked state dir** — `.design-sync-svelte/guidelines/*.md` and
+  `.design-sync-svelte/prompts/<Name>.prompt.md` — and have the build **copy** them into
+  `ds-bundle/`.
+- On a re-sync, **never overwrite an existing one.** Author only what's missing (a new
+  component's `prompt.md`, a guideline that doesn't exist yet), then re-validate the
+  existing ones against the fresh build and *propose* edits for anything whose names no
+  longer resolve. Same rule as the conventions header.
+- `ds-bundle/` stays disposable: tokens, cards, CSS, fonts regenerate freely.
+
+
 ## 4. Verify before upload
 
 Off-script generation is legitimate; off-script verification is not. Gate every card:
@@ -211,7 +245,20 @@ Off-script generation is legitimate; off-script verification is not. Gate every 
 ## 5. Author the conventions header (README.md)
 
 This file is inlined into the design agent's system prompt — it's the highest-leverage
-artifact of a spec-style sync. Every sentence must satisfy this test: *could the agent
+artifact of a spec-style sync.
+
+**Precedence — put this near the top of the header.** A Design project can also have the
+repo attached as context ("Link local code"/GitHub), so the agent may read raw source.
+For a spec-style sync that is actively harmful unless ranked: source contains Svelte/Dart
+it cannot render, components that were never synced, and token names that are *defined*
+but absent from the delivered stylesheet (the closed-set trap). State the order plainly:
+
+1. this conventions header — binding rules;
+2. `tokens/` + `styles.css` — the only safe styling vocabulary;
+3. `prompt.md` / `guidelines/` — component APIs and design→code mapping;
+4. attached repo source — background patterns and gaps **only**; never a source of class
+   names or components to reference directly.
+ Every sentence must satisfy this test: *could the agent
 act on this without guessing?* Cover, tersely (2–4k chars):
 
 - **Setup/wrapping** the agent's output needs (theme class on a root element, dark-mode

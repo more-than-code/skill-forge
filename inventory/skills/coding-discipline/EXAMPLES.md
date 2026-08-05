@@ -121,6 +121,18 @@ def save_preferences(db, user_id: int, preferences: dict) -> None:
 2. Updates owning docs (`agentic-chat`, webapp inventoring note, glossary) **in the same work batch**
 3. On "commit", stages **code + docs** in one per-intent commit (or one commit per repo, each including that repo's docs)
 
+### Example: Commit Outside Workspace / on main
+
+**User request:** (workspace = tutored) "commit changes so far"
+
+**Bad response**
+- Commits in `tutored/ttd-webapp` **and** silently commits in `~/workspace/skill-forge` on `main`
+
+**Better response**
+- Commits only under the active workspace repos the user meant
+- If Skill Forge inventory also needs a commit: ask, with path + branch (`dev` vs `main`)
+- Never commit on `main`/`master` without an explicit yes after naming that branch
+
 ---
 
 ## 4. Goal-Driven Execution

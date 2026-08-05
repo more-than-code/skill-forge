@@ -2,9 +2,10 @@
 name: coding-discipline
 description: >
   Behavioral guardrails against common LLM coding pitfalls: overengineering, hidden
-  assumptions, drive-by edits, vague execution, and post-hoc documentation. Activate on
-  all implementation tasks alongside security-baseline. Derived from Andrej Karpathy's
-  observations on LLM coding failure modes.
+  assumptions, drive-by edits, vague execution, post-hoc documentation, and unsafe git
+  commits (outside workspace; main/master without asking). Activate on all implementation
+  tasks alongside security-baseline. Derived from Andrej Karpathy's observations on LLM
+  coding failure modes.
 ---
 
 # Coding Discipline
@@ -43,6 +44,8 @@ Use this skill as part of the default implementation-time skill set defined in t
 - [ ] **Doc co-delivery check** (below) — required docs are already in the working tree with the code
 
 ### Before Any User-Requested Commit
+- [ ] **Repo is inside the active workspace** (or a path the user explicitly named) — never commit elsewhere
+- [ ] **Branch is not `main`/`master`** (or production default) unless the user explicitly authorized that branch after you asked
 - [ ] If the change set required docs, **those doc files are staged with the code** in the same per-intent commit
 - [ ] Commit message covers behavior **and** doc surface when both changed
 - [ ] No "code commit now, docs later" split for the same intent
@@ -149,3 +152,11 @@ Artifact-level anti-patterns (over-abstraction, speculative features, over-param
 ### Post-Commit Documentation
 **Wrong:** Ship code + tests, commit when asked, then update docs only after the user asks "did you update the docs?"
 **Right:** Treat owning docs as part of the implementation unit; stage them with the code in the same intent commit.
+
+### Commit Outside Workspace
+**Wrong:** While working in project A, also `git commit` in `~/skill-forge` or another sibling repo because you edited it for tooling.
+**Right:** Only commit in the workspace (or path) the user is working in / named. If another repo must change, ask first with the full path.
+
+### Commit on main/master Without Asking
+**Wrong:** User says "commit"; agent is on `main` and commits without checking the branch.
+**Right:** Run `git branch --show-current`. If `main`/`master` (or production default), stop and ask for explicit confirmation before committing.

@@ -105,6 +105,24 @@ sed -i '' 's#url(\./files/#url(fonts/#g' ds-bundle/_ds_bundle.css   # match your
 Then confirm `grep -c 'url(fonts/' ds-bundle/_ds_bundle.css` matches the font count and
 `grep -c 'url(./files/' ` is 0.
 
+**First check whether the app bundles a webfont at all.** If the built CSS contains no
+`@font-face` — a system-first stack, which is the right choice for any app shipping CJK,
+since Latin-only faces like Inter have no Han or Kana — then **skip this whole step and
+ship no `fonts/` directory.** Copying fonts "just in case" leaves orphaned binaries that
+nothing references and a token panel still advertising a brand font the product dropped.
+Gate it on the build output, never on what the app used to do:
+
+```sh
+grep -c '@font-face' ds-bundle/_ds_bundle.css   # 0 → no fonts/ dir, nothing to rewrite
+```
+
+**Rebuild `_ds_bundle.css` on every sync, and treat a stale one as a real defect.** It is
+a compiled artifact of the app's CSS, so it drifts silently while the cards built beside
+it look perfectly current. Observed: a project served every card with `Inter Variable`
+`@font-face` rules for a day and a half after the app had moved to a system stack —
+freshly generated cards, stale stylesheet underneath. Compare mtimes against the CSS
+entry before deciding the project is up to date.
+
 Emit `ds-bundle/styles.css` as the root that `@import`s `_ds_bundle.css` (which already
 carries the inlined `:root`/`.dark` tokens and `@font-face` rules). Designs receive only
 this import closure — verify every token and class you'll later document actually
@@ -283,6 +301,42 @@ Run the atomic upload sequence in `references/ds-layout.md` exactly (sentinel wi
 failures, omit `_ds_sync.json`). Then report: project URL, component count, cards
 verified, known limits. Offer to commit `.design-sync-svelte/` (config, NOTES,
 conventions) — one commit, sync inputs only.
+
+## The loop: push, design, pull — and who does which arrow
+
+The sync is **one direction of a two-direction loop**, and getting the direction or
+the actor wrong is the failure this skill exists to prevent.
+
+```
+repo components ──push──▶ Design project ──(design work)──▶ tokens/ guidelines/ README
+     (this skill)          components/ styles.css                     │
+                                                                pull  ▼
+                                                    ONE committed snapshot in the repo
+                                                                      │
+                                                        every client conforms to it
+```
+
+**Actors.** The design work happens inside the design tool. **Both the push and the
+pull are repo-side actions run by a coding agent with repo write access** — the design
+tool cannot write to your repository, and `DesignSync` has no CLI, so neither arrow is
+ever a CI step. Never hand someone a workflow where "the design agent syncs it back";
+it cannot, and the snapshot goes stale while everyone assumes it is current. Record
+this in the snapshot's lock file so nobody hunts for a pull binary.
+
+**One snapshot, one path.** Pull to a single location that every client reads, even in
+a multi-repo workspace. A per-client copy drifts silently and no check catches it.
+
+**Push cadence — it is not per-feature.** Push when the *component inventory or its
+rendering* changes: a component added to `synced`, markup/class strings changed, the
+utility surface widened. Do **not** push because tokens changed, and specifically do
+**not** push right after conforming a client to canon — that re-uploads canon-derived
+values as though they were fresh input from the client, and any deviation the client
+introduced acquires the appearance of canon. Pull is the frequent arrow; push is the
+occasional one.
+
+**The push is an input for design work, never a source of truth.** Once the project's
+`tokens/` and `guidelines/` have been curated, they outrank the repo — see the
+direction check in `references/ds-layout.md` before choosing your write globs.
 
 ## Re-syncs
 

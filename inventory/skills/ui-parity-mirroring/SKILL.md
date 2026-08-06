@@ -129,6 +129,36 @@ assertions, comparison logic, or capture selection. Require the delegate to
 disclose it, and review the diff — data wiring cannot fake a result, but an
 assertion change can.
 
+### Keep the capture test out of the default test suite
+
+The mirror-side capture is usually written as a golden/snapshot test, so it lands in
+`test/` and runs on every `npm test` / `flutter test` / `pytest`. That means **any
+routine test run silently rewrites one column of the board** — and the columns then
+come from different builds, so every pair compares mismatched output while the board
+still looks populated.
+
+Tag it and exclude it by default; produce captures *only* from the pipeline script,
+which does both columns together. For Flutter:
+
+```yaml
+# dart_test.yaml
+tags:
+  parity:
+    skip: "capture test — writes parity-out/; run via scripts/parity/run.sh"
+```
+
+```dart
+@Tags(['parity'])
+library;
+```
+
+and have the runner pass `--run-skipped`. Verify the exclusion empirically — compare a
+capture's mtime before and after a plain test run — rather than assuming the tag took.
+
+This is not hypothetical: it was found only because `capture-columns-skewed` fired
+after an unrelated `flutter test`, 4107 minutes of skew that nothing else would have
+surfaced.
+
 ## 4. False positives are more convincing than real findings
 
 A parity board manufactures failures that look exactly like bugs. **Maintain an
@@ -239,6 +269,46 @@ These need no capture infrastructure and catch a large share of drift:
 
   **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
 
+### Design-system conformance (check D) — when there is a canon
+
+Skip this if the project has no design system; the check disables itself cleanly.
+But if one exists, **it changes who "truth" is** for part of the board.
+
+**The direction that matters.** Without a canon, the mirror is graded against the
+source client — so any bug in the source client becomes the specification. That is
+not hypothetical: a source client rendered a "Log out" control to signed-out
+users, the mirror correctly rendered "Log in", and the vision review dutifully
+reported *the mirror* as wrong. A design system fixes this by being upstream of
+**both** clients, which is why check D is **symmetric — the source client is
+checked too, and fails the same way.**
+
+Configure it with a `design` block:
+
+```jsonc
+"design": {
+  "dir": "path/to/design",          // committed snapshot pulled FROM the design tool
+  "clients": [
+    { "name": "webapp", "tokensFile": "src/app.css",             "format": "css"  },
+    { "name": "mobile", "tokensFile": "lib/core/theme/tokens.dart", "format": "dart" }
+  ]
+}
+```
+
+- `dir/tokens/*.css` is the canon. Treat it as **read-only in the repo** — edit it in
+  the design tool and re-pull, or the next pull silently reverts you.
+- **One snapshot, one path.** A per-client copy drifts and no check would catch it.
+- `format: "css"` compares names **and values**. `format: "dart"` compares **names
+  only** — values are converted (oklch → sRGB, rem → logical px), so value equality
+  is meaningless there and asserting it would produce pure noise.
+- The CSS parser handles wrapped multi-line declarations. It did not always: a
+  line-anchored regex reported a wrapped `--font-sans` as **missing** rather than
+  **drifted** — "never defined it" instead of "defined it differently", the opposite
+  diagnosis, on the one token a human was actively arguing about.
+
+**What check D cannot see.** It reads declarations, never pixels. A client can
+define all N canonical tokens perfectly and still apply the wrong one in the wrong
+place. That residue is the visual-conformance axis in §1, and check D is not it.
+
 ### Tier 2 — full board, on PR or nightly
 
 - Regenerate captures and fail on any that render empty (content assertions, §3).
@@ -251,6 +321,33 @@ a reviewed capture — or a dated, named waiver.** Put this in the contributing
 guide. Without it, mirroring is always someone else's later task, nobody is
 blocked by its absence, and gaps accumulate silently. That incentive asymmetry,
 not ignorance, is what produces most parity debt.
+
+**When a design system exists, that is only half of done.** Two loops close
+independently, on different cadences and different authorities:
+
+```
+PRODUCT   source-client feature ──▶ mirror implements ──▶ parity board + vision review
+          authority: the source client (routes, screens, affordances, copy)
+
+VISUAL    client components ──push──▶ design tool ──(design work)──▶ tokens/guidelines
+                                                          │
+                                                     pull ▼
+                                          ONE committed snapshot
+                                                          │
+                                        both clients conform ──▶ check D
+          authority: the design system (colour, radius, type)
+```
+
+A feature is done when **both** are green: the mirror matches (parity board) **and**
+both clients conform to canon (check D). Tracking only the first is how a client's
+implementation quietly becomes the specification.
+
+**Who does which arrow matters.** The design work happens inside the design tool, by
+whatever agent or person works there. **The push and the pull are repo-side actions**
+— a coding agent with repo write access — because the design tool cannot write to your
+repository. Do not write a workflow that expects the design agent to update the repo
+snapshot; it cannot, and the snapshot silently goes stale while everyone assumes it
+is current.
 
 ### Make it cheap or it will not be run
 

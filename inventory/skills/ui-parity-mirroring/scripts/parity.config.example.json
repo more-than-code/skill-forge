@@ -10,7 +10,10 @@
       "$note": "File-router discovery. Next.js: filename 'page.tsx', dir 'app'. For anything else use \"list\": [\"/\", \"/settings\", ...]."
     }
   },
-  "mirror": { "name": "mobile", "root": "mobile" },
+  "mirror": {
+    "name": "mobile",
+    "root": "mobile"
+  },
   "manifest": "scripts/parity/parity-manifest.json",
   "waivers": "scripts/parity/waivers.json",
   "acceptedFindings": "scripts/parity/accepted-findings.json",
@@ -27,5 +30,24 @@
     "backend": "grok",
     "model": "gpt-4.1",
     "envFile": "backend/.env"
+  },
+  "design": {
+    "$comment": "OPTIONAL — omit and check D skips cleanly. When present, the design system is upstream of BOTH clients and the check is symmetric: the source client fails the same way the mirror does. This is what stops a source-client bug becoming the specification.",
+    "dir": "design",
+    "$dirNote": "Committed snapshot PULLED FROM the design tool. Read-only in the repo — edit upstream and re-pull, or the next pull reverts your edit. One snapshot, one path: a per-client copy drifts and nothing would catch it.",
+    "clients": [
+      {
+        "name": "webapp",
+        "tokensFile": "src/app.css",
+        "format": "css",
+        "$note": "css compares names AND values"
+      },
+      {
+        "name": "mobile",
+        "tokensFile": "lib/core/theme/tokens.dart",
+        "format": "dart",
+        "$note": "dart compares names ONLY — values are converted (oklch->sRGB, rem->logical px), so value equality is meaningless"
+      }
+    ]
   }
 }

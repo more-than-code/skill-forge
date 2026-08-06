@@ -120,7 +120,7 @@
     },
     "inventory/skills/design-sync-svelte": {
       "name": "design-sync-svelte",
-      "version": "0.2.1",
+      "version": "0.4.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
@@ -307,7 +307,7 @@
     },
     "inventory/skills/ui-parity-mirroring": {
       "name": "ui-parity-mirroring",
-      "version": "0.8.0",
+      "version": "0.11.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,

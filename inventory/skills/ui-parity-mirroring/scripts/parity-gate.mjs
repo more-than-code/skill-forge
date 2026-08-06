@@ -278,12 +278,23 @@ function checkUnlabelled() {
 // notation. Flutter stores sRGB converted from oklch, so value equality there
 // is meaningless; coverage (does the client define every canonical token?) is
 // the honest check.
+// Parse across the whole file, not line by line. A wrapped declaration —
+//   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+//     'PingFang SC', sans-serif;
+// is completely ordinary CSS, and a line-anchored regex never matches it. The
+// old version did exactly that and reported such a token as **missing** rather
+// than **drifted**, which reads as "the client never defined it" when in fact it
+// defined it differently — the opposite diagnosis. Observed 2026-08-03 on
+// `--font-sans`. Comments are stripped first so a commented-out declaration
+// cannot shadow the real one.
 function parseCssVars(file) {
   if (!existsSync(file)) return null;
+  const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const out = {};
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const m = line.match(/^\s*(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/);
-    if (m) out[m[1]] = m[2].trim();
+  for (const m of src.matchAll(/(--[A-Za-z0-9-]+)\s*:\s*([^;{}]+);/g)) {
+    // Collapse the newlines/indentation a wrapped value carries, so comparison
+    // is against the value the browser sees, not the source formatting.
+    out[m[1]] = m[2].replace(/\s+/g, ' ').trim();
   }
   return out;
 }

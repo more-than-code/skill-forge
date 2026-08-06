@@ -45,7 +45,7 @@
     {
       "type": "skill",
       "name": "coding-discipline",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "scope": "custom",
       "path": "inventory/skills/coding-discipline",
       "installable": true,

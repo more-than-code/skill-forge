@@ -120,6 +120,41 @@ def save_preferences(db, user_id: int, preferences: dict) -> None:
 1. Implements panel persistence
 2. Updates owning docs (`agentic-chat`, webapp inventoring note, glossary) **in the same work batch**
 3. On "commit", stages **code + docs** in one per-intent commit (or one commit per repo, each including that repo's docs)
+4. Reply includes Docs commit report with Completeness: Y
+
+### Example: Status-Only Doc Gate (empty git status for docs)
+
+**User request:** "Surface form values in dict search, then commit"
+
+**Bad response**
+1. Implements form search in code + tests
+2. On commit: `git status` shows no `docs/` → stages only `src/` and tests
+3. Leaves API contract saying "list q = headword only"
+
+**Better response**
+1. Implements form search
+2. Resolves owners from `docs/docs-owners.md` (personal dictionary domain)
+3. **Opens** API contract + agentic-chat even if clean; updates list-q prose
+4. Stages code + docs together
+```text
+Owning docs: docs/ttd-api-contract.md, docs/agentic-chat.md
+Completeness: Y
+Umbrella glossary: updated | unversioned path only (../docs/naming-glossary.md)
+```
+
+### Example: Partial Docs ≠ Completeness
+
+**User request:** (after multi-turn dictionary work) "commit changes"
+
+**Bad response**
+- Glossary was touched mid-session for countability
+- Commits without re-checking API contract / list search wording
+- Follow-up docs commit after user asks "did you update docs?"
+
+**Better response**
+- Before commit: re-read **final** behavior against **each** owner
+- Patch any stale sentence (e.g. form search, noun_classes)
+- One intent commit with code + all required docs; Docs commit report Completeness: Y
 
 ### Example: Commit Outside Workspace / on main
 

@@ -70,15 +70,15 @@
     },
     "inventory/skills/coding-discipline": {
       "name": "coding-discipline",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/coding-discipline",
-      "integrity": "sha256-StpWtKnU1o3tNgp5+sHHCMISB6rS1jXlai/X5BF3iYM=",
+      "integrity": "sha256-+AwdaB5NhSjGvG2+2uiWyFZ5nKszO+cxPKEDIT8EAkw=",
       "files": {
-        "EXAMPLES.md": "sha256-mxxTIgXpM2XYDaC3cF1bev4FfVdrKmC83rYPHlGmiL0=",
-        "SKILL.md": "sha256-vgyDP8W41xAuebd/MBcDV2g6VMPbwPNnqkqVtNfDIqM="
+        "EXAMPLES.md": "sha256-Pp+wGBnkqXg2un6HKiPzKCfZljEzQUb/wGyX0ctOH68=",
+        "SKILL.md": "sha256-X1BWJvnrEsbNglji8PZb12agTV32WxF5pUTamSAU2+w="
       }
     },
     "inventory/skills/data-migration": {
@@ -125,11 +125,11 @@
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-svelte",
-      "integrity": "sha256-UdCod3xsRoSVE9XiwOQnIF8HZs+oh6CFpxKjOXsVZHk=",
+      "integrity": "sha256-873XBgvPRwey7fgCqD7IbkG1XswxHkXJw6OeypMuTBw=",
       "files": {
         "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
         "references/ds-layout.md": "sha256-HKKMHrRkBQIiHN/IvjaRlwazrlRQ3+Q1b9bkQP6rVsc=",
-        "SKILL.md": "sha256-sLXrkCq1BQAWPCsr7P9uXpUlg959OTJHFFyS0q6n1As="
+        "SKILL.md": "sha256-hUmWwKa37UTP0L8k4lffmHl8qOB2ElXoKGzuiwX1BIo="
       }
     },
     "inventory/skills/failure-analysis": {
@@ -312,13 +312,13 @@
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
-      "integrity": "sha256-rqZ/76zDvTeBqm32PpDjZp4iRsJO2dPKLHUGBhGTj/8=",
+      "integrity": "sha256-faTY9TYYS6FtQlefTmj7N1xsBC0ZntGPxz/yb1Onm5g=",
       "files": {
         "RECIPES.md": "sha256-kCPGSkTa5YIKUDXttStU7dPk4alrDbs32Yl5Dicn0OI=",
-        "scripts/parity-gate.mjs": "sha256-T99A/ZtFMqQUWgrbqlwrQEkC5MJmacIFcGgpPzfXmtI=",
+        "scripts/parity-gate.mjs": "sha256-q3efuGkt5R3kmqdD9UizfvFSOtwOMMHZ3J+ML2vxE3g=",
         "scripts/parity-review.mjs": "sha256-pok2SvZd6/+HqC8AjG8b2oH9lqMlOGY6YiSI5hLr/ac=",
-        "scripts/parity.config.example.json": "sha256-YT1onRW33sMYQ4sxk8GnbYD+8+Q0CG1mgtSLlUf5vqw=",
-        "SKILL.md": "sha256-BSIAxoYuf2Hk/N2RC5fI+kbjZnFyySNT3xoCLo/DnLo="
+        "scripts/parity.config.example.json": "sha256-ELDXS8wclha9orUbfRawYmQoWQyJ/UNFUx1ytxb9vGU=",
+        "SKILL.md": "sha256-J588XUaNxDhO70YnzDaHcjvMmhw5TmK008tnj+z2Geg="
       }
     },
     "inventory/skills/ui-portability-baseline": {
@@ -351,9 +351,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-izBYB92NGCGLvBkhjZg8UpkZgTmVQ6rHqND9ncctXYE=",
+      "integrity": "sha256-e1k2zPDoralnvfZuGLp7jyw34It9k2i7mZowhcJRoXA=",
       "files": {
-        "core.md": "sha256-5sNZ9bbgn5fkfsBOXMmJdp/gr9z+oeB16CA2pXWQVA8="
+        "core.md": "sha256-ZY4munbU69cmnDm5SW3/kw6gEThH97513mIrsbvXGo4="
       },
       "sourceOnly": true
     },

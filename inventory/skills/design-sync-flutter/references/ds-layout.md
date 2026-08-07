@@ -96,6 +96,17 @@ creating a duplicate.
    repo-extracted token file usually says so in its header; a curated one reads as a
    specification.
 
+   **Never delete, and never write, anything the project holds that this skill did not
+   produce.** The app and the user write into the same file store, at the root, where a
+   careless `**` glob reaches: `*.dc.html` (design canvases, created by the user via
+   *New blank page*, named from the page title verbatim — **spaces included**),
+   `support.js` (canvas runtime, appears with the first page), `components/**/*.prompt.md`
+   (usage docs from earlier runs, typically absent from the current output dir, so a
+   delete-diff removes all of them), and `_ds_manifest.json` / `_adherence.*`.
+   Verified 2026-08-06 in `tutored`: one blank page added `Test from joe.dc.html` and
+   `support.js` at the root of a design-system project. Enumerate deletes explicitly,
+   `list_files` before every push, and treat unrecognised paths as someone else's.
+
    If the approval is denied, STOP — report the
    local output path and ask how to proceed; denial means the session can't approve,
    not that the arguments were wrong.

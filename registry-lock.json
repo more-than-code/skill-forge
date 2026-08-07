@@ -107,28 +107,28 @@
     },
     "inventory/skills/design-sync-flutter": {
       "name": "design-sync-flutter",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-flutter",
-      "integrity": "sha256-2AEwC4qFFqNzY184wtiTd8N6Sqdtt9h3VcNhJKLWXSA=",
+      "integrity": "sha256-1dMNidFHobPSSb/vtt3acxbd3BcxAjrsXxxK0UKd/UQ=",
       "files": {
-        "references/ds-layout.md": "sha256-BogduWYJ0I0PXco3F6Z8DwgSb/m322mUBxTJJUWyUz4=",
+        "references/ds-layout.md": "sha256-vpT1ESXbsLqJgHwXOASuWpeKCtJ1gpP3e1UfzWJuXUo=",
         "SKILL.md": "sha256-3lQQjcVpts0sakkw/8pT1UuhP7S263FpIKKcjxJe7Es="
       }
     },
     "inventory/skills/design-sync-svelte": {
       "name": "design-sync-svelte",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-svelte",
-      "integrity": "sha256-873XBgvPRwey7fgCqD7IbkG1XswxHkXJw6OeypMuTBw=",
+      "integrity": "sha256-Dxm/gMHEB15jipD6QdQcF2ViOSeyIRRONwdZAcHKfew=",
       "files": {
         "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
-        "references/ds-layout.md": "sha256-HKKMHrRkBQIiHN/IvjaRlwazrlRQ3+Q1b9bkQP6rVsc=",
+        "references/ds-layout.md": "sha256-NRK2dAoFuvkbv7+DW0Bw95mMGeUfkrPJMlrh3ZDIGPA=",
         "SKILL.md": "sha256-hUmWwKa37UTP0L8k4lffmHl8qOB2ElXoKGzuiwX1BIo="
       }
     },

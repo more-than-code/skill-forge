@@ -110,6 +110,22 @@ creating a duplicate.
    replaced the specification with one client's implementation, with no error and no
    diff anyone would look at.
 
+   **Never delete, and never write, anything the project holds that this skill did not
+   produce.** A design system is not only the sync output — the app and the user both
+   write into the same file store, at the root, where a careless `**` glob reaches:
+
+   | Path | Written by | Why it must survive a re-sync |
+   |---|---|---|
+   | `*.dc.html` (root) | the user, via *New blank page* | Design canvases. Named from the page title verbatim — **spaces included** — so they will not look like generated paths. |
+   | `support.js` (root) | the app | Canvas runtime; appears the first time any page is created. |
+   | `components/**/*.prompt.md` | this skill, on earlier runs | Usage docs. They are typically NOT in the current output dir, so a delete-diff removes every one of them. |
+   | `_ds_manifest.json`, `_adherence.*` | the app's self-check | Regenerated, but never yours to write. |
+
+   Verified 2026-08-06 (`tutored`): creating one blank page added `Test from joe.dc.html`
+   and `support.js` at the root of a design-system project — both plainly inside the
+   blast radius of a broadened write or delete glob. Enumerate deletes explicitly.
+   `list_files` before every push and treat unrecognised paths as someone else's.
+
    Then explain the approval in plain language (no tool jargon) and call
    `DesignSync(finalize_plan)` with `localDir` = the output dir. If the approval is
    denied, STOP — report the local output path and ask how to proceed; denial means the

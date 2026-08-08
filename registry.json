@@ -244,7 +244,7 @@
     {
       "type": "skill",
       "name": "umbrella-workspace",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "scope": "custom",
       "path": "inventory/skills/umbrella-workspace",
       "installable": true,

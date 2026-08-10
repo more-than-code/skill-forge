@@ -16,11 +16,16 @@
 //                         G exists because F is only as honest as its inputs: a
 //                         stale review, or two manifest entries that rendered the
 //                         same screen, both make F report a confident PASS.
+//   H  geometry         — shared-chrome alignment invariants measured on captured
+//                         PNGs, compared across clients. Catches implicit framework
+//                         defaults (e.g. Flutter IconButton 48×48 tap target) that
+//                         no token check and no vision reviewer can see.
 //
 // Exit: 0 pass · 1 fail · 2 misconfigured
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { runGeometry } from './parity-geometry.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
@@ -520,11 +525,34 @@ function checkVisual() {
 }
 
 // ---------------------------------------------------------------------------
+// H. Geometry / alignment invariants (deterministic — no model)
+// ---------------------------------------------------------------------------
+// Shared-chrome regions that must share a vertical centre are measured on both
+// clients' capture PNGs; the *spread* between those centres is compared across
+// clients. This catches the class of defect token conformance and the vision
+// reviewer both miss: an implicit framework default with no counterpart in the
+// source client (observed 2026-08-10 — Flutter IconButton's 48×48 padded tap
+// target pushed the composer placeholder ~6.7pt low on every screen for weeks).
+//
+// No-op when `cfg.geometry` is absent or has no invariants — other repos vendor
+// this skill without declaring any. Missing capture PNGs degrade to notes (via
+// runGeometry), not failures. Failure shape is reconciled at this boundary:
+// geometry uses `{ id, msg }`; the gate uses `{ check, message }`.
+function checkGeometry() {
+  const { notes: gNotes, failures: gFailures } = runGeometry(cfg, ROOT);
+  for (const n of gNotes) notes.push(n);
+  for (const f of gFailures) {
+    failures.push({ check: f.id, message: f.msg });
+  }
+}
+
+// ---------------------------------------------------------------------------
 checkCoverage();
 checkDesignTokens();
 checkI18n();
 checkUnlabelled();
 checkVisual();
+checkGeometry();
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ok: failures.length === 0, config: configPath, notes, failures }, null, 2));

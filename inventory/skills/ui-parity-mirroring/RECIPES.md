@@ -168,6 +168,29 @@ run.sh [--mirror-only]
 
 `--mirror-only` matters: it is the mode a sandboxed agent can actually execute.
 
+## Geometry invariants (check H — shared chrome only)
+
+Wired into `parity-gate.mjs` when `geometry.invariants` is present; also runnable
+standalone via `parity-geometry.mjs`. See `SKILL.md` §8 for the full declaration
+format and the defect class this catches.
+
+**What belongs in the set** (under ~5 total — do not grow past that):
+
+| Chrome | Example invariant name | When to add |
+|---|---|---|
+| Composer row | `chat-composer-row` | Icons + placeholder should share a vertical centre |
+| Page header | `page-header-row` | Leading control + title + trailing actions |
+| Canvas / content header | `canvas-header-row` | In-content top bar (if distinct from page header) |
+| List row | `list-row-leading` | Leading affordance + primary label on a representative list |
+
+**Do not** declare per-screen content regions. Boxes are fractions of the capture
+PNG; they rot when a single screen redesigns, and a noisy check gets switched off.
+
+**How to author a region:** open both clients' capture PNGs for one shared-chrome
+surface, mark fractional boxes that enclose the ink you care about, run
+`parity-geometry.mjs` once, then only commit if both sides measure cleanly and the
+cross-client delta is near zero on a known-good build. Never invent coordinates.
+
 ## Copy-drift check (cheap, high yield)
 
 Diff every shared i18n key between the source and mirror, rather than eyeballing

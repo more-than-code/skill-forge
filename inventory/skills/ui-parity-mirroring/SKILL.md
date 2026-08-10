@@ -30,6 +30,7 @@ Conflating these is how a client's bug becomes the specification.
 |---|---|---|---|
 | **Product parity** | can the user do the same things — affordances, copy, states, in-page IA? | the **source client** | this board + the vision review |
 | **Token conformance** | are the design tokens *declared* correctly in each client? | the **design system**, if one exists | a deterministic token check (check D) |
+| **Geometry / alignment** | do shared-chrome regions that should share a vertical centre actually do so on *both* clients? | the **source client** (cross-client spread) | a deterministic geometry check (check H) |
 | **Visual conformance** | does the rendered result actually *look* right? | the **design system** | usually nothing — see below |
 
 **The vision review is the product-parity axis only.** Its prompt puts layout,
@@ -330,6 +331,45 @@ These need no capture infrastructure and catch a large share of drift:
 
   **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
 
+- **Geometry / alignment invariants (check H).** Named regions on the captured PNGs that should share a vertical centre are measured on **both** clients; the gate fails when the *spread* between those centres differs across clients by more than a tolerance. This is the check for **implicit framework defaults with no counterpart in the source client** — a class of defect no token comparison and no vision reviewer can see.
+
+  Observed 2026-08-10: Flutter's `IconButton` silently enforces a 48×48 tap target (`MaterialTapTargetSize.padded`) where the web button is content-sized at ~36px. Both rows bottom-align, so the taller sibling set the row height and pushed the composer placeholder ~6.7pt below the icon row — on every screen, for weeks. No token was wrong, no string differed. Five reasoned fixes missed it; the vision reviewer never mentioned it once. Check H failed at 0.652% spread delta pre-fix and passed at 0.060% post-fix.
+
+  **Scope discipline — read before adding entries.** Shared chrome **only**: composer, page header, canvas header, list row. Chrome appears on every screen (so a defect there is systemic) and changes slowly (so declarations do not rot). Per-screen invariants are **not** worth it: region coordinates drift with every redesign, and a check that cries wolf gets switched off. Keep the set under ~**5** entries. A check with 90 entries is a check that lies.
+
+  **Cross-client comparison, not absolute offsets.** Asserting an absolute "correct" offset would make the script the arbiter of good design. Comparing the two keeps the source client the source of truth.
+
+  Omit the whole `geometry` block (or leave `invariants` empty) and the check is a silent no-op — other repos vendor this skill without declaring any. Missing capture PNGs degrade to a *note*, not a failure.
+
+  Configure it with a `geometry` block (regions are **fractions** of image width/height so differing scales and DPRs still compare):
+
+```jsonc
+"geometry": {
+  // SHARED CHROME ONLY — composer / page header / canvas header / list row.
+  // Keep under ~5 entries. Do NOT add per-screen invariants.
+  "inkThreshold": 170,           // optional; default 170 (pixels darker than this count as ink)
+  "toleranceFraction": 0.0015,   // optional; default ≈ 1pt on an 844pt-tall capture
+  "waivers": [],                 // optional: [{ "invariant": "name", "reason": "..." }]
+  "invariants": [
+    {
+      "name": "chat-composer-row",
+      "capture": "chat-conversation",
+      // Regions that must share a vertical centre on BOTH clients.
+      "regions": {
+        "leading-icon":  { "x1": 0.05, "x2": 0.14, "y1": 0.93, "y2": 1.0 },
+        "placeholder":   { "x1": 0.16, "x2": 0.42, "y1": 0.93, "y2": 1.0 },
+        "trailing-icon": { "x1": 0.84, "x2": 0.94, "y1": 0.93, "y2": 1.0 }
+      }
+    }
+    // Add further shared-chrome entries only when you have measured both
+    // columns and the regions are stable — e.g. page-header-row,
+    // canvas-header-row, list-row-leading. Do not invent coordinates.
+  ]
+}
+```
+
+  Standalone (same logic the gate calls): `node <skill>/scripts/parity-geometry.mjs --config parity.config.json`.
+
 ### Design-system conformance (check D) — when there is a canon
 
 Skip this if the project has no design system; the check disables itself cleanly.
@@ -424,7 +464,8 @@ repo gets them via `skf sync` instead of copying a harness around:
 
 | File | Role |
 |---|---|
-| `scripts/parity-gate.mjs` | The gate — coverage ratchet (A), i18n regeneration (B), copy drift (C), design-token conformance (D, symmetric — the source client is checked too), a11y ratchet (E), visual ratchet (F), capture validity (G). No browser, no simulator, ~1s, exit 1 on failure. |
+| `scripts/parity-gate.mjs` | The gate — coverage ratchet (A), i18n regeneration (B), copy drift (C), design-token conformance (D, symmetric — the source client is checked too), a11y ratchet (E), visual ratchet (F), capture validity (G), geometry / alignment invariants (H). No browser, no simulator, ~1s, exit 1 on failure. |
+| `scripts/parity-geometry.mjs` | Check H implementation — measures named regions on capture PNGs and compares vertical-centre spread across clients. Invoked by the gate; also runnable standalone. |
 | `scripts/parity-review.mjs` | The LLM visual comparison — emits structured findings to `<out>/findings.json`. |
 | `scripts/parity.config.example.json` | Config template. |
 

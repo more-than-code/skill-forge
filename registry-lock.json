@@ -307,19 +307,19 @@
     },
     "inventory/skills/ui-parity-mirroring": {
       "name": "ui-parity-mirroring",
-      "version": "0.13.0",
+      "version": "0.14.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
-      "integrity": "sha256-IOoGjJ0mBwRY4NGCX3lz3v9AdVQsK+uTy/fCjbIb3D4=",
+      "integrity": "sha256-XZHamNCR7ZLFEW4pSDRd6DF4ED9aiDxnCVLnjH6t/TA=",
       "files": {
-        "RECIPES.md": "sha256-kCPGSkTa5YIKUDXttStU7dPk4alrDbs32Yl5Dicn0OI=",
-        "scripts/parity-gate.mjs": "sha256-ZO9byCset7RPA8PmbKxghldVMV+h/MsNT5J34YhKx5M=",
+        "RECIPES.md": "sha256-01kaRgT6/AdONI5l2YtBBU3qEwZweBIop5uMA1ex/bA=",
+        "scripts/parity-gate.mjs": "sha256-cIrB8lZXMAwKI5e9EP9n7mZGz9ScrK+U17ir1Hyz7fY=",
         "scripts/parity-geometry.mjs": "sha256-005uola9Te9p1ubDFb7kiqQckxczCwzwcJVJYwAMMGk=",
         "scripts/parity-review.mjs": "sha256-pok2SvZd6/+HqC8AjG8b2oH9lqMlOGY6YiSI5hLr/ac=",
-        "scripts/parity.config.example.json": "sha256-ELDXS8wclha9orUbfRawYmQoWQyJ/UNFUx1ytxb9vGU=",
-        "SKILL.md": "sha256-2UNzF0+fplxTsqqyY9nU0MKHKY0kslaWFMjH9LvbRAI="
+        "scripts/parity.config.example.json": "sha256-tdUjfX33UIMVRpMo5zLNZlu0sH+fs7nsYUGOF+1Je70=",
+        "SKILL.md": "sha256-l2efIddk+tzXsCKx9UPlag6YQulMGUEIRUX/TvDjR8g="
       }
     },
     "inventory/skills/ui-portability-baseline": {

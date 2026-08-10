@@ -410,6 +410,24 @@ function checkVisual() {
   const findings = JSON.parse(readFileSync(findingsPath, 'utf8'));
   const accepted = (existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {}).accepted ?? {};
 
+  // Accepted debt must stay VISIBLE. The ratchet only fails on novel findings, so an
+  // accepted gap is silent forever after — the gate goes green and "accepted" quietly
+  // reads as "resolved". That is how a parity board can run for weeks, stay green, and
+  // leave the mirror exactly as far behind as it started.
+  //
+  // This is a report line, not a failure: accepting is legitimate. Being unable to see
+  // what you accepted is not.
+  const acceptedPairs = Object.values(accepted).reduce(
+    (n, cats) => n + (Array.isArray(cats) ? cats.length : 0),
+    0
+  );
+  if (acceptedPairs > 0) {
+    notes.push(
+      `visual review: ${acceptedPairs} accepted finding(s) across ${Object.keys(accepted).length} capture(s) ` +
+        `— accepted debt, not resolved. Each should have an owner and a tracker entry.`
+    );
+  }
+
   // Duplicate captures manufacture findings. If two manifest entries render the
   // same screen on one side — no seeded session, a redirect, a shared empty state
   // — then every difference on the OTHER side reads as a real gap. Observed

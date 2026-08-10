@@ -247,6 +247,67 @@ the generated file, not just the source.
 5. **Record** gaps in the tracker with the evidence, and artifacts in the plan doc so they are never re-litigated.
 6. **Fix** in a separate pass, with the harness frozen. Re-run and diff the captures to prove closure — not "I wrote the code".
 
+### 7.1 The board measures; it does not close
+
+A screenshot pipeline is a **ratchet**: it answers "did the gap grow?" It never answers
+"who is shrinking it?" Projects run it for weeks, keep it green, and find the gap
+untouched — because measuring got mistaken for mirroring. The closing loop is a
+different activity and it is mostly **source diffing**, not looking at pictures:
+
+```
+capability diff (source, file:line both sides)
+  → adjudicate each claim against source
+    → implement one gap
+      → verify on the real device/browser
+        → re-capture, re-run the gate
+```
+
+**Capability gaps produce no pixels.** A dropped part, an unhandled variant, a field read
+under the wrong name — each renders as *nothing*, and nothing looks like clean design.
+The board shows a tidy screen and the reviewer reports no finding. Measured 2026-08-08
+in `tutored`: a controller consuming only two of its stream's part types silently
+dropped every in-chat card. Weeks of visual review never mentioned it; one source diff
+found it in an hour. **If the mirror is far behind, diff the source. Do not add
+screenshots.**
+
+### 7.2 Read the source of truth — never derive from the mirror
+
+When implementing a mirrored value, read it from the **source client**. Never copy the
+value already sitting in the target: you will propagate its errors and make them look
+deliberate.
+
+Observed the same day: a composer line-height was "fixed" by matching the hint to the
+field's own existing value. Both then agreed — and both were wrong against the web
+source (`text-sm leading-5` = 14px text on a **20px** line box; the target had 1.25,
+a 17.5px box). The internal inconsistency was fixed and the actual mirroring error
+survived, because the mirror was treated as the spec.
+
+This is the same instinct as trusting a reviewer's finding text, and the same instinct
+that lets one client's bug become the specification. **The mirror is never evidence
+about the source.**
+
+### 7.3 Say how you verified
+
+Every completion claim names its evidence in one line. "Analyzer clean, not run on
+device" is a fine thing to say; "fixed" when you mean "compiles" is not.
+
+The recurring failure is accepting a **proxy** for the thing itself — a linter for a
+working app, a match count for absent code, an exit code for work done, a rendered card
+for a *current* card. For UI work the definition of done is **seen on the real
+surface**: build, launch, screenshot. Twice in one session a fix was reported from
+analyzer output alone and did not hold up on device.
+
+### 7.4 Reviewer output is a lead list, never a finding list
+
+Adjudicate every visual finding against source before writing code. On a 13-finding run
+(2026-08-08): 6 confirmed, 4 false, 3 inverted — **more than half wrong**, and one would
+have deleted a correct feature from the mirror. The same model, given the same findings
+as a *source-reading* task, correctly identified its own earlier inversions.
+
+Accepting a finding into the baseline is a decision that needs an owner and a tracker
+entry. Otherwise the baseline becomes where gaps go to be forgotten: the gate goes
+green, and "accepted" quietly reads as "resolved".
+
 ## 8. Enforcement — the part that actually prevents recurrence
 
 A one-off audit, however good, decays from the moment it is taken. The source

@@ -328,7 +328,7 @@
     {
       "type": "skill",
       "name": "ui-parity-mirroring",
-      "version": "0.11.0",
+      "version": "0.13.0",
       "scope": "custom",
       "path": "inventory/skills/ui-parity-mirroring",
       "installable": true,

@@ -359,3 +359,7 @@ session ID.
 - `agent|subagent|hook install` write to runtime targets; existing files are
   not overwritten without confirmation unless `--yes` is set.
 - Runtime files are deployment targets, not the source of truth.
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

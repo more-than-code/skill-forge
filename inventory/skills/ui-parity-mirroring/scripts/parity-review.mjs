@@ -2,8 +2,9 @@
 // Tier 3 — LLM visual comparison of each parity pair.
 //
 // Sends the webapp capture and the mobile capture for each manifest entry to a
-// vision model and asks for STRUCTURED findings, judged against the parity bar
-// and the known-artifact table. Writes parity-out/findings.json.
+// local coding-agent CLI (vision-capable) and asks for STRUCTURED findings,
+// judged against the parity bar and the known-artifact table. Writes
+// parity-out/findings.json.
 //
 // This is the judgement layer. It is deliberately NOT the thing that fails the
 // build — model verdicts vary run to run, and a flaky blocker gets disabled,
@@ -11,19 +12,27 @@
 // a finding fails the build only when it is NEW relative to the reviewed
 // baseline in scripts/parity/accepted-findings.json.
 //
-// Provider: the repo's existing OpenAI-compatible config (LLM_API_KEY /
-// LLM_BASE_URL / LLM_MODEL_MAIN), so this introduces no new vendor.
+// Backends: LOCAL coding-agent CLIs ONLY — grok | claude | codex.
+// The remote OpenAI chat/completions path was removed: app LLM cost defaults
+// (gpt-5.6-luna) are a poor fit for left/right screenshot judgement, and
+// parity review must not share production API keys or depend on paid vision
+// APIs. Measured 2026-07-31: gpt-4.1-mini inverted left/right and was
+// non-deterministic at temperature 0; keep judgement on agent CLIs with file
+// tools instead of embedding images into a chat/completions body.
 //
 // Usage:
 //   node scripts/parity/review.mjs [--only <captureId>] [--concurrency N]
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+//   PARITY_REVIEW_BACKEND=grok|claude|codex  (default: grok)
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Portable: resolve everything from a parity.config.json in the consuming repo,
-// not from this file's location (it lives in the vendored skill directory).
+// Portable: resolve everything from a parity.config.json in the consuming repo, not from
+// this file's location — it lives in the vendored skill directory, which is nowhere near
+// the repo being reviewed.
 function findConfig() {
   const i = process.argv.indexOf('--config');
   const cands = i >= 0 ? [process.argv[i + 1]] : ['parity.config.json', 'scripts/parity/parity.config.json', '.parity/parity.config.json'];
@@ -36,7 +45,9 @@ const ROOT = CONFIG_PATH ? path.resolve(path.dirname(CONFIG_PATH), CFG.root ?? '
 const OUT = process.env.PARITY_OUT ?? path.resolve(ROOT, CFG.out ?? 'parity-out');
 const MANIFEST = process.env.PARITY_MANIFEST ?? path.resolve(ROOT, CFG.manifest ?? 'scripts/parity/parity-manifest.json');
 
-// Reuse the app's own LLM config rather than adding a provider.
+const ALLOWED_BACKENDS = new Set(['grok', 'claude', 'codex']);
+
+// Reuse the app's .env only for non-secret overrides if present; no API keys required.
 function loadEnvFile(p) {
   if (!existsSync(p)) return {};
   const out = {};
@@ -46,33 +57,25 @@ function loadEnvFile(p) {
   }
   return out;
 }
+// Consumer-declared, never a hardcoded repo path: the previous value pointed at
+// ttd-backend/.env, which exists in exactly one workspace. No API keys are required —
+// this is for non-secret overrides only.
 const env = { ...(CFG.review?.envFile ? loadEnvFile(path.resolve(ROOT, CFG.review.envFile)) : {}), ...process.env };
-const API_KEY = env.PARITY_REVIEW_API_KEY || env.LLM_API_KEY;
-const BASE_URL = (env.PARITY_REVIEW_BASE_URL || env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-// Model tier matters more than prompt wording here. Measured 2026-07-31 on the
-// settings pair: gpt-4.1-mini inverted left/right, reported the mobile-only theme
-// control as "missing from mobile", and returned DIFFERENT findings on two
-// identical temperature-0 runs. gpt-4.1 returned no findings on that same
-// (at-parity) pair twice, and on a known-gapped pre-fix capture correctly found
-// missing avatars, placeholder copy drift, composer differences and missing date
-// dividers. Do not drop this tier to save cost — a noisy reviewer is worse than none.
-const MODEL = env.PARITY_REVIEW_MODEL || CFG.review?.model || 'gpt-4.1';
 
-// Backend: 'grok' (local Grok Build CLI) or 'openai' (stateless chat/completions).
-//
-// Grok is the default here because this machine has a SuperGrok subscription, so
-// per-pair cost is not a factor, and its vision reading of these captures is
-// stronger. The agentic-CLI risks that make Grok a poor fit for build gates do
-// NOT apply to this call shape: we never pass --continue (so the sandbox-profile
-// resume collision cannot occur), single-turn is exactly what a judgement needs,
-// and --sandbox read-only + --disable-web-search keep it from wandering.
-const BACKEND = (env.PARITY_REVIEW_BACKEND || CFG.review?.backend || 'grok').toLowerCase();
+// Backend: local coding-agent CLIs only. Default grok (Grok Build CLI).
+// Never pass --continue to grok (sandbox-profile resume collision). Single-turn
+// judgement under read-only / restricted tool policy.
+const BACKEND = (env.PARITY_REVIEW_BACKEND || 'grok').toLowerCase();
 const execFileAsync = promisify(execFile);
-
 
 const argv = process.argv.slice(2);
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
-const CONCURRENCY = Number(argv.includes('--concurrency') ? argv[argv.indexOf('--concurrency') + 1] : 3);
+// Agent CLIs are heavier than a single HTTP call — default concurrency 1.
+const CONCURRENCY = Number(
+  argv.includes('--concurrency')
+    ? argv[argv.indexOf('--concurrency') + 1]
+    : env.PARITY_REVIEW_CONCURRENCY || 1
+);
 
 // Fixed enum keeps findings comparable across runs — free-text summaries drift,
 // so the ratchet keys on (captureId, category), not on wording.
@@ -160,18 +163,13 @@ function normalise(findings) {
     }));
 }
 
-function dataUrl(p) {
-  return 'data:image/png;base64,' + readFileSync(p).toString('base64');
-}
-
-
-async function reviewViaGrok(capture, webPath, mobPath, userText) {
-  const prompt = [
+function inventoryPrompt(webPath, mobPath, userText) {
+  return [
     SYSTEM,
     '',
     userText,
     '',
-    'Read these two image files with your image-reading tool:',
+    'Read these two image files with your image-reading / Read tool:',
     `IMAGE 1 OF 2 — THE WEBAPP (source of truth): ${webPath}`,
     `IMAGE 2 OF 2 — THE MOBILE APP (the mirror being checked): ${mobPath}`,
     '',
@@ -190,9 +188,41 @@ async function reviewViaGrok(capture, webPath, mobPath, userText) {
     'compared. Be exhaustive in steps 1-2 and conservative only in step 4.',
     'If it exists in IMAGE 2 but not IMAGE 1, it is mobile-only — NOT a finding',
     'unless it contradicts the webapp.',
-    'Do not read any other file.',
+    'Do not read any other file. Do not edit files. Do not run shell commands.',
   ].join('\n');
+}
 
+/** Pull a findings object from various CLI JSON envelopes. */
+function extractFindingsPayload(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    try {
+      return extractFindingsPayload(JSON.parse(raw));
+    } catch {
+      // try to find a JSON object in prose
+      const m = raw.match(/\{[\s\S]*"findings"[\s\S]*\}/);
+      if (m) {
+        try {
+          return extractFindingsPayload(JSON.parse(m[0]));
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+  }
+  if (typeof raw !== 'object') return null;
+  if (Array.isArray(raw.findings)) return raw;
+  if (raw.structuredOutput && Array.isArray(raw.structuredOutput.findings)) return raw.structuredOutput;
+  if (raw.structured_output && Array.isArray(raw.structured_output.findings)) return raw.structured_output;
+  if (raw.result != null) return extractFindingsPayload(raw.result);
+  if (raw.message != null) return extractFindingsPayload(raw.message);
+  if (raw.content != null) return extractFindingsPayload(raw.content);
+  return null;
+}
+
+async function reviewViaGrok(webPath, mobPath, userText) {
+  const prompt = inventoryPrompt(webPath, mobPath, userText);
   const args = [
     '-p', prompt,
     '--cwd', ROOT,
@@ -208,9 +238,66 @@ async function reviewViaGrok(capture, webPath, mobPath, userText) {
     timeout: 300_000,
   });
   const envelope = JSON.parse(stdout);
-  const out = envelope.structuredOutput;
-  if (!out) throw new Error('grok returned no structuredOutput');
+  const out = extractFindingsPayload(envelope);
+  if (!out) throw new Error('grok returned no findings payload');
   return out;
+}
+
+async function reviewViaClaude(webPath, mobPath, userText) {
+  const prompt = inventoryPrompt(webPath, mobPath, userText);
+  // Read-only: allow Read only so Claude can open the PNGs; no Bash/Edit/Write.
+  const args = [
+    '-p', prompt,
+    '--output-format', 'json',
+    '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
+    '--permission-mode', 'auto',
+    '--allowedTools', 'Read',
+  ];
+  const { stdout } = await execFileAsync('claude', args, {
+    cwd: ROOT,
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 300_000,
+  });
+  const envelope = JSON.parse(stdout);
+  const out = extractFindingsPayload(envelope);
+  if (!out) throw new Error('claude returned no findings payload');
+  return out;
+}
+
+async function reviewViaCodex(webPath, mobPath, userText) {
+  const prompt = inventoryPrompt(webPath, mobPath, userText);
+  const tmp = mkdtempSync(path.join(tmpdir(), 'parity-review-'));
+  const schemaPath = path.join(tmp, 'findings.schema.json');
+  const outPath = path.join(tmp, 'last-message.txt');
+  writeFileSync(schemaPath, JSON.stringify(FINDINGS_SCHEMA));
+  try {
+    // -i attaches images; --sandbox read-only; schema constrains final message.
+    const args = [
+      'exec',
+      '--sandbox', 'read-only',
+      '--output-schema', schemaPath,
+      '-o', outPath,
+      '-i', webPath,
+      '-i', mobPath,
+      prompt,
+    ];
+    await execFileAsync('codex', args, {
+      cwd: ROOT,
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 300_000,
+    });
+    if (!existsSync(outPath)) throw new Error('codex wrote no last-message file');
+    const raw = readFileSync(outPath, 'utf8');
+    const out = extractFindingsPayload(raw);
+    if (!out) throw new Error('codex returned no findings payload');
+    return out;
+  } finally {
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 async function reviewOne(capture) {
@@ -234,57 +321,20 @@ async function reviewOne(capture) {
     .filter(Boolean)
     .join('\n');
 
-  const body = {
-    model: MODEL,
-    temperature: 0,
-    messages: [
-      { role: 'system', content: SYSTEM },
-      {
-        role: 'user',
-        // Each image is labelled immediately before it. Without this the model
-        // cannot reliably tell the two apart and inverts the direction of a
-        // finding — observed on the first run, where it reported mobile's
-        // theme toggle as "missing from mobile".
-        content: [
-          { type: 'text', text: userText },
-          { type: 'text', text: 'IMAGE 1 OF 2 — THE WEBAPP (source of truth). Everything in this image is what the mobile app must mirror:' },
-          { type: 'image_url', image_url: { url: dataUrl(web) } },
-          { type: 'text', text: 'IMAGE 2 OF 2 — THE MOBILE APP (the mirror being checked). Report only things present in IMAGE 1 and absent or different here:' },
-          { type: 'image_url', image_url: { url: dataUrl(mob) } },
-          { type: 'text', text: 'Before reporting a finding, state to yourself which image the feature is in. If it exists in IMAGE 2 but not IMAGE 1, it is mobile-only — that is NOT a finding unless it contradicts the webapp.' },
-        ],
-      },
-    ],
-    response_format: { type: 'json_object' },
-  };
-
-  if (BACKEND === 'grok') {
-    let parsedGrok;
-    try {
-      parsedGrok = await reviewViaGrok(capture, web, mob, userText);
-    } catch (err) {
-      return { id: capture.id, error: `grok: ${String(err.message ?? err).slice(0, 200)}`, findings: [] };
-    }
-    return { id: capture.id, findings: normalise(parsedGrok.findings) };
-  }
-
-  const res = await fetch(`${BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    return { id: capture.id, error: `${res.status} ${(await res.text()).slice(0, 200)}`, findings: [] };
-  }
-  const json = await res.json();
-  const raw = json.choices?.[0]?.message?.content ?? '{}';
-  let parsed;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { id: capture.id, error: 'model returned non-JSON', findings: [] };
+    let parsed;
+    if (BACKEND === 'grok') parsed = await reviewViaGrok(web, mob, userText);
+    else if (BACKEND === 'claude') parsed = await reviewViaClaude(web, mob, userText);
+    else if (BACKEND === 'codex') parsed = await reviewViaCodex(web, mob, userText);
+    else throw new Error(`unsupported backend: ${BACKEND}`);
+    return { id: capture.id, findings: normalise(parsed.findings) };
+  } catch (err) {
+    return {
+      id: capture.id,
+      error: `${BACKEND}: ${String(err.message ?? err).slice(0, 200)}`,
+      findings: [],
+    };
   }
-  return { id: capture.id, findings: normalise(parsed.findings) };
 }
 
 async function pool(items, n, fn) {
@@ -302,11 +352,26 @@ async function pool(items, n, fn) {
   return out;
 }
 
+function modelLabel(backend) {
+  if (backend === 'grok') return 'grok-cli';
+  if (backend === 'claude') return 'claude-cli';
+  if (backend === 'codex') return 'codex-cli';
+  return backend;
+}
+
 async function main() {
-  if (BACKEND !== 'grok' && !API_KEY) {
-    console.error('No API key. Set PARITY_REVIEW_API_KEY, or LLM_API_KEY in ttd-backend/.env.');
+  if (!ALLOWED_BACKENDS.has(BACKEND)) {
+    console.error(
+      [
+        `PARITY_REVIEW_BACKEND=${BACKEND} is not allowed.`,
+        `Allowed values (local coding-agent CLIs only): ${[...ALLOWED_BACKENDS].join(', ')}.`,
+        'The remote OpenAI chat/completions path was removed — do not set openai or an API model.',
+        'App LLM defaults (gpt-5.6-luna) are for product traffic, not parity vision review.',
+      ].join('\n')
+    );
     process.exit(2);
   }
+
   const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
   const captures = manifest.captures.filter((c) => !only || c.id === only);
 
@@ -315,14 +380,14 @@ async function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     backend: BACKEND,
-    model: BACKEND === 'grok' ? 'grok-cli' : MODEL,
+    model: modelLabel(BACKEND),
     results,
   };
   writeFileSync(path.join(OUT, 'findings.json'), JSON.stringify(payload, null, 2));
 
   const total = results.reduce((n, r) => n + r.findings.length, 0);
   const errored = results.filter((r) => r.error);
-  console.log(`[parity-review] ${results.length} pair(s) reviewed, ${total} finding(s) → parity-out/findings.json`);
+  console.log(`[parity-review] backend=${BACKEND} ${results.length} pair(s) reviewed, ${total} finding(s) → parity-out/findings.json`);
   if (errored.length) {
     console.log(`[parity-review] ${errored.length} pair(s) errored — findings are INCOMPLETE`);
     process.exit(1);

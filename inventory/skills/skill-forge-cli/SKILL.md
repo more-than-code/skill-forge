@@ -39,6 +39,26 @@ Always pass **`--json`** and parse **stdout** even when the exit code is non-zer
 5. **Prefer `bump` after content changes**; use `set-version` for exact targets or initial align.
 6. **Never hand-edit `registry-lock.json`.**
 7. **Do not invent MCP tools** for these ops in-session — shell the CLI.
+8. **Skills hold doctrine, not runtime data.** A skill is vendored into repos you will never
+   see. Anything that stops being true when pointed at a different product belongs in that
+   product's repo.
+
+   Keep out: product, repo and app names in *instructions*; measured benchmarks; thresholds
+   tuned to one codebase; ids, hosts, ports and config values from a live system; suppression
+   or waiver lists describing one product's stubs.
+
+   The line is not "no numbers" — it is **evidence vs specification**:
+
+   - *Evidence for a mechanism* — "on one project (dated), X produced Y, which is why the rule
+     exists" — **keep**, dated, named as one observation, with a pointer to measure your own.
+   - *A figure someone will cite, or a name someone will copy* — **move to the repo**. A
+     benchmark from one product read as a general fact is how a stale number outlives the
+     conditions that produced it.
+
+   Audit trigger: if you can name the project a line came from, ask whether the line still
+   means anything without it. Observed 2026-08-17 — a detection-rate table and a product's
+   suppression rule had both migrated into a shared skill; the second silenced a real defect
+   in an unrelated area for weeks.
 
 ## Command map
 

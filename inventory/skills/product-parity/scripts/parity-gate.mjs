@@ -25,10 +25,10 @@
 //                         definition. Mobile-only today (web writes no semantics).
 //   K  control names     — the SET of activatable control names agrees across clients,
 //                         within a declared region of shared chrome. The only check that
-//                         sees an icon-only affordance swap: measured 2026-08-17, the
-//                         vision review found one such gap in 1 of 11 runs, this finds it
-//                         every run. Regions are mandatory — unscoped it reports 25
-//                         differences for 3 real ones.
+//                         sees an icon-only affordance swap, which the vision reviewer
+//                         reports only intermittently because iconography is out of its
+//                         declared scope. Regions are mandatory: unscoped, the diff is
+//                         dominated by content the two clients legitimately differ on.
 //   H  geometry         — shared-chrome alignment invariants measured on captured
 //                         PNGs, compared across clients. Catches implicit framework
 //                         defaults (e.g. Flutter IconButton 48×48 tap target) that

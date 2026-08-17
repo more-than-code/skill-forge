@@ -290,20 +290,21 @@ allowed to differ there. The consequence is that **swapping one icon-only contro
 in the same slot is a change the vision review cannot report** without violating its own
 scope. That is not a prompt bug and cannot be fixed by rewording.
 
-**Measured, so nobody re-litigates it with more prompt tuning.** One confirmed gap — the
-source client's composer swapped a sticker button for a reasoning-effort control, the mirror
-kept the sticker — on fresh, correctly paired, fully legible captures, both controls carrying
-accessible names:
+**Do not try to fix this with prompt tuning — measure it instead.** On one project
+(2026-08-17) a confirmed gap of exactly this shape — the source client's composer swapped an
+icon-only control for a different one, the mirror kept the old one — was reported by the
+vision reviewer in a small minority of repeated runs on identical, correctly paired, fully
+legible captures, while a control-name diff found it every time. The prompt was rewritten
+twice in between, ending with the relevant suppression scoped away from that capture *and* an
+explicit clause saying such a difference IS a finding. Detection did not improve.
 
-| Detector | Detection rate | Cost | Reproducible |
-|---|---|---|---|
-| Vision review | **1 of 11 runs** | 1–2 min per pair | no — 0/2/4 findings on identical images |
-| Control-name diff | **every run** | milliseconds | yes |
+That is one observation on one product, and it is here to explain a MECHANISM, not to serve
+as a benchmark: **run your own sensitivity test** (§9) rather than citing a number from
+someone else's project. Keep the run-by-run record in the repo that produced it, where it can
+be re-measured and where its conditions are known.
 
-The prompt was rewritten twice between those runs, ending in its strongest possible form —
-the suppression scoped away from this capture *and* an explicit clause saying such a control
-difference on any screen IS a finding. Detection did not improve. The reviewer is comparing
-two unlabelled glyphs; being told what to report does not help it see them. Its one hit
+The reviewer is comparing two unlabelled glyphs; being told what to report does not help it
+see them. Its one hit
 described the source glyph as a "paper-plane send" when it is a rocket — it was guessing.
 
 The check that closes it is a **control-name set diff**: dump the accessibility tree on

@@ -58,7 +58,7 @@ Intake is asynchronous: the route enqueues a job and returns `202 {job}`. The de
 not exist yet, and may never. **Read back before claiming anything was filed:**
 
 ```bash
-curl -s localhost:8788/api/defects | jq '[.defects[] | select(.source=="parity-review")] | length'
+curl -s localhost:8788/api/defects | jq '[.defects[] | select(.source=="<your-detector>")] | length'
 curl -s localhost:8788/api/jobs | jq -r '.jobs[] | "\(.status) \(.mode) \(.defectId)"' | sort | uniq -c
 ```
 

@@ -5,11 +5,11 @@
 // ---------------
 // The vision review cannot see an icon-only affordance change, and no prompt wording fixes
 // that: iconography is out of its declared scope, and it is comparing two unlabelled glyphs.
-// Measured 2026-08-17 on one confirmed gap — the source client swapped its composer sticker
-// button for a reasoning-effort control, the mirror kept the sticker:
-//
-//   vision review   1 detection in 11 runs   (prompt rewritten twice in between; no effect)
-//   this check      every run                (milliseconds, deterministic)
+// Seen on one project (2026-08-17): the source client swapped an icon-only composer control
+// for a different one and the mirror kept the old one. The vision reviewer reported it only
+// intermittently across repeated runs on identical captures, with two prompt rewrites in
+// between and no improvement; this check found it every run. Run your own sensitivity test
+// rather than relying on that figure — it is one observation, not a benchmark.
 //
 // Names are the evidence that survives when pixels do not. The source exposes
 // "Reasoning effort: Auto", the mirror exposes "Stickers". Comparing those needs nothing

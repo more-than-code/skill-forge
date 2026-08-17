@@ -215,7 +215,7 @@
     {
       "type": "skill",
       "name": "skill-forge-cli",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-cli",
       "installable": true,
@@ -344,7 +344,7 @@
     {
       "type": "skill",
       "name": "fvm-flutter",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "scope": "custom",
       "path": "inventory/skills/fvm-flutter",
       "installable": true,
@@ -359,7 +359,7 @@
     {
       "type": "skill",
       "name": "product-parity",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,
@@ -376,7 +376,7 @@
     {
       "type": "skill",
       "name": "defect-drainer-intake",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "custom",
       "path": "inventory/skills/defect-drainer-intake",
       "installable": true,

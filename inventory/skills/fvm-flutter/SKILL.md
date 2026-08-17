@@ -54,7 +54,7 @@ download Flutter into the repo by hand.
 4. **Do not open the FVM SDK folder as a VS Code / multi-root workspace root** — Source Control
    will show thousands of noise diffs. If it appears, remove it from the workspace or add it to
    `git.ignoredRepositories`.
-5. **Run commands from the pinned package root** so FVM picks up `.fvmrc` (e.g. `cd ttd-mobileapp && fvm flutter test`).
+5. **Run commands from the pinned package root** so FVM picks up `.fvmrc` (e.g. `cd <package-with-.fvmrc> && fvm flutter test`).
 
 ## Common commands
 

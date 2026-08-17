@@ -64,7 +64,7 @@ export function runInteractive(cfg, root) {
   const failures = [];
   if (!declared.length) return { notes, failures };
 
-  const outDir = resolve(root, cfg.out ?? 'parity-out');
+  const outDir = resolve(root, process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const semDir = join(outDir, 'semantics');
   const waived = new Set(cfg.interactive?.waivers?.map((w) => w.affordance) ?? []);
 

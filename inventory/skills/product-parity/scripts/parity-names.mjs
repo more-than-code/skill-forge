@@ -68,7 +68,7 @@ export function runNames(cfg, root) {
   const failures = [];
   if (!regions.length) return { notes, failures };
 
-  const outDir = resolve(root, cfg.out ?? 'parity-out');
+  const outDir = resolve(root, process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const semDir = join(outDir, 'semantics');
   const accepted = cfg.names?.accepted ?? {};
   const waived = new Set((cfg.names?.waivers ?? []).map((w) => w.region));

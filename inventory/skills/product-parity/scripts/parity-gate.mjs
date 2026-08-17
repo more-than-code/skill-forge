@@ -41,6 +41,7 @@ import path from 'node:path';
 import { runGeometry } from './parity-geometry.mjs';
 import { runInteractive } from './parity-interactive.mjs';
 import { runNames } from './parity-names.mjs';
+import { runSession } from './parity-session.mjs';
 import { runApi } from './parity-api.mjs';
 
 const argv = process.argv.slice(2);
@@ -249,7 +250,7 @@ function checkI18n() {
 // Ratcheted, not absolute: existing debt is recorded per capture and may only
 // shrink. New unlabelled controls fail the build the moment they appear.
 function checkUnlabelled() {
-  const out = abs(cfg.out ?? 'parity-out');
+  const out = abs(process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const dir = path.join(out, 'semantics');
   if (!existsSync(dir)) {
     notes.push('a11y: no semantics dumps — mirror harness does not emit them (check skipped)');
@@ -421,7 +422,7 @@ function checkDesignTokens() {
 // than no gate. Fail only on a (capture, category) pair absent from the reviewed
 // baseline. Accepting one is a decision, never a way to quiet the gate.
 function checkVisual() {
-  const out = abs(cfg.out ?? 'parity-out');
+  const out = abs(process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const findingsPath = path.join(out, 'findings.json');
   const baselinePath = abs(cfg.acceptedFindings ?? 'scripts/parity/accepted-findings.json');
   if (!existsSync(findingsPath)) {
@@ -622,6 +623,12 @@ function checkGeometry() {
   }
 }
 
+function checkSession() {
+  const { notes: sNotes, failures: sFailures } = runSession(cfg, ROOT);
+  for (const n of sNotes) notes.push(n);
+  for (const f of sFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
 function checkNames() {
   const { notes: nNotes, failures: nFailures } = runNames(cfg, ROOT);
   for (const n of nNotes) notes.push(n);
@@ -629,6 +636,7 @@ function checkNames() {
 }
 
 // ---------------------------------------------------------------------------
+checkSession();
 checkCoverage();
 checkDesignTokens();
 checkI18n();

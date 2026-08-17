@@ -37,7 +37,7 @@ const setOf = (arr) => new Set(arr.map(stripQuery).filter(Boolean));
 export function runApi(cfg, root) {
   const notes = [];
   const failures = [];
-  const outDir = resolve(root, cfg.out ?? 'parity-out');
+  const outDir = resolve(root, process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const manifestPath = resolve(root, cfg.manifest ?? 'scripts/parity/parity-manifest.json');
   if (!existsSync(manifestPath)) return { notes, failures };
 

@@ -24,17 +24,39 @@ places and a diff nobody can review.
 
 **Pick one capture and one lens. Finish it. Re-run. Then pick the next.**
 
-A lens is one question about one screen:
+A lens is one question about one screen — **except the two that are not**:
 
-| Lens | Question | Evidence |
-|---|---|---|
-| Coverage | is this screen captured at all, on both clients? | manifest entry + two PNGs |
-| Look | do the pixels agree? | visual review finding for THIS capture |
-| Geometry | do declared regions share a centre on both? | check H |
-| Tokens | do both clients use canon values? | check D |
-| Copy / i18n | same strings, same keys? | checks B/C |
-| Interaction | are the affordances real, activatable controls? | check I + semantics dump |
-| Data / API | did both clients request the declared endpoints? | check J + api bags |
+| Lens | Question | Evidence | Scope |
+|---|---|---|---|
+| Coverage | is this screen captured at all, on both clients? | manifest entry + two PNGs | per-capture |
+| Look | do the pixels agree? | visual review finding for THIS capture | per-capture |
+| Geometry | do declared regions share a centre on both? | check H | per-capture |
+| Interaction | are the affordances real, activatable controls? | check I + semantics dump | per-capture |
+| Data / API | did both clients request the declared endpoints? | check J + api bags | per-capture |
+| Tokens | do both clients use canon values? | check D | **project-wide** |
+| Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
+
+**A project-wide lens cannot answer a per-screen question, and a screen is never "done"
+on its say-so.** Check D compares token *declarations* across the whole app; checks B/C
+compare the *values of shared keys*. Neither knows which screen you are working on, so
+"chat canvas × tokens" is not a task that exists.
+
+The failure this causes has a name — **call-site choice**. Both clients can define every
+key identically and still pick the wrong one in a given place. Measured 2026-08-17: the
+mirror's single-chat menu rendered `chat_archive_action` ("Archive") where the source
+client rendered `chat_archive_one_action` ("Archive chat") — the mirror using the *bulk*
+string for a *single-item* action. Check C passed, correctly: both keys exist on both
+clients with identical values. The vision reviewer had both labels in front of it across
+two runs and reported nothing. It was found by reading the two call sites.
+
+This is the same shape as the icon-only gap below: **a lens whose scope does not match the
+question being asked.** When you catch one, ask which lens *should* have owned it, and
+whether that lens can be scoped to the thing that varies.
+
+One more scope hole worth knowing: check C excludes multi-line source entries from the
+drift comparison and says so in its output (`N source entries not single-line, excluded`).
+That count is strings sitting outside the check while it reads as green. Read the number;
+do not let it become invisible.
 
 Why this ordering discipline matters, from a real session:
 
@@ -268,10 +290,36 @@ allowed to differ there. The consequence is that **swapping one icon-only contro
 in the same slot is a change the vision review cannot report** without violating its own
 scope. That is not a prompt bug and cannot be fixed by rewording.
 
+**Measured, so nobody re-litigates it with more prompt tuning.** One confirmed gap — the
+source client's composer swapped a sticker button for a reasoning-effort control, the mirror
+kept the sticker — on fresh, correctly paired, fully legible captures, both controls carrying
+accessible names:
+
+| Detector | Detection rate | Cost | Reproducible |
+|---|---|---|---|
+| Vision review | **1 of 11 runs** | 1–2 min per pair | no — 0/2/4 findings on identical images |
+| Control-name diff | **every run** | milliseconds | yes |
+
+The prompt was rewritten twice between those runs, ending in its strongest possible form —
+the suppression scoped away from this capture *and* an explicit clause saying such a control
+difference on any screen IS a finding. Detection did not improve. The reviewer is comparing
+two unlabelled glyphs; being told what to report does not help it see them. Its one hit
+described the source glyph as a "paper-plane send" when it is a rocket — it was guessing.
+
 The check that closes it is a **control-name set diff**: dump the accessibility tree on
 *both* clients and compare the sets of accessible names. Until the source client emits one,
 this class is uncovered — say so when reporting coverage rather than letting a green review
 imply otherwise.
+
+**Scope it geometrically or it will be switched off.** A whole-screen diff drowns: measured
+on the same capture, the source client yielded 91 interactive nodes against the mirror's 17,
+because a full-page capture includes the entire scrollback while the mirror captures a
+viewport. Raw diff = 25 differences, ~3 real. Filtering by role (91 → 19) and by name length
+does not fix it, because the survivors are *content* — the two clients legitimately show
+different messages. Compare within a declared region (the composer strip, a header), the way
+check H does, and require BOTH clients to emit painted, viewport-relative coordinates. A
+dump that reports layout position instead will put pinned chrome outside the viewport and
+the region will match nothing.
 
 ### A duplicate capture manufactures findings in bulk
 

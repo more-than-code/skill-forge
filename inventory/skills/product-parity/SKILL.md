@@ -1,13 +1,68 @@
 ---
-name: ui-parity-mirroring
-description: Verify that a mirrored UI (web ↔ mobile, or any second client) actually matches its source of truth, using a screenshot-driven parity board instead of code review. Use when porting or mirroring an app to another client, auditing feature/screen parity, investigating "the screens look different" reports, or when a parity phase was marked complete on static-audit evidence alone. Covers capture harness design, false-positive control, and coverage accounting.
+name: product-parity
+description: Verify that a mirrored or ported client faithfully reproduces its source of truth — screens, look, geometry, design tokens, copy/i18n, interaction behaviour, and the API calls behind them — using a capture-driven parity harness rather than code review. Use when porting or mirroring a product to a second client (web ↔ mobile or any pair), auditing feature/screen parity, investigating "the two clients differ" reports, or when a parity phase was marked complete on static-audit evidence alone. Covers capture harness design, dynamic-state capture via named prep steps, per-screen/per-lens working discipline, false-positive control, and coverage accounting.
 ---
 
-# UI parity mirroring
+# Product parity
 
-Verifying that a mirrored client matches its source of truth. The failure this
-skill prevents: a parity phase closing "complete" on evidence that structurally
-cannot see the gaps it claims to have checked.
+Verifying that a mirrored client reproduces its source of truth — not only how it
+looks, but what it does: routes, interaction behaviour, and the API calls behind
+them. The failure this skill prevents: a parity phase closing "complete" on
+evidence that structurally cannot see the gaps it claims to have checked.
+
+**Parity is a product property, not a visual one.** A screenshot pair proves two
+surfaces look alike; it cannot distinguish a live control from a dead icon, and it
+never asks whether either client is *right*. Treat look as one lens among several
+(below), not as the definition of the job.
+
+## Work one screen and one lens at a time
+
+The gate reports every failure across every capture at once. That is right for *reporting*
+and wrong for *working*: a 13-finding ratchet plus a coverage failure plus an a11y count is
+not a task, it is a weather report. Sweeping across all of it produces half-fixes in ten
+places and a diff nobody can review.
+
+**Pick one capture and one lens. Finish it. Re-run. Then pick the next.**
+
+A lens is one question about one screen:
+
+| Lens | Question | Evidence |
+|---|---|---|
+| Coverage | is this screen captured at all, on both clients? | manifest entry + two PNGs |
+| Look | do the pixels agree? | visual review finding for THIS capture |
+| Geometry | do declared regions share a centre on both? | check H |
+| Tokens | do both clients use canon values? | check D |
+| Copy / i18n | same strings, same keys? | checks B/C |
+| Interaction | are the affordances real, activatable controls? | check I + semantics dump |
+| Data / API | did both clients request the declared endpoints? | check J + api bags |
+
+Why this ordering discipline matters, from a real session:
+
+- Fixing "the composer looks wrong" turned out to need FIVE separate lenses — geometry
+  (a framework tap-target default), interaction (an unnamed control), coverage (no capture
+  reached the typed state), look, and finally data. Attacked as one problem it produced
+  three wrong diagnoses in a row. Attacked one lens at a time, each step was decidable.
+- A single capture's fix routinely INVALIDATES other captures (re-capturing the mirror
+  skews the columns, which fails freshness). Finishing one screen and re-running keeps that
+  visible instead of burying it under the next change.
+
+**Definition of done for one screen×lens:** the specific check passes, you ran it yourself
+and pasted the output, and nothing that previously passed now fails. If a fix requires a
+second lens, that is a second pass — write the finding down and come back to it.
+
+Do NOT batch a rename, a token change and a capture change into one commit because they
+were all discovered in the same run. Commit per intent.
+
+## Dynamic states (menus, popups, actions, API calls)
+
+A capture is one static state, so anything reached by *doing* something — dropdowns,
+context menus, sheets, the result of a tap that fires an API call — is invisible to every
+check in this harness. The mechanism that closes it is `prep`: named steps performed
+between ready and the screenshot, implemented by BOTH harnesses under the same name.
+
+Read **DYNAMIC-STATES.md** before adding a step, a dynamic capture, or an API assertion.
+The rule that matters most: a `prep` implemented on one client only makes the two columns
+photograph different screens, which is worse than no capture at all.
 
 ## 1. The core principle
 
@@ -178,6 +233,46 @@ Recurring artifact classes:
 The stubbed-subsystem one is the dangerous case: it mimics a real defect **and**
 often there is an open ticket about exactly that subsystem, so it gets believed.
 
+### Scope every suppression rule to a CAPTURE, never to a subject
+
+Each artifact above becomes a "never report this" line in the reviewer prompt. **A rule
+scoped by subject silences that subject everywhere**, including on screens the artifact
+cannot occur on — and a false negative is invisible, so nothing ever tells you.
+
+Measured 2026-08-17. The prompt carried:
+
+> *"The sticker catalog shows fewer stickers on the RIGHT because sticker sync is stubbed
+> offline in the harness."*
+
+Written about one screen. The reviewer generalised it to *any* sticker difference, and
+stayed silent on a P1: the source client had replaced its composer sticker button with a
+reasoning-effort control and the mirror still showed the sticker. **Zero findings on that
+capture across two runs on fresh, correctly paired images.** The gap was found by a human
+recalling the product change, then confirmed by source diff in minutes.
+
+Note the direction, because it is the tell: the rule anticipated **fewer** stickers on the
+mirror; the real gap was an **extra** sticker control on the mirror. A rule cannot even be
+checked against reality when it is phrased as a topic rather than an observation.
+
+Write them as: *this capture, this element, this direction.* Then add the counter-clause
+explicitly — "a sticker **button** present on one client and not the other, on any screen,
+IS a finding" — because the model will otherwise fill the gap by generalising.
+
+**Audit the suppression list whenever a real gap is found and the reviewer missed it.** That
+is the only signal you get; there is no failing test for a false negative.
+
+### Icon-only affordances are invisible to this review by design
+
+The prompt puts iconography and layout out of scope — correctly, since a mirroring client is
+allowed to differ there. The consequence is that **swapping one icon-only control for another
+in the same slot is a change the vision review cannot report** without violating its own
+scope. That is not a prompt bug and cannot be fixed by rewording.
+
+The check that closes it is a **control-name set diff**: dump the accessibility tree on
+*both* clients and compare the sets of accessible names. Until the source client emits one,
+this class is uncovered — say so when reporting coverage rather than letting a green review
+imply otherwise.
+
 ### A duplicate capture manufactures findings in bulk
 
 If two manifest entries render **the same screen on one side** — no seeded
@@ -308,6 +403,27 @@ as a *source-reading* task, correctly identified its own earlier inversions.
 Accepting a finding into the baseline is a decision that needs an owner and a tracker
 entry. Otherwise the baseline becomes where gaps go to be forgotten: the gate goes
 green, and "accepted" quietly reads as "resolved".
+
+### 7.5 Route findings to a queue a human actually works
+
+Adjudication that happens by reading `findings.json` happens rarely, and a decision nobody
+makes is a decision to ship the gap. Findings need a durable queue with both captures
+attached, worked in the same unit this skill works in — one screen, one lens at a time.
+
+If the project has a defect inventory, file into it: see the **`defect-drainer-intake`**
+skill for the bridge contract and the adjudication loop. Two rules matter regardless of
+where the queue lives:
+
+- **The bridge files everything.** A bridge that drops low-confidence findings has replaced
+  the human's judgement with its own, and the human is now reviewing the bridge.
+- **A closed false positive must also update the baseline here**, or the next run reports it
+  again and the queue teaches people to ignore it.
+
+**The arrow back matters more than the queue.** An adjudication you have made twice is a
+deterministic check you have not written yet — that is how the composer misalignment became
+check H and stopped needing a human forever. Every lens in the table above earns unattended
+status one check at a time, by being right repeatedly, never by a decision that the
+harness is now trustworthy.
 
 ## 8. Enforcement — the part that actually prevents recurrence
 
@@ -474,8 +590,8 @@ directory layout, or language is hardcoded. Drop a `parity.config.json` at the
 repo root and run:
 
 ```bash
-node ~/.agents/skills/ui-parity-mirroring/scripts/parity-gate.mjs
-node ~/.agents/skills/ui-parity-mirroring/scripts/parity-review.mjs
+node ~/.agents/skills/product-parity/scripts/parity-gate.mjs
+node ~/.agents/skills/product-parity/scripts/parity-review.mjs
 ```
 
 Route discovery covers file-router frameworks via `{dir, filename}` — SvelteKit
@@ -483,10 +599,45 @@ Route discovery covers file-router frameworks via `{dir, filename}` — SvelteKi
 as the escape hatch for anything else. The i18n block is optional; omit it and
 those checks skip cleanly.
 
-**What stays per-project:** the capture manifest, the waivers file, the accepted-
-findings baseline, and the capture harness for your mirror framework (the golden
-/ snapshot test). The skill ships the parts that generalise; your repo owns the
-parts that cannot.
+### Who owns what — the test, not the list
+
+**The skill owns what stays true when you point the harness at a different product.
+The repo owns everything else.**
+
+Memorise the test, not the inventory; the inventory is what the test produces.
+
+| Skill | Repo |
+|---|---|
+| the gate and the checks | the capture harnesses (both clients) |
+| the reviewer's *form* — scope rules, required fields | the capture manifest |
+| doctrine: what counts as a finding, how to write a rule | waivers, accepted-findings baseline |
+| — | `parity.config.json`, product suppression rules |
+
+The ambiguous cases are all suppressions, and they split on **cause**:
+
+- caused by the **capture technique** — test-runner font stacks, images not decoded,
+  fallback glyphs — the skill, because they follow from the capture method it recommends;
+- caused by the **product's own stubs or features** — the repo, because the skill cannot
+  know what you stubbed.
+
+**A suppression is a waiver, and a broader one.** A per-finding waiver silences one known
+thing; a suppression rule silences a whole subject on every capture, forever. Hold it to at
+least the waiver standard — reason, owner, date, and the condition that removes it — and
+prefer a `removeWhen` condition over a review date. A condition tells the next person what
+to verify; a date tells them to have an opinion on a Tuesday.
+
+This is not bookkeeping. Product knowledge stored in the skill is invisible to the people who
+would audit it, and it goes stale silently: the rule that cost a P1 on 2026-08-17 was correct
+when written and became a defect when the product moved underneath it. Nothing failed,
+because a suppression working as designed and a suppression hiding a real gap look identical
+from outside.
+
+**Completeness cannot be enforced, and must not be faked.** A new harness legitimately has
+zero product artifacts — you learn them *from* the board, by watching it produce false
+positives. Hard-failing an empty list just produces an entry written to satisfy the gate.
+So the tooling validates the *shape* of every declared rule and says loudly when none are
+declared; judging whether the list is complete stays with the human. The event that should
+trigger that audit is not a date: it is **a human finding a gap the reviewer missed.**
 
 ### Review backends are not interchangeable
 

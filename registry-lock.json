@@ -93,6 +93,18 @@
         "SKILL.md": "sha256-mrgzf9dHh8JKspgAUrJsmXtetqCRF4oLZ8GY60GTJwY="
       }
     },
+    "inventory/skills/defect-drainer-intake": {
+      "name": "defect-drainer-intake",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/defect-drainer-intake",
+      "integrity": "sha256-LqDVfH6i9W557nwZ0U99Atmcn794KcI09HAxYEwjTCE=",
+      "files": {
+        "SKILL.md": "sha256-ih9MXB6LzyODM6+xycYGAtdCbTvNwe4bNDTz7nBivnY="
+      }
+    },
     "inventory/skills/deployment-strategy": {
       "name": "deployment-strategy",
       "version": "0.1.0",
@@ -244,6 +256,26 @@
         "SKILL.md": "sha256-/CzB52pYpU7Y7j9WtQVbf8VFrYIMWyE1/EszD4jSouE="
       }
     },
+    "inventory/skills/product-parity": {
+      "name": "product-parity",
+      "version": "0.4.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/product-parity",
+      "integrity": "sha256-IFG1NFkz8yILIlYoXBOBOQ5/cUKvlMk+JGVaRBr5Jog=",
+      "files": {
+        "DYNAMIC-STATES.md": "sha256-sHEVbKt2eyEWR9BE20MdQq11QjbE0/uKQA5h4P4meEE=",
+        "RECIPES.md": "sha256-01kaRgT6/AdONI5l2YtBBU3qEwZweBIop5uMA1ex/bA=",
+        "scripts/parity-api.mjs": "sha256-FENNZ1zdacVZj8IGi9TsQWYpcSeJ/QAx0s+KP1tMlco=",
+        "scripts/parity-gate.mjs": "sha256-5q8ioUEawbVCtGYskn1yh5XRPaP+QEjP01zkJQf+8BY=",
+        "scripts/parity-geometry.mjs": "sha256-005uola9Te9p1ubDFb7kiqQckxczCwzwcJVJYwAMMGk=",
+        "scripts/parity-interactive.mjs": "sha256-ZJjupTRMPaArP4yaeTrkANLboBsnRUmdtI32G0GMu10=",
+        "scripts/parity-review.mjs": "sha256-nA9KGzNvSdHYkrcPO6UpjdLxFNhljCZqC4y9drXu0Aw=",
+        "scripts/parity.config.example.json": "sha256-59Yyy6daYoiCE3o4qYA8vQdzlbmKfZLOE/BusyY1rKg=",
+        "SKILL.md": "sha256-KwDQrzwWWFacfNoMjNuuw8mu3DREyOfiFqYpD7q8bXs="
+      }
+    },
     "inventory/skills/production-readiness": {
       "name": "production-readiness",
       "version": "0.1.0",
@@ -303,23 +335,6 @@
       "integrity": "sha256-KsqNmZ/F+oxg+PFicC4Q/6LMl+1FtbkwoX7JCgJ8h4A=",
       "files": {
         "SKILL.md": "sha256-Nl/s8uWLK48RERQ3XKOwVV7KTqqZjzj1PG1lOuRJCp8="
-      }
-    },
-    "inventory/skills/ui-parity-mirroring": {
-      "name": "ui-parity-mirroring",
-      "version": "0.15.0",
-      "type": "skill",
-      "scope": "custom",
-      "installable": true,
-      "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
-      "integrity": "sha256-VaXsj8RyXcyD6bnA/LAYA8KjcHzQg1u2j1M3t9Oj+2s=",
-      "files": {
-        "RECIPES.md": "sha256-01kaRgT6/AdONI5l2YtBBU3qEwZweBIop5uMA1ex/bA=",
-        "scripts/parity-gate.mjs": "sha256-cIrB8lZXMAwKI5e9EP9n7mZGz9ScrK+U17ir1Hyz7fY=",
-        "scripts/parity-geometry.mjs": "sha256-005uola9Te9p1ubDFb7kiqQckxczCwzwcJVJYwAMMGk=",
-        "scripts/parity-review.mjs": "sha256-FrOtaxJBZ8d/+NNjC9kJgHJ+gGZDjHSCPdV7Tcsqo2g=",
-        "scripts/parity.config.example.json": "sha256-tdUjfX33UIMVRpMo5zLNZlu0sH+fs7nsYUGOF+1Je70=",
-        "SKILL.md": "sha256-l2efIddk+tzXsCKx9UPlag6YQulMGUEIRUX/TvDjR8g="
       }
     },
     "inventory/skills/ui-portability-baseline": {

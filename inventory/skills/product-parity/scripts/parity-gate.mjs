@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// UI parity quality gate — portable. Ships with the `ui-parity-mirroring` skill.
+// Product parity quality gate — portable. Ships with the `product-parity` skill.
 //
 // Config-driven so it works in any repo. Point it at a parity.config.json:
 //   node <skill>/scripts/parity-gate.mjs --config parity.config.json
@@ -16,6 +16,13 @@
 //                         G exists because F is only as honest as its inputs: a
 //                         stale review, or two manifest entries that rendered the
 //                         same screen, both make F report a confident PASS.
+//   J  api parity       — both clients requested the DECLARED endpoints for the screen.
+//                         A screen can be pixel-perfect and built from different data.
+//   I  interactive       — declared affordances resolve to real, activatable controls in
+//                         the captured accessibility tree. The only check that sees
+//                         BEHAVIOUR: a dead icon and a live button are pixel-identical,
+//                         and an affordance broken on both clients passes parity by
+//                         definition. Mobile-only today (web writes no semantics).
 //   H  geometry         — shared-chrome alignment invariants measured on captured
 //                         PNGs, compared across clients. Catches implicit framework
 //                         defaults (e.g. Flutter IconButton 48×48 tap target) that
@@ -26,6 +33,8 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { runGeometry } from './parity-geometry.mjs';
+import { runInteractive } from './parity-interactive.mjs';
+import { runApi } from './parity-api.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
@@ -477,7 +486,46 @@ function checkVisual() {
   const findingsAt = statSync(findingsPath).mtimeMs;
   const mins = (ms) => Math.round(ms / 60000);
 
-  if (newestCapture && findingsAt < newestCapture) {
+  // PER-CAPTURE freshness. The whole-file mtime is not usable once the reviewer merges
+  // subset runs (it must, or one-screen work destroys the other results) — every entry
+  // would look as fresh as the last write, which silently disables this guard. So each
+  // result is graded against ITS OWN capture PNGs.
+  //
+  // Falls back to the whole-file comparison for findings.json written before results
+  // carried `reviewedAt`; an old file must not silently skip the check.
+  const allResults = findings.results ?? [];
+  const stamped = allResults.filter((r) => r.reviewedAt);
+  if (stamped.length) {
+    const stale = [];
+    // A result with no `reviewedAt` came from a reviewer that did not record when it ran.
+    // Once the file is merged its mtime is meaningless for these, so freshness CANNOT be
+    // established — and an unverifiable entry must never pass silently. Treat it as stale:
+    // one re-review stamps it and the check becomes exact from then on.
+    for (const r of allResults) {
+      if (!r.reviewedAt) stale.push(`${r.id}: no reviewedAt — freshness unverifiable, re-review it`);
+    }
+    for (const r of stamped) {
+      const at = Date.parse(r.reviewedAt);
+      if (Number.isNaN(at)) continue;
+      const pngAt = (col) => {
+        const p = path.join(out, col, `${r.id}.png`);
+        return existsSync(p) ? statSync(p).mtimeMs : 0;
+      };
+      const capAt = Math.max(pngAt('web'), pngAt('mobile'));
+      if (capAt && at < capAt) stale.push(`${r.id}: reviewed ${mins(capAt - at)} min before its newest capture`);
+    }
+    if (stale.length) {
+      failures.push({
+        check: 'visual-review-stale',
+        message:
+          `${stale.length} of ${allResults.length} reviewed capture(s) cannot be trusted: their findings ` +
+          `describe screenshots that have since been replaced, or were recorded without a review ` +
+          `timestamp so freshness cannot be established. Re-review just those captures ` +
+          `(--only <id>, or a subset PARITY_MANIFEST — the reviewer merges, so the rest are kept).`,
+        items: stale,
+      });
+    }
+  } else if (newestCapture && findingsAt < newestCapture) {
     failures.push({
       check: 'visual-review-stale',
       message:
@@ -538,6 +586,27 @@ function checkVisual() {
 // this skill without declaring any. Missing capture PNGs degrade to notes (via
 // runGeometry), not failures. Failure shape is reconciled at this boundary:
 // geometry uses `{ id, msg }`; the gate uses `{ check, message }`.
+// ---------------------------------------------------------------------------
+// I. Interactive affordances (deterministic — no model)
+// ---------------------------------------------------------------------------
+// No-op when cfg.interactive is absent. Mobile-only, and every note says so: a check
+// that overstates its coverage is worse than no check.
+// ---------------------------------------------------------------------------
+// J. API parity (deterministic — no model)
+// ---------------------------------------------------------------------------
+// Two clients can render identical pixels from different data. Nothing else here sees it.
+function checkApi() {
+  const { notes: aNotes, failures: aFailures } = runApi(cfg, ROOT);
+  for (const n of aNotes) notes.push(n);
+  for (const f of aFailures) failures.push({ check: f.id, message: f.msg });
+}
+
+function checkInteractive() {
+  const { notes: iNotes, failures: iFailures } = runInteractive(cfg, ROOT);
+  for (const n of iNotes) notes.push(n);
+  for (const f of iFailures) failures.push({ check: f.id, message: f.msg });
+}
+
 function checkGeometry() {
   const { notes: gNotes, failures: gFailures } = runGeometry(cfg, ROOT);
   for (const n of gNotes) notes.push(n);
@@ -553,11 +622,13 @@ checkI18n();
 checkUnlabelled();
 checkVisual();
 checkGeometry();
+checkInteractive();
+checkApi();
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ok: failures.length === 0, config: configPath, notes, failures }, null, 2));
 } else {
-  console.log(`[parity-gate] UI parity quality gate (${path.relative(process.cwd(), configPath)})`);
+  console.log(`[parity-gate] Product parity quality gate (${path.relative(process.cwd(), configPath)})`);
   for (const n of notes) console.log('  · ' + n);
   if (!failures.length) console.log('[parity-gate] PASS');
   else {

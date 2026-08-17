@@ -1,5 +1,5 @@
 {
-  "$comment": "Config for the ui-parity-mirroring tools. Place at repo root (or scripts/parity/) and run: node <skill>/scripts/parity-gate.mjs",
+  "$comment": "Config for the product-parity tools. Place at repo root (or scripts/parity/) and run: node <skill>/scripts/parity-gate.mjs",
   "root": ".",
   "source": {
     "name": "webapp",
@@ -29,7 +29,21 @@
   "review": {
     "backend": "grok",
     "model": "gpt-4.1",
-    "envFile": "backend/.env"
+    "envFile": "backend/.env",
+    "$artifacts": "Product-specific suppression rules. The skill inlines artifacts caused by the CAPTURE TECHNIQUE (test-runner fonts, undecoded images); anything caused by YOUR product's stubs or features belongs here, because the skill cannot know what you stubbed. Omit the list on a new harness — you learn it from the board — and the reviewer will say so on every run. Every field below is REQUIRED and validated before any capture is reviewed.",
+    "artifacts": [
+      {
+        "captures": ["catalog-*", "settings-catalog"],
+        "element": "the COUNT of item tiles in the catalog grid",
+        "direction": "fewer tiles on the mirror",
+        "cause": "catalog sync is stubbed offline in the capture harness",
+        "counterClause": "A catalog BUTTON or control present on one client and not the other, on any screen, IS a finding and must be reported.",
+        "owner": "you@example.com",
+        "addedOn": "2026-01-01",
+        "removeWhen": "the capture harness serves real catalog sync",
+        "reviewBy": "2026-07-01"
+      }
+    ]
   },
   "design": {
     "$comment": "OPTIONAL — omit and check D skips cleanly. When present, the design system is upstream of BOTH clients and the check is symmetric: the source client fails the same way the mirror does. This is what stops a source-client bug becoming the specification.",

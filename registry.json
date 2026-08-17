@@ -328,21 +328,6 @@
     },
     {
       "type": "skill",
-      "name": "ui-parity-mirroring",
-      "version": "0.15.0",
-      "scope": "custom",
-      "path": "inventory/skills/ui-parity-mirroring",
-      "installable": true,
-      "runtimeTarget": "~/.codex/skills/ui-parity-mirroring",
-      "tags": [
-        "parity",
-        "ui",
-        "mirroring",
-        "visual-regression"
-      ]
-    },
-    {
-      "type": "skill",
       "name": "grok-build-harness",
       "version": "0.2.0",
       "scope": "custom",
@@ -369,6 +354,39 @@
         "fvm",
         "dart",
         "sdk"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "product-parity",
+      "version": "0.4.0",
+      "scope": "custom",
+      "path": "inventory/skills/product-parity",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/product-parity",
+      "tags": [
+        "parity",
+        "mirroring",
+        "porting",
+        "interaction",
+        "api",
+        "visual-regression"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "defect-drainer-intake",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/defect-drainer-intake",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/defect-drainer-intake",
+      "tags": [
+        "defects",
+        "intake",
+        "triage",
+        "human-in-the-loop",
+        "harness"
       ]
     }
   ],

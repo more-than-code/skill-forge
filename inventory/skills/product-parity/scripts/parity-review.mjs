@@ -109,6 +109,77 @@ const FINDINGS_SCHEMA = {
 };
 
 
+/**
+ * Product-specific suppression rules, supplied by the REPO via `review.artifacts`.
+ *
+ * OWNERSHIP. The skill owns what stays true when you point the harness at a different
+ * product; the repo owns everything else. Applied to suppressions, the line is:
+ *   · caused by the CAPTURE TECHNIQUE (test-runner font stacks, undecoded images) → skill,
+ *     inlined below, because they follow from the capture method this skill recommends;
+ *   · caused by the PRODUCT's own stubs or features → repo, declared in config.
+ *
+ * This function exists because the second kind was hardcoded here and cost a P1. The rule
+ * read "the sticker catalog shows fewer stickers on the RIGHT" — Tutored product knowledge,
+ * living in a skill other repos vendor. The model generalised it to any sticker difference
+ * and stayed silent while the source client replaced its composer sticker button with a
+ * different control. Nothing failed, because a suppression working as designed and a
+ * suppression hiding a real gap are indistinguishable from outside.
+ *
+ * SHAPE IS ENFORCED, not merely documented. A suppression is a waiver — a broader one than
+ * a per-finding waiver, since it silences a whole subject on every capture — so it carries
+ * the same metadata this skill already demands of waivers, plus the two fields that make it
+ * checkable against reality:
+ *   captures      which capture ids it applies to (globs). NEVER "all".
+ *   element       the specific thing affected, not the subject area.
+ *   direction     what you expect to see. A rule without a direction cannot be falsified.
+ *   cause         why the harness does this.
+ *   counterClause what is STILL a finding. The model fills gaps by generalising; this is
+ *                 the only thing that stops it.
+ *   owner         who decided this.
+ *   addedOn       when.
+ *   removeWhen    the condition that retires it. A date tells you to have an opinion on a
+ *                 Tuesday; a condition tells you what to verify.
+ *   reviewBy      optional backstop for conditions nobody can mechanically check.
+ */
+function renderArtifacts(cfg) {
+  const declared = cfg.review?.artifacts ?? [];
+  const REQUIRED = ['captures', 'element', 'direction', 'cause', 'counterClause', 'owner', 'addedOn', 'removeWhen'];
+  const notes = [];
+
+  declared.forEach((a, i) => {
+    const missing = REQUIRED.filter((k) => !a[k] || String(a[k]).trim() === '');
+    if (missing.length) {
+      throw new Error(
+        `review.artifacts[${i}] (${a.element ?? a.captures ?? 'unnamed'}) is missing: ${missing.join(', ')}.\n` +
+          `A suppression rule without these is a silence switch. "direction" and "counterClause" are ` +
+          `not optional: a rule phrased as a subject rather than an observation silences that subject ` +
+          `everywhere, on every capture, forever — and a false negative is invisible, so nothing will ` +
+          `ever tell you.`,
+      );
+    }
+    if (a.reviewBy && Date.parse(a.reviewBy) < Date.now()) {
+      notes.push(
+        `review: suppression for "${a.element}" passed its reviewBy (${a.reviewBy}, owner ${a.owner}). ` +
+          `Re-audit it: confirm "${a.removeWhen}" is still false, or delete the entry.`,
+      );
+    }
+  });
+
+  if (!declared.length) {
+    notes.push(
+      'review: no product artifacts declared (review.artifacts) — every stubbed subsystem will read ' +
+        'as a real finding. Expected on a new harness; add entries once the board shows you which.',
+    );
+  }
+
+  const lines = declared.map(
+    (a) =>
+      `- On ${Array.isArray(a.captures) ? a.captures.join(', ') : a.captures} ONLY: ${a.element} — ` +
+      `expect ${a.direction}, because ${a.cause}. This covers that and nothing else. ${a.counterClause}`,
+  );
+  return { lines, notes };
+}
+
 const SYSTEM = `You compare two screenshots of the SAME screen from two clients of one product.
 
 LEFT = webapp. This is the SOURCE OF TRUTH.
@@ -134,16 +205,17 @@ OUT OF SCOPE (never report these — they are explicitly allowed to differ):
 - different underlying DATA (different chat messages, different list items).
   The captures may be taken moments apart against a live database.
 
-KNOWN RENDERING ARTIFACTS OF THE MOBILE CAPTURE HARNESS — NEVER report these as findings:
+KNOWN RENDERING ARTIFACTS OF THE MOBILE CAPTURE HARNESS — NEVER report these as findings.
+Each rule is limited to what it names. Do NOT generalise a rule to other screens, other
+controls, or the opposite direction:
 - CJK (Japanese/Chinese) text renders as filled black boxes on the RIGHT only.
   The test font lacks CJK glyphs. It renders correctly on real devices.
 - Avatar and asset images may render as solid discs or initials on the RIGHT,
   inconsistently within one screen. Images are not decoded in the test runner.
   Judge whether the avatar SLOT exists, never the image content.
-- The sticker catalog shows fewer stickers on the RIGHT because sticker sync is
-  stubbed offline in the harness.
 - Occasional text rendering as a solid black bar on the RIGHT is a font fallback
   artifact, not missing content.
+__PRODUCT_ARTIFACTS__
 
 Be conservative. A false finding is more costly than a missed one, because it
 erodes trust in this review. If unsure, do not report it.
@@ -163,9 +235,19 @@ function normalise(findings) {
     }));
 }
 
+// Composed once at startup so a malformed entry fails before any capture is reviewed,
+// rather than after the first nine minutes of model time.
+const { lines: ARTIFACT_LINES, notes: ARTIFACT_NOTES } = renderArtifacts(CFG);
+const SYSTEM_COMPOSED = SYSTEM.replace(
+  '__PRODUCT_ARTIFACTS__',
+  ARTIFACT_LINES.length
+    ? ARTIFACT_LINES.join('\n')
+    : '(no product-specific artifacts declared for this repo)',
+);
+
 function inventoryPrompt(webPath, mobPath, userText) {
   return [
-    SYSTEM,
+    SYSTEM_COMPOSED,
     '',
     userText,
     '',
@@ -377,17 +459,64 @@ async function main() {
 
   const results = await pool(captures, CONCURRENCY, reviewOne);
   mkdirSync(OUT, { recursive: true });
+
+  // Stamp each result with WHEN and WITH WHAT it was reviewed. A merged file legitimately
+  // mixes review times and backends, and the gate grades per capture — a single top-level
+  // timestamp cannot describe that.
+  const reviewedAt = new Date().toISOString();
+  for (const r of results) {
+    r.reviewedAt = reviewedAt;
+    r.backend = BACKEND;
+    r.model = modelLabel(BACKEND);
+  }
+
+  // MERGE, never replace. This script is normally invoked on a SUBSET — `--only`, or a
+  // subset PARITY_MANIFEST — because the skill mandates working one screen at a time.
+  // Overwriting meant a one-capture run discarded every other capture's findings, and the
+  // gate's ratchet read the loss as progress. Observed 2026-08-17: three sequential
+  // `--only` runs left a findings.json containing one capture, silently dropping 29.
+  //
+  // Reviewed captures REPLACE their previous entry; untouched ones are carried forward
+  // verbatim, keeping their own older `reviewedAt` so the gate can still call them stale.
+  const findingsPath = path.join(OUT, 'findings.json');
+  const byId = new Map();
+  if (existsSync(findingsPath)) {
+    try {
+      const prev = JSON.parse(readFileSync(findingsPath, 'utf8'));
+      for (const r of prev.results ?? []) byId.set(r.id, r);
+    } catch {
+      console.log('[parity-review] existing findings.json unreadable — starting fresh');
+    }
+  }
+  for (const r of results) byId.set(r.id, r);
+  const merged = [...byId.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
   const payload = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: reviewedAt,
+    // The review as a whole is only as fresh as its OLDEST entry. Stated explicitly so a
+    // merged file cannot read as wholly current just because it was written just now.
+    oldestReviewedAt: merged.reduce(
+      (min, r) => (r.reviewedAt && r.reviewedAt < min ? r.reviewedAt : min),
+      reviewedAt,
+    ),
     backend: BACKEND,
     model: modelLabel(BACKEND),
-    results,
+    results: merged,
   };
-  writeFileSync(path.join(OUT, 'findings.json'), JSON.stringify(payload, null, 2));
+  writeFileSync(findingsPath, JSON.stringify(payload, null, 2));
+  const carried = merged.length - results.length;
+  if (carried > 0) {
+    console.log(`[parity-review] merged: ${results.length} reviewed now, ${carried} carried forward`);
+  }
 
   const total = results.reduce((n, r) => n + r.findings.length, 0);
   const errored = results.filter((r) => r.error);
   console.log(`[parity-review] backend=${BACKEND} ${results.length} pair(s) reviewed, ${total} finding(s) → parity-out/findings.json`);
+  // Printed AFTER the count so it is not scrolled away by per-capture output. An absent or
+  // expired suppression list is exactly the state that produces silent false negatives, so
+  // it must be visible on every run — the only signal a false negative ever gives you is a
+  // human noticing a gap the reviewer missed.
+  for (const n of ARTIFACT_NOTES) console.log(`[parity-review] ${n}`);
   if (errored.length) {
     console.log(`[parity-review] ${errored.length} pair(s) errored — findings are INCOMPLETE`);
     process.exit(1);

@@ -45,7 +45,7 @@
     {
       "type": "skill",
       "name": "coding-discipline",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "scope": "custom",
       "path": "inventory/skills/coding-discipline",
       "installable": true,
@@ -244,7 +244,7 @@
     {
       "type": "skill",
       "name": "umbrella-workspace",
-      "version": "0.1.0",
+      "version": "0.2.1",
       "scope": "custom",
       "path": "inventory/skills/umbrella-workspace",
       "installable": true,
@@ -252,7 +252,8 @@
       "tags": [
         "multi-repo",
         "cooperation",
-        "handoff"
+        "handoff",
+        "worktree"
       ]
     },
     {
@@ -287,7 +288,7 @@
     {
       "type": "skill",
       "name": "design-sync-svelte",
-      "version": "0.2.1",
+      "version": "0.4.1",
       "scope": "custom",
       "path": "inventory/skills/design-sync-svelte",
       "installable": true,
@@ -301,7 +302,7 @@
     {
       "type": "skill",
       "name": "design-sync-flutter",
-      "version": "0.2.0",
+      "version": "0.2.2",
       "scope": "custom",
       "path": "inventory/skills/design-sync-flutter",
       "installable": true,
@@ -327,6 +328,21 @@
     },
     {
       "type": "skill",
+      "name": "grok-build-harness",
+      "version": "0.2.0",
+      "scope": "custom",
+      "path": "inventory/skills/grok-build-harness",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/grok-build-harness",
+      "tags": [
+        "grok",
+        "delegation",
+        "cli",
+        "harness"
+      ]
+    },
+    {
+      "type": "skill",
       "name": "fvm-flutter",
       "version": "0.1.0",
       "scope": "custom",
@@ -336,7 +352,41 @@
       "tags": [
         "flutter",
         "fvm",
-        "toolchain"
+        "dart",
+        "sdk"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "product-parity",
+      "version": "0.6.0",
+      "scope": "custom",
+      "path": "inventory/skills/product-parity",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/product-parity",
+      "tags": [
+        "parity",
+        "mirroring",
+        "porting",
+        "interaction",
+        "api",
+        "visual-regression"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "defect-drainer-intake",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/defect-drainer-intake",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/defect-drainer-intake",
+      "tags": [
+        "defects",
+        "intake",
+        "triage",
+        "human-in-the-loop",
+        "harness"
       ]
     }
   ],

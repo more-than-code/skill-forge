@@ -442,7 +442,7 @@ Hard rules (always apply):
 
 **Cleanup/deletion:** Scope allowlist → preservation set → verify no collateral → execute. Never outside approved scope.
 
-**Doc drift:** Contract/interface/architecture changes update owning docs **in same changeset**. Maintain Key Design Decisions log.
+**Doc drift (HARD — same unit of work as code):** Contract, tool/API surface, user-visible flow, or architecture changes **must** update owning docs **in the same implementation batch and the same per-intent commit** as the code. Do **not** ship a code-only commit and a follow-up docs commit for the same intent (unless the user explicitly asks to split). Pure internal refactors with identical external behavior may mark docs N/A. Default implementation skill `coding-discipline` owns the checklist: resolve owners via project `docs/docs-owners.md` when present → co-author with code → **open owners even if clean in git** → Completeness re-read vs final behavior → stage docs with code → emit **Docs commit report** in the commit reply (`Owning docs` / `Completeness: Y|N` / umbrella glossary note). If Completeness is N, **do not** commit. Maintain Key Design Decisions log when architecture decisions change.
 
 ---
 
@@ -505,6 +505,18 @@ Tier 2/3: track progress in `todo.md` until archived.
 
 **Restricted (explicit confirmation required):** Delete files. Modify prod credentials/config. Commit/push. Modify `.git/`. Destructive commands (DROP, rm -rf, etc.).
 
+### Git operations (mandatory)
+
+These rules apply in every repo and every multi-repo workspace. Runtime targets under `~` are deployments of this policy — do not weaken them locally.
+
+1. **No commit unless asked.** Never run `git commit`, `git push`, or create a commit via any wrapper unless the user explicitly requests it (e.g. "commit", "create a commit", "push"). Drafting a proposed commit message in chat is fine; performing the commit is not. "Looks done" is not permission to commit.
+2. **Only the active workspace / cwd.** Never commit (or stage for commit) in a repository **outside** the user's current workspace root (or an explicitly named path in their request). Sibling repos under an umbrella are in-scope only when the user asked for that umbrella/repo; do **not** opportunistically commit `~/…`, Skill Forge inventory, or other projects just because you edited them. If a change must land elsewhere, say so and wait for an explicit go-ahead naming that path.
+3. **Never commit on `main` or `master` without asking.** Before any commit, check `git branch --show-current` (or equivalent). If the branch is `main` or `master` (or the repo's default production branch), **stop** and ask for explicit confirmation — even if the user said "commit". Prefer a feature/`dev` branch unless they clearly authorize that default branch.
+4. **Per-repo, per-intent commits.** Prefer one commit per repository and per distinct intent. If work spans sibling repos (umbrella workspaces), commit separately in each child repo. Do not mix unrelated intents (e.g. a bugfix + an unrelated refactor) in one commit.
+5. **No WIP commits.** Do not commit half-done, broken, checkpoint, or "WIP" code. Prefer leaving a dirty working tree (or stashing only if the user asks) over a WIP commit. Commit only when the intent is complete enough that the tree is a coherent, reviewable unit.
+6. **Docs with code (same intent).** When the intent required owning-doc updates (§11 Doc drift), those files **must be staged and committed with the code** in that repo's intent commit. Do not produce a code-only commit and a later docs-only commit for the same feature/fix. If docs are still missing when the user asks to commit, update docs first, then commit once. Empty `docs/` in `git status` is **not** N/A — open owners from `docs/docs-owners.md` (or skill fallback), patch if stale, then stage. Commit reply must include the coding-discipline **Docs commit report**.
+7. **Same-issue multi-commit cleanup: rebase.** When several *local, unpushed* commits all address the same issue or fix, prefer interactive rebase (or soft-reset + single commit) into a clean history before the user pushes. Do not rewrite history that is already shared/pushed without explicit approval. Force-push and amend of published commits remain restricted and require explicit confirmation.
+
 ---
 
 ## 16) Communication
@@ -527,6 +539,7 @@ If gates are waived, explicitly state waiver text + timestamp + risk.
 ### Tier 1
 - [ ] Confirmed contained (Tier 1)
 - [ ] Implemented
+- [ ] Owning docs co-delivered if contract/UX changed (else N/A)
 - [ ] Tests pass (add if none exist)
 - [ ] Security self-check. Activate: `security-baseline`
 - [ ] No unintended changes
@@ -540,7 +553,7 @@ If gates are waived, explicitly state waiver text + timestamp + risk.
 - [ ] Mandatory gates auto-ran immediately after implementation (no user prompt)
 - [ ] Gate evidence attached in response
 - [ ] Spec, security, code, test lenses reviewed
-- [ ] Docs updated
+- [ ] Docs co-delivered with code (same batch; same intent commit when committing) — not a follow-up
 - [ ] Summary with spec reference + evidence
 
 ### Tier 3
@@ -554,7 +567,7 @@ If gates are waived, explicitly state waiver text + timestamp + risk.
 - [ ] Conditional verifications per applicable skills
 - [ ] Artifact diffs reviewed (if deterministic)
 - [ ] All 8 review lenses completed
-- [ ] Runtime/tests/docs/contracts aligned
+- [ ] Runtime/tests/docs/contracts aligned **in the same work batch** (not a later docs pass)
 - [ ] Design decisions updated
 - [ ] Final report: spec, evidence, risks, open items
 

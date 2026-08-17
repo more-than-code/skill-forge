@@ -2,11 +2,15 @@
 name: umbrella-workspace
 description: >
   Cooperation rules for multi-repo (umbrella) workspaces: where docs and tasks live,
-  self-contained task entries, pointer stubs in child repos, handoff checklists, and
-  plan-vs-status split. Use when working in a multi-repo container directory, starting
-  or resuming cross-repo plans, writing umbrella tasks/todo.md, adding pointer stubs,
-  or when the user mentions umbrella workspace, cross-repo handoff, or multi-repo
-  cooperation. Slash: /umbrella-workspace.
+  self-contained task entries, pointer stubs in child repos, handoff checklists,
+  plan-vs-status split, and parallel agent sessions via git worktrees (SESSION.md
+  markers, AGENTS load hooks, thin feature umbrellas, worktree vs copy, retire
+  on primary). Use when working in a multi-repo container directory, starting or
+  resuming cross-repo plans, writing umbrella tasks/todo.md, adding pointer
+  stubs, seeding a second checkout for parallel work, or when the user mentions
+  umbrella workspace, cross-repo handoff, multi-repo cooperation, worktree,
+  feature umbrella, or parallel session.
+  Slash: /umbrella-workspace.
 ---
 
 # Umbrella workspace cooperation
@@ -57,12 +61,29 @@ Do not duplicate status here — update it at the umbrella level only.
 
 **Single source of truth:** status lives **only** in umbrella `tasks/todo.md`. Stubs link; they never carry their own status (avoids drift).
 
+## Parallel sessions (git worktrees)
+
+When **two sessions** would edit the **same child repo** at once:
+
+- A **branch** is not enough if both share one working directory.
+- Prefer **`git worktree add`** for each **git** child you will change (same branch name across related children).
+- Prefer a **thin feature umbrella** (sibling folder, not a git repo) that *contains* those worktrees; open that folder as the session root.
+- Distinguish **git worktrees** from **folder copies**. Cleanup must remove both.
+- Open each session on the **correct root** only (primary vs feature umbrella).
+- Soft ownership: feature-umbrella **`SESSION.md`** + child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
+- Feature-specific absolute paths belong in the **plan** / `SESSION.md`, not in this skill.
+- When the feature is done: handoff on the **primary** umbrella, merge **code**, then remove worktrees and leftover copies. Do not merge gitignored runtime data unless asked.
+
+**Full procedure:** companion **`PARALLEL-WORKTREES.md`** (load when seeding, retiring, or the user mentions worktree / feature umbrella / parallel session).
+
 ## Handoff checklist (end of session on cross-repo work)
 
 - [ ] Umbrella `tasks/todo.md` phase entry matches reality (not stale)
 - [ ] Every repo touched has a pointer stub (add once; don’t re-add)
 - [ ] Completed phases: status complete + gate evidence, or moved to `tasks/archive.md` with `**Archived:** YYYY-MM-DD`
 - [ ] Spec divergences written back into the plan doc, not only in chat
+- [ ] If this session used a worktree: `SESSION.md` still accurate; do not leave the other session editing the same tree
+- [ ] If retiring a feature umbrella: cold resume lives on the **primary** (`HANDOFF.md` or equivalent + primary `tasks/todo.md`); feature-umbrella `SESSION.md` redirects; do not continue there
 
 ## Cross-repo plan implementer protocol
 
@@ -74,6 +95,7 @@ Plan docs keep **only** plan-specific key files, phase gates, and restricted ops
 4. **Gates** — project/global gate rules after every implementation batch; evidence in the phase section
 5. **Divergence** — stop, update the plan doc, re-approve if material (Tier 3)
 6. **Restricted ops** — explicit user confirmation for `git init`, deletes, commit/push, prod deploy, destructive commands
+7. **Parallel sessions** — if another agent owns the primary checkout, use worktrees per `PARALLEL-WORKTREES.md`; do not fight over one folder
 
 ## Scaffold (new umbrella)
 
@@ -99,8 +121,15 @@ umbrella/                 # usually not a git repo
 - Plan-only docs with no umbrella task tracking for Tier 3 work
 - Putting single-repo bugs/features in umbrella `tasks/`
 - Assuming the next agent has chat context
+- Two sessions editing the same child **folder** on different branches (or the same)
+- Putting ephemeral worktree absolute paths into this portable skill or into long-lived AGENTS as the only SSOT
+- Relying on `SESSION.md` without an AGENTS (or user) instruction to **read** it
+- Treating a nested folder copy (deploy, vendor) as a `git worktree`
+- Merging worktree SQLite / uploads / published assets as if they were source
+- Continuing work in a feature umbrella after the retire handoff is on the primary
 
 ## Related
 
 - Global agent process: risk tiers, mandatory gates, `tasks/` format (§13 style) — already in core instructions
 - Project skills stay in each child for stack-specific conventions; this skill is only multi-repo cooperation
+- Companion: `PARALLEL-WORKTREES.md` — seed, thin feature umbrella, worktree vs copy, one DB file per tree, retire on primary, cleanup

@@ -173,14 +173,14 @@
     },
     "inventory/skills/fvm-flutter": {
       "name": "fvm-flutter",
-      "version": "0.1.0",
+      "version": "0.2.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/fvm-flutter",
-      "integrity": "sha256-WG2xPP8akHTV+Vn07ILMOnfVt7oK3SRvVKwn/XmVqz0=",
+      "integrity": "sha256-spmPJoh01x9Mv0bbGOYwQ4vU+KyvoyMfg/zvRIUaq0Q=",
       "files": {
-        "SKILL.md": "sha256-9xucwk3hNypTxdaPJQj5X4lZmPLuiA/I2oFtXPYgG5I="
+        "SKILL.md": "sha256-hs9kmkxFckh916oEDqsxKhrsJTIj3te2ZXNsuar1IoM="
       }
     },
     "inventory/skills/grok-build-harness": {
@@ -258,20 +258,20 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/product-parity",
-      "integrity": "sha256-kHi+Md1wm0iTwgqvW+xEqp/jycerkqpj8R3Gy9PVBRE=",
+      "integrity": "sha256-xGYlQj+qVhYCPhB/+fs8hbODO0mfkf1OoppUmcajP68=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-sHEVbKt2eyEWR9BE20MdQq11QjbE0/uKQA5h4P4meEE=",
         "RECIPES.md": "sha256-01kaRgT6/AdONI5l2YtBBU3qEwZweBIop5uMA1ex/bA=",
         "scripts/parity-api.mjs": "sha256-FENNZ1zdacVZj8IGi9TsQWYpcSeJ/QAx0s+KP1tMlco=",
         "scripts/parity-gate.mjs": "sha256-KrS+IPaSiHGd6ASpGqildfo1rx8wCePLKTfTi8noAK4=",
         "scripts/parity-geometry.mjs": "sha256-005uola9Te9p1ubDFb7kiqQckxczCwzwcJVJYwAMMGk=",
-        "scripts/parity-interactive.mjs": "sha256-ZJjupTRMPaArP4yaeTrkANLboBsnRUmdtI32G0GMu10=",
-        "scripts/parity-names.mjs": "sha256-O8Mpx6gfq7OxgEEvT54H+EtvXvhzM6V6frQ7DsznEZs=",
+        "scripts/parity-interactive.mjs": "sha256-eidGsP5VLwvFIgiH9b65TjSxufXGNtvdDUrD6YAxa84=",
+        "scripts/parity-names.mjs": "sha256-K0ynwib4QNHI5QIVA+hpb0ZuhrzF6FnG3gZuwZYF21g=",
         "scripts/parity-review.mjs": "sha256-nA9KGzNvSdHYkrcPO6UpjdLxFNhljCZqC4y9drXu0Aw=",
         "scripts/parity.config.example.json": "sha256-59Yyy6daYoiCE3o4qYA8vQdzlbmKfZLOE/BusyY1rKg=",
         "SKILL.md": "sha256-A33eFP9LRs6Yf4xlpU4TtmJpwWC+1/nJlIej1U31OtA="

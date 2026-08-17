@@ -95,6 +95,35 @@ export function runNames(cfg, root) {
 
     const web = JSON.parse(readFileSync(webFile, 'utf8')).nodes ?? [];
     const mob = JSON.parse(readFileSync(mobFile, 'utf8')).nodes ?? [];
+
+    // Coordinates must be PAINTED fractions. A dump that records layout or document
+    // positions puts most nodes outside [0,1], the region then selects a near-random
+    // subset, and the diff looks plausible while comparing nothing. Measured 2026-08-17:
+    // the source emitter used document space and 72 of 91 nodes fell outside the viewport,
+    // including a control ~58,000px above it sitting in a closed panel.
+    //
+    // Refuse to grade that. A wrong region silently produces a confident answer, which is
+    // the failure this harness exists to prevent.
+    // Threshold distinguishes WRONG COORDINATE SPACE from ordinary scroll. A control
+    // straddling the top edge legitimately has a negative centre (-0.055 measured on a
+    // partly-scrolled message row); a control in document space is a whole viewport away
+    // or more (-69.571 measured). Anything beyond one viewport in either direction cannot
+    // be explained by scroll and means the emitter is wrong.
+    const strays = (nodes, get) => nodes.filter((n) => get(n) != null && (get(n) < -1 || get(n) > 2)).length;
+    const badWeb = strays(web, (n) => n.y);
+    const badMob = strays(mob, (n) => n.fy);
+    if (badWeb || badMob) {
+      failures.push({
+        id: `names:${region.name}`,
+        msg:
+          `Coordinates are not painted viewport fractions: ` +
+          `${badWeb} source node(s) and ${badMob} mirror node(s) fall outside [0,1] on ${region.capture}. ` +
+          `The emitter is recording layout or document position, or is including controls the capture ` +
+          `never painted. Fix the dump before trusting any region — a region over bad coordinates ` +
+          `selects an arbitrary subset and reports a confident, meaningless diff.`,
+      });
+      continue;
+    }
     const W = namesInRegion(web, region, (n) => ({ name: n.name, role: n.role, fy: n.y }));
     const M = namesInRegion(mob, region, (n) => ({ name: n.label, role: n.role, fy: n.fy }));
 

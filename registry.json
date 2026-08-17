@@ -344,7 +344,7 @@
     {
       "type": "skill",
       "name": "fvm-flutter",
-      "version": "0.1.0",
+      "version": "0.2.1",
       "scope": "custom",
       "path": "inventory/skills/fvm-flutter",
       "installable": true,
@@ -359,7 +359,7 @@
     {
       "type": "skill",
       "name": "product-parity",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,

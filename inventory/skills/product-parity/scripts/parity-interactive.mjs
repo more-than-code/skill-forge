@@ -88,15 +88,41 @@ export function runInteractive(cfg, root) {
     const hits = findNodes(nodes, a.labelContains);
 
     if (!hits.length) {
-      // A vanished label is NOT a pass. It usually means the copy changed or the control
-      // left the screen — either way the declaration is no longer verifying anything, and
-      // silently succeeding is how a check rots into decoration.
+      // A vanished label is NOT a pass. But "the mirror is missing this control" and "this
+      // capture does not render the control at all" are different defects with different
+      // owners, and reporting the wrong one sends someone hunting a product bug that is
+      // really a coverage gap.
+      //
+      // Observed 2026-08-17: a pronunciation control was declared and reported absent on
+      // the mirror. It was absent from the SOURCE capture too — it lives in a panel that
+      // capture never opens — so nothing was broken except the declaration. The failure
+      // text said "gone, renamed, or off-screen" and the reader picked the wrong one.
+      //
+      // When the source dump exists, use it to tell them apart.
+      const webFile = join(semDir, `${a.capture}.web.json`);
+      let sourceHas = null;
+      if (existsSync(webFile)) {
+        const wn = JSON.parse(readFileSync(webFile, 'utf8')).nodes ?? [];
+        sourceHas = wn.some(
+          (n) => typeof n.name === 'string' && n.name.toLowerCase().includes(a.labelContains.toLowerCase())
+        );
+      }
+
       failures.push({
         id: `interactive:${a.name}`,
         msg:
-          `No node labelled "${a.labelContains}" in ${a.capture} (mobile). The affordance is ` +
-          `either gone, renamed, or off-screen — the declaration verifies nothing as written. ` +
-          `Fix the label, fix the capture, or remove the declaration.`,
+          sourceHas === false
+            ? `"${a.labelContains}" is absent from BOTH clients on ${a.capture}. This capture does not ` +
+              `render the control at all, so the declaration verifies nothing — it is a COVERAGE gap, ` +
+              `not a mirror defect. Do not go looking for a product bug: add a capture that renders ` +
+              `this control, or waive the declaration with a removeWhen condition.`
+            : sourceHas === true
+              ? `"${a.labelContains}" is rendered by the SOURCE client on ${a.capture} but no node ` +
+                `carries that name on the mirror. Either the control is missing, or it exists with no ` +
+                `accessible name — both are real defects, and the second is invisible to assistive tech.`
+              : `No node labelled "${a.labelContains}" in ${a.capture} (mobile), and there is no source ` +
+                `semantics dump to compare against, so this cannot be diagnosed further. The affordance ` +
+                `is gone, renamed, or not rendered by this capture. Emit a source dump to tell them apart.`,
       });
       continue;
     }

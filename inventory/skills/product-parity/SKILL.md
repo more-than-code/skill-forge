@@ -251,6 +251,7 @@ Recurring artifact classes:
 | Missing glyph coverage | Broken text rendering | Test font stack lacks CJK/script glyphs; fine on real devices |
 | Image decoding | Missing assets | Asset/network images not decoded in the test runner; often inconsistent *within one screen* |
 | Fallback font | Wrong typeface / black bars | A style that bypasses the theme font resolves to the runner's default |
+| Concurrent writer | Reviewer non-determinism; a gap that appears or vanishes between runs | A second agent or process writing the same output tree — see below |
 
 The stubbed-subsystem one is the dangerous case: it mimics a real defect **and**
 often there is an open ticket about exactly that subsystem, so it gets believed.
@@ -321,6 +322,39 @@ different messages. Compare within a declared region (the composer strip, a head
 check H does, and require BOTH clients to emit painted, viewport-relative coordinates. A
 dump that reports layout position instead will put pinned chrome outside the viewport and
 the region will match nothing.
+
+### A second writer corrupts the board silently, and looks like model variance
+
+The output tree is usually one untracked directory with no locking — captures, semantics
+dumps, api bags, the review output and the filing ledger all in it. Nothing stops a second
+agent, a parallel session, or a stray test run writing there mid-analysis.
+
+**The tell: findings change without you running the reviewer.** Also — a gap you confirmed in
+source disappears between runs, or a control appears on the mirror that its committed code
+does not contain. Reach for that explanation *before* concluding the reviewer is
+non-deterministic, because both look identical from where you are sitting.
+
+Why the other validity checks cannot save you here: every one of them was built for **stale**
+inputs. A review-vs-capture timestamp comparison, a column-skew comparison — a concurrent
+write defeats both, because it is *fresh* and it is *consistent*. It simply belongs to
+someone else's run.
+
+Observed 2026-08-17: a second session re-ran the reviewer and landed a product fix on a
+branch while a first session was measuring. The changing results were written up as a
+measured property of the reviewer, and a fix was reported as landed when it existed only on
+an unmerged branch. Both conclusions came from contaminated state, drawn by a harness whose
+entire purpose is refusing to do that.
+
+Two things follow, and the first matters more:
+
+1. **Isolate before you measure.** Give each run its own output directory. Sharing a
+   directory is not a small risk to manage — it invalidates the results, and you cannot tell
+   afterwards which findings were yours.
+2. **Stamp the run and check attribution** — the artifacts must belong to the run that claims
+   to have produced them (check L). This is the backstop for when isolation is skipped.
+
+And when a fix appears to have landed, **verify which branch it is on** before recording it.
+A capture renders the working tree, not the mainline.
 
 ### A duplicate capture manufactures findings in bulk
 

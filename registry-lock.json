@@ -258,12 +258,12 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/product-parity",
-      "integrity": "sha256-3oHvu88lU5BGJmKrI1PDQlx2SNGazlBY/6ix99uYLxs=",
+      "integrity": "sha256-QsXZcw2tJj378WzLy6gbifKtvHgK3sJik6Prc5In19A=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-sHEVbKt2eyEWR9BE20MdQq11QjbE0/uKQA5h4P4meEE=",
         "RECIPES.md": "sha256-01kaRgT6/AdONI5l2YtBBU3qEwZweBIop5uMA1ex/bA=",
@@ -275,7 +275,7 @@
         "scripts/parity-review.mjs": "sha256-nA9KGzNvSdHYkrcPO6UpjdLxFNhljCZqC4y9drXu0Aw=",
         "scripts/parity-session.mjs": "sha256-/Nos22Qslzh59KDEJqRgU016/K/YyXKIAoH9PwDrQtk=",
         "scripts/parity.config.example.json": "sha256-59Yyy6daYoiCE3o4qYA8vQdzlbmKfZLOE/BusyY1rKg=",
-        "SKILL.md": "sha256-LDr4hNofNAtTvodw5Eqv8bWnf0z543YheHnqz68Etxo="
+        "SKILL.md": "sha256-6FNXdgYtf4/vZ1T4D12Ud7gjQXdcc6f7FYH5wLg4JM0="
       }
     },
     "inventory/skills/production-readiness": {

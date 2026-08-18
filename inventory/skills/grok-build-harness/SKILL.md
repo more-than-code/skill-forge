@@ -7,7 +7,8 @@ description: >
   Imagine image/video tool usage, and self-contained brief structure. Activate when
   handing work to Grok, spawning `grok` headlessly, streaming or parsing grok
   output, tracking its cost, debugging a grok run that exits 0 having done nothing,
-  or generating images/video with image_gen / image_edit / image_to_video.
+  generating images/video with image_gen / image_edit / image_to_video, or
+  driving grok over ACP (`grok agent stdio` / `serve`).
 ---
 
 # Grok Build Harness
@@ -62,8 +63,9 @@ Read three fields every time:
 - **`num_turns`** — how much it actually did. `1` on a large brief means it barely started.
 - **`total_cost_usd`** — accumulate across iterations; a driver loop spends real money.
 
-**Caveat:** there are **no tool-call events** — you see narration and reasoning, not
-file writes. To know what it actually *did*, still watch the filesystem:
+**Caveat:** streaming-json has **no tool-call events** — you see narration and
+reasoning, not file writes. (The ACP transport below *does* emit them; this is a
+limitation of the headless format, not of Grok.) With `-p`, watch the filesystem:
 
 ```bash
 find work/src work/static -type f -newer work/BRIEF.md | sort
@@ -179,6 +181,58 @@ ffmpeg -f concat -safe 0 -i shots.txt -c copy out.mp4    # never re-encode
 
 Expect transient **HTTP 429** on parallel generation calls; retry sequentially.
 
+## Interactive delegation — `grok agent stdio` (ACP)
+
+`-p` is fire-and-forget. For a back-channel, Grok also speaks **ACP** (Agent Client
+Protocol) — JSON-RPC 2.0, newline-delimited, over stdio or WebSocket:
+
+```bash
+grok agent --always-approve stdio                                  # local
+grok agent --always-approve serve --bind 127.0.0.1:2419 --secret X # WebSocket
+```
+
+**Verified handshake** (probed against 0.2.102, not merely read from docs):
+
+1. `initialize` -> `{"protocolVersion":1}`
+2. `session/new` `{cwd, mcpServers:[], _meta:{yoloMode:true}}` -> `sessionId`
+3. `session/prompt` `{sessionId, prompt:[{type:"text",text:"..."}]}` -> `{stopReason:"end_turn"}`
+4. Agent pushes `session/update` notifications throughout.
+
+A trivial one-tool prompt produced **104** `session/update` notifications. Observed
+`sessionUpdate` kinds:
+
+| Kind | Why it matters |
+|------|----------------|
+| `tool_call`, `tool_call_update`, `tool_call_delta_chunk` | **what `-p` cannot give you** — live tool name, status, result |
+| `agent_thought_chunk`, `agent_message_chunk` | reasoning + response text |
+| `pending_interaction`, `interaction_resolved` | the **permission back-channel** |
+| `turn_completed`, `response_completed`, `session_summary_generated` | turn lifecycle |
+| `available_commands_update`, `model_changed`, `session_info_update` | session state |
+
+Side-channel notifications arrive as `_x.ai/*` methods (`_x.ai/session_notification`,
+`_x.ai/queue/changed`, `_x.ai/models/update`, ...). **Note:** the docs spell these
+`x.ai/*`; the wire uses a leading underscore. Discover from `initialize`, don't hardcode.
+
+### Why this can beat the driver loop
+
+Continuation is **another `session/prompt` on the same session** — no new process, no
+`-c`, no context reload. The single-turn stop (Gotcha 1) stops being a process-lifecycle
+problem and becomes an ordinary "send the next prompt" decision, made by *your* code
+with full visibility into what the last turn actually did.
+
+**Choose:**
+
+| Want | Use |
+|------|-----|
+| One batch job, minimal client code | `-p` + driver loop + `streaming-json` |
+| Live tool visibility, permission prompts, mid-run steering | `agent stdio` (ACP) |
+| Remote / multi-client | `agent serve` (WebSocket + `--secret`) |
+
+Official ACP SDKs exist for TypeScript, Rust, Python, Go and Kotlin, and Zed / Neovim /
+Emacs are working clients — prefer one over hand-rolling. `EXAMPLES.md` carries a
+~40-line Python client that completes the handshake above.
+
+
 ## The brief
 
 Grok starts **cold** — it cannot see the delegating conversation. Write a
@@ -225,6 +279,7 @@ paper over it with flag variations.
 | Treat `grok -p` exit 0 as success | Check artifacts; read `stopReason` |
 | Run with default `plain` output and guess at progress | `--output-format streaming-json` + watch the filesystem |
 | Raise `--max-turns` to stop early exits | Driver loop with `grok -c` |
+| Assume batch (`-p`) is the only mode | `grok agent stdio` (ACP) for tool visibility + steering |
 | Let Grok scaffold and `pnpm install` in-sandbox | Pre-build the environment outside it |
 | `--sandbox devbox` / no sandbox to dodge write errors | `workspace` + redirect caches to `/tmp` |
 | `image_gen` a UI mockup or anything with real copy | Build it in code |

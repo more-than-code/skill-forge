@@ -185,15 +185,15 @@
     },
     "inventory/skills/grok-build-harness": {
       "name": "grok-build-harness",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/grok-build-harness",
-      "integrity": "sha256-d/l6Eo8PIvYaVw+nlB3KjNBh4s8XF+GmCRIB3CaHN54=",
+      "integrity": "sha256-mqnXtoKeB3DKWUzRpGErLlzMOkvXpWHqKYumJ1+CTJU=",
       "files": {
-        "EXAMPLES.md": "sha256-3cY68m58FmwQRzaVDxvlcxcbiHpAgzgHv6YKQkeqpx0=",
-        "SKILL.md": "sha256-XiTxVinC8BmI8BWL4wf69xyuGr1kx5GDfq/lXuFD9L8="
+        "EXAMPLES.md": "sha256-iEv5umY8moBgQ586wo0zv6Had0EhFRB13gKwF2ZP3zk=",
+        "SKILL.md": "sha256-3Zc9zl1lZZ01OuRUgHT61411mz5K+8SnwpOikVZWEXY="
       }
     },
     "inventory/skills/llm-integration": {

@@ -195,6 +195,20 @@ grok agent --always-approve stdio                                  # local
 grok agent --always-approve serve --bind 127.0.0.1:2419 --secret X # WebSocket
 ```
 
+**Stamp a `serve` process as the worker when you start it:**
+
+```bash
+SKILL_FORGE_AGENT_ROLE=worker grok agent --always-approve serve --bind 127.0.0.1:2419 --secret X
+```
+
+A per-job spawn gets its role marker from the dispatcher (see `external-worker-delegation`), but a
+server starts once and serves every later session from that one environment. Launched from a shell
+that declares you the orchestrator, it inherits *orchestrator* and every job it runs is told to
+hand the work off — backwards. If the server exists to do delegated work, mark the whole server.
+
+One server splitting both roles across its sessions has no per-session signal to carry this; use
+separate servers, or `stdio`.
+
 **Verified handshake** (probed against 0.2.102, not merely read from docs):
 
 1. `initialize` -> `{"protocolVersion":1}`

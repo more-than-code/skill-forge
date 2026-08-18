@@ -161,6 +161,61 @@ test('stats hook script appends metadata-only JSONL records', async () => {
   assert.doesNotMatch(line, /SECRET/);
 });
 
+test('delegation-mode hook speaks only for active external-worker tasks', async () => {
+  const hook = path.join(REPO_ROOT, 'inventory', 'hooks', 'claude-code', 'delegation-mode.mjs');
+  const project = await tempDir('skf-delegation-');
+  await fs.mkdir(path.join(project, 'tasks'), { recursive: true });
+
+  const fire = async (payload, env) => {
+    const child = run('node', [hook], env ? { env: { ...process.env, ...env } } : undefined);
+    child.child.stdin.end(payload);
+    return (await child).stdout;
+  };
+  const writeTodo = (body) => fs.writeFile(path.join(project, 'tasks', 'todo.md'), body);
+  const payload = JSON.stringify({
+    hook_event_name: 'UserPromptSubmit',
+    cwd: project,
+    prompt: 'SECRET PROMPT CONTENT MUST NOT BE ECHOED'
+  });
+
+  const asOrchestrator = { SKILL_FORGE_AGENT_ROLE: 'orchestrator' };
+
+  // Missing task file, and the in-harness default, must both stay silent: this
+  // runs on every prompt in every workspace.
+  assert.equal(await fire(payload, asOrchestrator), '');
+  await writeTodo('## Refactor cache\n**Tier:** 2  **Status:** in-progress  **Delegation:** in-harness  **Date:** 2026-08-18\n');
+  assert.equal(await fire(payload, asOrchestrator), '');
+
+  // A completed external-worker task is not active; the in-progress one is.
+  await writeTodo(
+    '## Refactor cache\n**Tier:** 2  **Status:** complete  **Delegation:** external-worker  **Date:** 2026-08-18\n' +
+    '## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n'
+  );
+  const out = await fire(payload, asOrchestrator);
+  assert.match(out, /Port billing screens/);
+  assert.doesNotMatch(out, /Refactor cache/);
+  assert.doesNotMatch(out, /SECRET/);
+  assert.equal(out.trim().split('\n').length, 1);
+
+  // Task blocks predating the Delegation field must not trigger it.
+  await writeTodo('## Old task\n**Tier:** 2  **Status:** in-progress  **Date:** 2026-08-18\n');
+  assert.equal(await fire(payload, asOrchestrator), '');
+
+  // Role comes from the spawn, never from the directory. Silence is the default so a
+  // missing marker costs a reminder instead of telling a worker to delegate onward.
+  await writeTodo('## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n');
+  assert.match(await fire(payload, asOrchestrator), /Port billing screens/);
+  assert.equal(await fire(payload, { SKILL_FORGE_AGENT_ROLE: 'worker' }), '');
+  assert.equal(await fire(payload, { SKILL_FORGE_AGENT_ROLE: '' }), '');
+  // A stray brief in the tree changes nothing either way: role is not inferred.
+  await fs.writeFile(path.join(project, 'BRIEF.md'), '# Brief\n');
+  assert.match(await fire(payload, asOrchestrator), /Port billing screens/);
+  await fs.rm(path.join(project, 'BRIEF.md'));
+
+  // A malformed payload must never fail the turn.
+  assert.equal(await fire('not json', asOrchestrator), '');
+});
+
 test('stats record subcommand appends a record from stdin', async () => {
   const home = await tempDir('skf-stats-cli-');
   const payload = JSON.stringify({ tool: 'codex', event: 'subagent_stop', cwd: '/tmp/other-project', agent_type: 'researcher' });

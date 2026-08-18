@@ -202,6 +202,7 @@ Include in the spec when the change involves these concerns. Activate the releva
 | Container runtime usage | Docker, Podman, Compose, local service dependencies, image builds, logs, ports, or Docker-like commands | `podman-utilization` | Implementation / Review |
 | UI portability baseline | Any frontend/UI implementation or review where full design-system governance is not required | `ui-portability-baseline` | Implementation / Review |
 | Frontend / UI architecture | Component design, state management, layout, editor integration, real-time UI, accessibility architecture | `frontend-engineering` | Exploration |
+| Cost-asymmetric delegation | An external agent is materially cheaper or faster and the primary's budget is binding | `external-worker-delegation` | Exploration |
 ### Spec is the source of truth
 Implementation is measured against the spec. Verification confirms acceptance criteria. Review checks conformance. Wrong spec → fix spec first, then code.
 
@@ -327,6 +328,9 @@ Every delegated prompt must be self-contained: the subagent does not see this co
 | Implementation | — | Optional (3+ files) | Recommended |
 | Review | — | Optional | Recommended (per lens) |
 
+This table assumes an in-harness executor. When an external worker is engaged instead, see
+**Orchestrator–worker delegation** below — it overrides the whole table.
+
 ### Exploration delegation (most important use)
 
 Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execute these checks directly:
@@ -382,6 +386,14 @@ Rules:
   normal failure mode. Completion is measured on disk.
 - **Track both budgets.** Worker cost and primary tokens. The figure that matters is primary
   tokens per accepted artifact.
+- **No recursion.** An agent executing a brief *is* the worker for that brief and does not itself
+  engage an external worker. Because these instructions are shared, a worker reads this section
+  too and cannot tell from it which end of the delegation it is on — the brief settles that, so
+  the brief must state the role, and the spawn must mark it (`SKILL_FORGE_AGENT_ROLE`) so tooling
+  can tell the two apart without guessing.
+
+Engaging a worker is an explicit user decision; record it as `**Delegation:** external-worker`
+in the task block (§13) so it survives context compaction.
 
 Method, per-phase brief structure, and the acceptance ladder: activate
 `external-worker-delegation`. Process mechanics belong to the worker CLI's own transport skill.
@@ -501,7 +513,7 @@ Hard rules (always apply):
 - `tasks/todo.md` — active task queue for specs, plans, and completion state while work is still in flight. One section per active task:
   ```
   ## [Task Title]
-  **Tier:** [1/2/3]  **Status:** [planned | in-progress | blocked | complete]  **Date:** YYYY-MM-DD
+  **Tier:** [1/2/3]  **Status:** [planned | in-progress | blocked | complete]  **Delegation:** [in-harness | external-worker]  **Date:** YYYY-MM-DD
   ### Spec
   - Goal: [one sentence]
   - Changes: [files/modules]
@@ -522,6 +534,13 @@ Archival rule:
 - Record Tier 3 approvals, gate waivers, and blocked-state history in the task block before archiving so the archive remains self-contained.
 
 Tier 2/3: track progress in `todo.md` until archived.
+
+**Delegation** records which executor the task runs on (§7). It defaults to `in-harness`;
+set `external-worker` only on an explicit user decision, and note the decision in the task
+block. The field is task-scoped on purpose — engaging an external worker authorizes spend
+against a separate budget, and that authorization expires when the task archives rather than
+persisting across the workspace. Re-read the active task block when resuming work: the
+conversation that set the mode does not survive context compaction, but the file does.
 
 ---
 

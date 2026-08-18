@@ -70,6 +70,39 @@ Pre-build the environment before dispatch (dependencies installed, toolchains ve
 sandboxes commonly cannot write to package caches, and a worker that burns its run fighting a
 scaffolder produces nothing. The transport skill covers the specifics.
 
+## Dispatch with the wrapper
+
+Both ends run the same shared instructions, including this pattern's own description, so a worker
+cannot tell from them which end of the delegation it is on. Role is a fact about how the process
+was started — it travels as `SKILL_FORGE_AGENT_ROLE`. Anything that infers it from the directory (a
+brief lying around, a branch name) guesses, and guesses wrong in both directions.
+
+Do not set that variable by hand. A flag you must remember is a flag you will forget — use the
+`dispatch.sh` companion, which makes the whole handoff one command:
+
+```bash
+./dispatch.sh <task-slug> -- <worker-cli> [args...]
+```
+
+First run creates the worktree and stops so you can write the brief. Second run refuses to dispatch
+unless `BRIEF.md` exists and has a `Role` section, then execs the worker with its role set and the
+worktree as cwd. It also refuses to run from inside a linked worktree, which would nest one
+delegation inside another.
+
+**Declare the orchestrator side once**, on the machine you drive from:
+
+```bash
+skf home env --install
+```
+
+That writes a managed block into your shell rc (zsh/bash/fish detected, idempotent, replaceable).
+Plain `skf home env` prints the line instead, for `eval` or a profile you manage yourself.
+
+Tooling reads both values — the `delegation-mode` hook speaks only to a declared orchestrator. The
+default is silence, so a forgotten variable costs a reminder rather than telling a worker to
+delegate onward. The brief's `Role` section stays the guarantee; the variable makes it
+machine-readable, and the wrapper makes it hard to omit.
+
 ## Briefs, per phase
 
 Every brief is a **file in the working directory**, never a prompt argument. The worker starts
@@ -77,13 +110,17 @@ cold: no shared conversation, no prior turns. Reference nothing it cannot read.
 
 Universal sections:
 
-1. **Facts** — what the system actually is.
-2. **Decisions already made** — a table, marked do-not-relitigate.
-3. **Environment** — what is pre-installed, what it must not run or re-scaffold.
-4. **Deliverables** — concrete and checkable.
-5. **Honesty constraints** — what it must not invent. Agents fill gaps with plausible fabrication
+1. **Role** — *you are the worker for this brief; execute it, do not delegate onward; the
+   orchestrator reviews everything you produce.* First section, always. The worker is running the
+   same shared instructions the orchestrator is, including the section describing this pattern,
+   and nothing in them reveals which end of the delegation it is on. Only the brief can.
+2. **Facts** — what the system actually is.
+3. **Decisions already made** — a table, marked do-not-relitigate.
+4. **Environment** — what is pre-installed, what it must not run or re-scaffold.
+5. **Deliverables** — concrete and checkable.
+6. **Honesty constraints** — what it must not invent. Agents fill gaps with plausible fabrication
    unless forbidden.
-6. **`NOTES.md` requirement** — decisions made, departures and why, what it could not verify, what
+7. **`NOTES.md` requirement** — decisions made, departures and why, what it could not verify, what
    a human must do next.
 
 What each phase adds, and what it must return:
@@ -148,6 +185,8 @@ artifacts on disk, never the worker's claim of completion.
 | Worker writes to the primary working tree | Dedicated worktree/branch the orchestrator merges |
 | Accept the worker's verification as §5 evidence | Re-run gates in the orchestrator's shell |
 | A brief that references prior conversation | Self-contained file in the working directory |
+| A brief that leaves the role implicit | State it first: the worker does not delegate onward |
+| Infer the worker's role from a file in the tree | Dispatch through `dispatch.sh`, which sets the role |
 | Thin brief, iterate to converge | Front-load the brief; iteration costs primary tokens |
 | Delegate architecture and ambiguous requirements | Keep judgment work; delegate production work |
 | Loop until the worker says it is done | Loop until artifacts exist and gates pass |

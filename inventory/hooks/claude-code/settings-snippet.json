@@ -1,5 +1,5 @@
 {
-  "_comment": "Merge the hooks block below into ~/.claude/settings.json (or a project's .claude/settings.json) to record agent-usage stats. PostToolUse on Task/Agent captures subagent type, model, and task description; SessionEnd marks session boundaries.",
+  "_comment": "Merge the hooks block below into ~/.claude/settings.json (or a project's .claude/settings.json). PostToolUse on Task/Agent captures subagent type, model, and task description; SessionEnd marks session boundaries; UserPromptSubmit re-states the active task's delegation mode from tasks/todo.md (silent unless it is external-worker).",
   "hooks": {
     "PostToolUse": [
       {
@@ -18,6 +18,16 @@
           {
             "type": "command",
             "command": "node ~/.claude/hooks/skill-forge/skill-forge-stats.mjs"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/skill-forge/delegation-mode.mjs"
           }
         ]
       }

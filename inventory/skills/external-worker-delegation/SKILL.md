@@ -63,8 +63,24 @@ git worktree add ../work-<task> -b worker/<task>
 ```
 
 Dispatch with that as cwd. The orchestrator reviews the branch and merges. This satisfies the
-verify-write-scope rule without needing to watch the worker, and makes rejection free — delete the
-branch.
+verify-write-scope rule without needing to watch the worker, and makes rejection free.
+
+**The orchestrator owns the worktree's whole life** — it created it, it removes it, whether the work
+was accepted or thrown away. Order matters and is easy to get wrong: git refuses to delete a branch
+while a worktree holds it, and deleting the directory alone leaves a stale `prunable` entry behind.
+`dispatch.sh <slug> --remove` does it correctly, refusing an unmerged branch unless you add
+`--force`.
+
+**`BRIEF.md` and `NOTES.md` live inside the worktree**, so a worker's `git add -A` commits them to
+the branch and the merge carries them into your main branch. `dispatch.sh` excludes both on first
+use, via the repo's `info/exclude` — local, never committed, and it cannot affect a file the repo
+already tracks. Excluding `NOTES.md` from the merge is not discarding it: it is the handoff record,
+so lift anything durable out of it into the commit message or the task block before teardown.
+
+**Ignore `tasks/` in any repo that dispatches workers.** Untracked files do not travel with a branch
+checkout, so ignoring the directory keeps the orchestrator's ledger out of every worker's worktree
+and out of every merge, structurally rather than by discipline. The trade is real — an untracked
+ledger has no history and no audit trail for anyone else — so make it deliberately.
 
 Pre-build the environment before dispatch (dependencies installed, toolchains verified). Worker
 sandboxes commonly cannot write to package caches, and a worker that burns its run fighting a
@@ -103,6 +119,28 @@ default is silence, so a forgotten variable costs a reminder rather than telling
 delegate onward. The brief's `Role` section stays the guarantee; the variable makes it
 machine-readable, and the wrapper makes it hard to omit.
 
+## The worktree isolates files, not services
+
+A worktree bounds what the worker can *write*. It does nothing about what the worker *calls*. Two
+workers and an orchestrator will happily bind the same port, share one dev database, and overwrite
+each other's auth state.
+
+Pick per task, cheapest first:
+
+| Situation | Approach |
+|-----------|----------|
+| The work genuinely depends on the service | One instance per worker — compose project named for the slug, ports derived from it (`podman-utilization` covers the runtime) |
+| The service is incidental to the change | Fixtures or contract-level stubs for the worker's inner loop: deterministic, no shared state, no port contention |
+| Either way | The orchestrator runs the live integration gate once, in the main checkout, against the real service |
+
+That last row is the existing rule, not a new one: a worker's gate run is triage, and the §5.2
+evidence block is produced in the orchestrator's own shell. The worker verifies as far as its
+environment honestly allows and records in `NOTES.md` what it could not.
+
+This is what makes the brief's **Environment** section load-bearing. Name the services the worker
+may call and their addresses, say whether their state is shared with anyone else, list what it must
+never touch (no destructive operations on a shared database), and give it a port range of its own.
+
 ## Briefs, per phase
 
 Every brief is a **file in the working directory**, never a prompt argument. The worker starts
@@ -138,6 +176,13 @@ What each phase adds, and what it must return:
 
 One lens per session. A brief asking for "a review" returns a summary; a brief naming the lens and
 the severity scale returns findings the orchestrator can act on without re-reading the diff.
+
+**The worker keeps no task ledger.** The brief is already the spec — goal, deliverables, acceptance
+criteria — so a worker that re-derives it into `tasks/todo.md` creates a second source of truth on
+the far side of a boundary the orchestrator cannot see, and (with `tasks/` ignored) writes it where
+nothing will ever read it. It does not re-tier or re-plan. Durable state across a long run goes in
+`NOTES.md`, which is a deliverable the orchestrator actually reads. Tiering, approvals, gate
+waivers, and archival belong to the orchestrator's ledger; the worker is one entry in it.
 
 ## Independent review
 
@@ -190,6 +235,9 @@ artifacts on disk, never the worker's claim of completion.
 | A brief that references prior conversation | Self-contained file in the working directory |
 | A brief that leaves the role implicit | State it first: the worker does not delegate onward |
 | Infer the worker's role from a file in the tree | Dispatch through `dispatch.sh`, which sets the role |
+| Leave the worktree behind after review | `dispatch.sh <slug> --remove`, which orders the teardown |
+| Let the worker keep its own `tasks/todo.md` | The brief is the spec; durable state goes in `NOTES.md` |
+| Assume a worktree isolates the backend too | Per-worker instance, or fixtures plus the orchestrator's live gate |
 | Thin brief, iterate to converge | Front-load the brief; iteration costs primary tokens |
 | Delegate architecture and ambiguous requirements | Keep judgment work; delegate production work |
 | Loop until the worker says it is done | Loop until artifacts exist and gates pass |

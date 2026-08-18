@@ -146,15 +146,15 @@
     },
     "inventory/skills/external-worker-delegation": {
       "name": "external-worker-delegation",
-      "version": "0.4.2",
+      "version": "0.5.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/external-worker-delegation",
-      "integrity": "sha256-dkBw+y0ogGFdvP098L+MWNqzl+x6ImCn6/UTwmOMs20=",
+      "integrity": "sha256-YuudXtm7GlK6x0+HdGtM70xEqdw4eL5P/+MNM5bXSy8=",
       "files": {
-        "dispatch.sh": "sha256-Wmg5+nkALzr9wa/sPWS27DhQx4AbYQ6hj5OxV7504e8=",
-        "SKILL.md": "sha256-dndKtERGnHggRFFx8vM+w3nXQwtOTwuwlZ8rfVPKEWs="
+        "dispatch.sh": "sha256-KLSLCMJuZyBleZguyu2edFO+EXoJHM0zZ1tuLcOwM5Q=",
+        "SKILL.md": "sha256-XUXi/T3pIpRjB5dF8LlIIQg7y3HA2EW/zMA40ihnOjw="
       }
     },
     "inventory/skills/failure-analysis": {

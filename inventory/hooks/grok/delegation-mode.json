@@ -1,0 +1,15 @@
+{
+  "_comment": "Grok loads ~/.grok/hooks/*.json automatically. UserPromptSubmit re-states the active task's delegation mode from tasks/todo.md; silent unless a task block is marked external-worker.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.grok/hooks/delegation-mode.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

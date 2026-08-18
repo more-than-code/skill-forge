@@ -202,6 +202,7 @@ Include in the spec when the change involves these concerns. Activate the releva
 | Container runtime usage | Docker, Podman, Compose, local service dependencies, image builds, logs, ports, or Docker-like commands | `podman-utilization` | Implementation / Review |
 | UI portability baseline | Any frontend/UI implementation or review where full design-system governance is not required | `ui-portability-baseline` | Implementation / Review |
 | Frontend / UI architecture | Component design, state management, layout, editor integration, real-time UI, accessibility architecture | `frontend-engineering` | Exploration |
+| Cost-asymmetric delegation | An external agent is materially cheaper or faster and the primary's budget is binding | `external-worker-delegation` | Exploration |
 ### Spec is the source of truth
 Implementation is measured against the spec. Verification confirms acceptance criteria. Review checks conformance. Wrong spec → fix spec first, then code.
 
@@ -327,6 +328,9 @@ Every delegated prompt must be self-contained: the subagent does not see this co
 | Implementation | — | Optional (3+ files) | Recommended |
 | Review | — | Optional | Recommended (per lens) |
 
+This table assumes an in-harness executor. When an external worker is engaged instead, see
+**Orchestrator–worker delegation** below — it overrides the whole table.
+
 ### Exploration delegation (most important use)
 
 Use before writing Tier 2/3 specs. Spawn helpers when supported; otherwise execute these checks directly:
@@ -350,6 +354,49 @@ Split by layer/component only when the tool can keep edits isolated. Main thread
 
 ### Review delegation
 Use one helper per lens (§6) when supported. Prefer the maintained tool-specific `reviewer` subagent/custom agent for this work so every lens returns the same severity-tagged shape. Each review returns: findings, severity, locations, reasoning, suggested fix. Without helpers, run each lens sequentially in the main context and use the same output shape. Built-in review commands may supplement this process, but do not replace it unless they can guarantee the required per-lens output format.
+
+### Orchestrator–worker delegation (external worker)
+
+An **external worker** is a separate agent CLI or service, not an in-harness subagent: its own
+process, its own context, its own budget. Use one when it is materially cheaper or faster than
+the primary and the primary's own spend is a binding constraint. The primary becomes the
+**orchestrator** — it writes the brief, dispatches, and adjudicates what returns.
+
+**This is a mode switch, not a mix.** While an external worker is engaged, the phase table above
+routes to that worker: exploration, planning, implementation, validation, review. The
+orchestrator does not also spawn in-harness helpers for the same work — those bill against the
+budget the pattern exists to protect.
+
+Two responsibilities never move:
+
+- **Deterministic gates (§5)** — lint, build, test, artifact diffs — run in the orchestrator's own
+  shell. A worker's gate run is triage; the §5.2 evidence block is the orchestrator's.
+- **Acceptance** — the §6 lenses judge the returned work and the orchestrator is the reviewer of
+  record, even when a worker session performed the lens pass.
+
+Rules:
+
+- **The brief is a file** in the working directory, not a prompt argument. The worker starts cold;
+  the self-contained rule above applies with no exceptions.
+- **Isolate writes.** Give the worker a scratch worktree or branch that the orchestrator merges,
+  never the primary working tree — its intermediate steps are unobservable (§4 rule 10).
+- **Independent review.** A delegated lens pass runs in a *fresh* worker session given the diff and
+  the lens only. The session that authored the work cannot review it.
+- **Verify artifacts, not claims.** A worker that exits successfully having produced nothing is a
+  normal failure mode. Completion is measured on disk.
+- **Track both budgets.** Worker cost and primary tokens. The figure that matters is primary
+  tokens per accepted artifact.
+- **No recursion.** An agent executing a brief *is* the worker for that brief and does not itself
+  engage an external worker. Because these instructions are shared, a worker reads this section
+  too and cannot tell from it which end of the delegation it is on — the brief settles that, so
+  the brief must state the role, and the spawn must mark it (`SKILL_FORGE_AGENT_ROLE`) so tooling
+  can tell the two apart without guessing.
+
+Engaging a worker is an explicit user decision; record it as `**Delegation:** external-worker`
+in the task block (§13) so it survives context compaction.
+
+Method, per-phase brief structure, and the acceptance ladder: activate
+`external-worker-delegation`. Process mechanics belong to the worker CLI's own transport skill.
 
 ---
 
@@ -466,7 +513,7 @@ Hard rules (always apply):
 - `tasks/todo.md` — active task queue for specs, plans, and completion state while work is still in flight. One section per active task:
   ```
   ## [Task Title]
-  **Tier:** [1/2/3]  **Status:** [planned | in-progress | blocked | complete]  **Date:** YYYY-MM-DD
+  **Tier:** [1/2/3]  **Status:** [planned | in-progress | blocked | complete]  **Delegation:** [in-harness | external-worker]  **Date:** YYYY-MM-DD
   ### Spec
   - Goal: [one sentence]
   - Changes: [files/modules]
@@ -487,6 +534,13 @@ Archival rule:
 - Record Tier 3 approvals, gate waivers, and blocked-state history in the task block before archiving so the archive remains self-contained.
 
 Tier 2/3: track progress in `todo.md` until archived.
+
+**Delegation** records which executor the task runs on (§7). It defaults to `in-harness`;
+set `external-worker` only on an explicit user decision, and note the decision in the task
+block. The field is task-scoped on purpose — engaging an external worker authorizes spend
+against a separate budget, and that authorization expires when the task archives rather than
+persisting across the workspace. Re-read the active task block when resuming work: the
+conversation that set the mode does not survive context compaction, but the file does.
 
 ---
 

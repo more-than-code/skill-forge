@@ -161,6 +161,82 @@ test('stats hook script appends metadata-only JSONL records', async () => {
   assert.doesNotMatch(line, /SECRET/);
 });
 
+test('delegation-mode hook speaks only for active external-worker tasks', async () => {
+  const hook = path.join(REPO_ROOT, 'inventory', 'hooks', 'claude-code', 'delegation-mode.mjs');
+  const project = await tempDir('skf-delegation-');
+  await fs.mkdir(path.join(project, 'tasks'), { recursive: true });
+
+  const fire = async (payload, env) => {
+    const child = run('node', [hook], env ? { env: { ...process.env, ...env } } : undefined);
+    child.child.stdin.end(payload);
+    return (await child).stdout;
+  };
+  const writeTodo = (body) => fs.writeFile(path.join(project, 'tasks', 'todo.md'), body);
+  const payload = JSON.stringify({
+    hook_event_name: 'UserPromptSubmit',
+    cwd: project,
+    prompt: 'SECRET PROMPT CONTENT MUST NOT BE ECHOED'
+  });
+
+  const asOrchestrator = { SKILL_FORGE_AGENT_ROLE: 'orchestrator' };
+
+  // Missing task file, and the in-harness default, must both stay silent: this
+  // runs on every prompt in every workspace.
+  assert.equal(await fire(payload, asOrchestrator), '');
+  await writeTodo('## Refactor cache\n**Tier:** 2  **Status:** in-progress  **Delegation:** in-harness  **Date:** 2026-08-18\n');
+  assert.equal(await fire(payload, asOrchestrator), '');
+
+  // A completed external-worker task is not active; the in-progress one is.
+  await writeTodo(
+    '## Refactor cache\n**Tier:** 2  **Status:** complete  **Delegation:** external-worker  **Date:** 2026-08-18\n' +
+    '## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n'
+  );
+  const out = await fire(payload, asOrchestrator);
+  assert.match(out, /Port billing screens/);
+  assert.doesNotMatch(out, /Refactor cache/);
+  assert.doesNotMatch(out, /SECRET/);
+  assert.equal(out.trim().split('\n').length, 1);
+
+  // Task blocks predating the Delegation field must not trigger it.
+  await writeTodo('## Old task\n**Tier:** 2  **Status:** in-progress  **Date:** 2026-08-18\n');
+  assert.equal(await fire(payload, asOrchestrator), '');
+
+  // Role comes from the spawn, never from the directory. Silence is the default so a
+  // missing marker costs a reminder instead of telling a worker to delegate onward.
+  await writeTodo('## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n');
+  assert.match(await fire(payload, asOrchestrator), /Port billing screens/);
+  assert.equal(await fire(payload, { SKILL_FORGE_AGENT_ROLE: 'worker' }), '');
+  assert.equal(await fire(payload, { SKILL_FORGE_AGENT_ROLE: '' }), '');
+  // A stray brief in the tree changes nothing either way: role is not inferred.
+  await fs.writeFile(path.join(project, 'BRIEF.md'), '# Brief\n');
+  assert.match(await fire(payload, asOrchestrator), /Port billing screens/);
+  await fs.rm(path.join(project, 'BRIEF.md'));
+
+  // A malformed payload must never fail the turn.
+  assert.equal(await fire('not json', asOrchestrator), '');
+
+  // A worker inherits `orchestrator` from the dispatching shell unless something
+  // overrides it. Inside a linked worktree that claim is a contradiction, so the
+  // hook suppresses rather than tell a worker to delegate onward. Suppression-only:
+  // it can never promote a worker into an orchestrator.
+  const repo = await tempDir('skf-delegation-wt-');
+  const linked = path.join(repo, 'linked');
+  await fs.mkdir(path.join(repo, 'main', 'tasks'), { recursive: true });
+  const main = path.join(repo, 'main');
+  const todoBody = '## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n';
+  await fs.writeFile(path.join(main, 'tasks', 'todo.md'), todoBody);
+  await run('git', ['init', '-q'], { cwd: main });
+  await run('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: main });
+  await run('git', ['add', '-A'], { cwd: main });
+  await run('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'todo'], { cwd: main });
+  await run('git', ['worktree', 'add', '-q', linked, '-b', 'worker/demo'], { cwd: main });
+
+  const atMain = JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd: main });
+  const atLinked = JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd: linked });
+  assert.match(await fire(atMain, asOrchestrator), /Port billing screens/);
+  assert.equal(await fire(atLinked, asOrchestrator), '');
+});
+
 test('stats record subcommand appends a record from stdin', async () => {
   const home = await tempDir('skf-stats-cli-');
   const payload = JSON.stringify({ tool: 'codex', event: 'subagent_stop', cwd: '/tmp/other-project', agent_type: 'researcher' });
@@ -834,6 +910,60 @@ test('noun-verb namespaces install and diff; legacy spellings warn', async () =>
   const { stdout: addOut } = await fx.run(['add', 'demo-skill', '--dir', addDir, '--yes']);
   assert.match(addOut, /"add" is deprecated/);
   assert.match(addOut, /skills are project-scoped/);
+});
+
+// Bounded: on a regression these invocations block on an inquirer prompt rather
+// than exiting, so the test must fail on time rather than hang the suite.
+test('install is non-interactive under --yes and refuses to prompt on closed stdin', { timeout: 30_000 }, async () => {
+  const dir = await tempDir('skf-noninteractive-');
+  const target = path.join(dir, 'AGENTS.md');
+
+  // --yes supplies the artifact selection; --path is still explicit here.
+  await run('node', [CLI, 'agent', 'install', '--target', 'codex', '--path', target, '--yes'], { cwd: REPO_ROOT });
+  assert.match(await fs.readFile(target, 'utf8'), /Delegation Strategy/);
+
+  // Every prompt the install flow can reach fails with an actionable message
+  // rather than an inquirer ERR_USE_AFTER_CLOSE stack.
+  await assert.rejects(
+    run('node', [CLI, 'agent', 'install'], { cwd: REPO_ROOT }),
+    (error) => /needs a terminal; pass --target <tool>/.test(error.stdout + error.stderr)
+  );
+  await assert.rejects(
+    run('node', [CLI, 'install', '--type', 'skill', '--target', 'codex', '--yes'], { cwd: REPO_ROOT }),
+    (error) => /needs a terminal; pass --path <path>/.test(error.stdout + error.stderr)
+  );
+});
+
+test('home env prints the role line and installs an idempotent, replaceable rc block', async () => {
+  const dir = await tempDir('skf-homeenv-');
+  const rc = path.join(dir, 'rc');
+  const env = ['home', 'env'];
+
+  // Print mode is side-effect free and eval-able.
+  const { stdout: printed } = await run('node', [CLI, ...env], { cwd: REPO_ROOT });
+  assert.equal(printed.trim(), 'export SKILL_FORGE_AGENT_ROLE=orchestrator');
+  assert.equal(await fs.access(rc).then(() => true, () => false), false);
+
+  const { stdout: fishOut } = await run('node', [CLI, ...env, '--shell', 'fish'], { cwd: REPO_ROOT });
+  assert.equal(fishOut.trim(), 'set -gx SKILL_FORGE_AGENT_ROLE orchestrator');
+
+  await assert.rejects(run('node', [CLI, ...env, '--role', 'nope'], { cwd: REPO_ROOT }));
+
+  // Existing rc content is preserved, and re-installing must not stack blocks.
+  await fs.writeFile(rc, 'export FOO=1\n');
+  await run('node', [CLI, ...env, '--install', '--rc', rc], { cwd: REPO_ROOT });
+  await run('node', [CLI, ...env, '--install', '--rc', rc], { cwd: REPO_ROOT });
+  let body = await fs.readFile(rc, 'utf8');
+  assert.match(body, /export FOO=1/);
+  assert.equal(body.match(/# >>> skill-forge >>>/g).length, 1);
+  assert.match(body, /export SKILL_FORGE_AGENT_ROLE=orchestrator/);
+
+  // Changing the role rewrites the managed block in place.
+  await run('node', [CLI, ...env, '--install', '--rc', rc, '--role', 'worker'], { cwd: REPO_ROOT });
+  body = await fs.readFile(rc, 'utf8');
+  assert.equal(body.match(/# >>> skill-forge >>>/g).length, 1);
+  assert.match(body, /export SKILL_FORGE_AGENT_ROLE=worker/);
+  assert.doesNotMatch(body, /ROLE=orchestrator/);
 });
 
 test('home namespace seeds skill-forge-project and syncs the $HOME profile from any cwd', async () => {

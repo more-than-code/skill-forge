@@ -149,3 +149,73 @@ rasters (`ffmpeg -encoders | grep webp`), and fall back to PNG/JPEG or `sips`.
 | Chromium SIGSEGV | sandbox + keychain/crashpad | native renderer fallback |
 | Build segfault only under agent | inherited env | `env -i HOME=… PATH=… <build>` |
 | HTTP 429 during generation | parallel Imagine calls | retry sequentially |
+
+## 8. Minimal ACP client (`grok agent stdio`)
+
+Verified against grok 0.2.102. Completes initialize → session/new → session/prompt and
+prints every `tool_call` as it happens — the visibility `-p` cannot provide.
+
+```python
+import json, subprocess, threading, time, collections
+
+CWD = "/path/to/work"
+proc = subprocess.Popen(["grok", "agent", "--always-approve", "stdio"], cwd=CWD,
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+
+results, updates, lock = {}, [], threading.Lock()
+
+def reader():
+    for line in proc.stdout:
+        line = line.strip()
+        if not line: continue
+        try: m = json.loads(line)
+        except ValueError: continue
+        with lock:
+            if "id" in m and ("result" in m or "error" in m): results[m["id"]] = m
+            elif m.get("method"): updates.append(m)
+threading.Thread(target=reader, daemon=True).start()
+
+def send(i, method, params):
+    proc.stdin.write(json.dumps(
+        {"jsonrpc": "2.0", "id": i, "method": method, "params": params}) + "\n")
+    proc.stdin.flush()
+
+def wait(i, secs=300):
+    t0 = time.time()
+    while time.time() - t0 < secs:
+        with lock:
+            if i in results: return results[i]
+        time.sleep(0.1)
+
+send(1, "initialize", {"protocolVersion": 1,
+     "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}}})
+wait(1)
+
+send(2, "session/new", {"cwd": CWD, "mcpServers": [], "_meta": {"yoloMode": True}})
+sid = wait(2)["result"]["sessionId"]
+
+send(3, "session/prompt", {"sessionId": sid,
+     "prompt": [{"type": "text", "text": "Read BRIEF.md and begin executing it."}]})
+print("stopReason:", wait(3)["result"]["stopReason"])
+
+# Continue the SAME session — no new process, no `-c`
+send(4, "session/prompt", {"sessionId": sid,
+     "prompt": [{"type": "text", "text": "Continue until every deliverable exists."}]})
+wait(4)
+
+with lock:
+    kinds = collections.Counter(
+        (u.get("params", {}).get("update") or {}).get("sessionUpdate") for u in updates)
+print(dict(kinds))
+```
+
+Live tool feed — replace the counter with:
+
+```python
+u = upd.get("params", {}).get("update", {})
+if u.get("sessionUpdate") in ("tool_call", "tool_call_update"):
+    print("TOOL:", u.get("title"), u.get("status"))
+```
+
+Watch for `pending_interaction`: the agent is asking permission. Answer it instead of
+pre-approving everything with `yoloMode` when the run touches anything destructive.

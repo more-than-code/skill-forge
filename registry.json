@@ -329,7 +329,7 @@
     {
       "type": "skill",
       "name": "grok-build-harness",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "scope": "custom",
       "path": "inventory/skills/grok-build-harness",
       "installable": true,
@@ -387,6 +387,20 @@
         "triage",
         "human-in-the-loop",
         "harness"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "external-worker-delegation",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/external-worker-delegation",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/external-worker-delegation",
+      "tags": [
+        "delegation",
+        "process",
+        "cost"
       ]
     }
   ],

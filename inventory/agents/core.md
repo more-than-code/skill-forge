@@ -351,6 +351,41 @@ Split by layer/component only when the tool can keep edits isolated. Main thread
 ### Review delegation
 Use one helper per lens (§6) when supported. Prefer the maintained tool-specific `reviewer` subagent/custom agent for this work so every lens returns the same severity-tagged shape. Each review returns: findings, severity, locations, reasoning, suggested fix. Without helpers, run each lens sequentially in the main context and use the same output shape. Built-in review commands may supplement this process, but do not replace it unless they can guarantee the required per-lens output format.
 
+### Orchestrator–worker delegation (external worker)
+
+An **external worker** is a separate agent CLI or service, not an in-harness subagent: its own
+process, its own context, its own budget. Use one when it is materially cheaper or faster than
+the primary and the primary's own spend is a binding constraint. The primary becomes the
+**orchestrator** — it writes the brief, dispatches, and adjudicates what returns.
+
+**This is a mode switch, not a mix.** While an external worker is engaged, the phase table above
+routes to that worker: exploration, planning, implementation, validation, review. The
+orchestrator does not also spawn in-harness helpers for the same work — those bill against the
+budget the pattern exists to protect.
+
+Two responsibilities never move:
+
+- **Deterministic gates (§5)** — lint, build, test, artifact diffs — run in the orchestrator's own
+  shell. A worker's gate run is triage; the §5.2 evidence block is the orchestrator's.
+- **Acceptance** — the §6 lenses judge the returned work and the orchestrator is the reviewer of
+  record, even when a worker session performed the lens pass.
+
+Rules:
+
+- **The brief is a file** in the working directory, not a prompt argument. The worker starts cold;
+  the self-contained rule above applies with no exceptions.
+- **Isolate writes.** Give the worker a scratch worktree or branch that the orchestrator merges,
+  never the primary working tree — its intermediate steps are unobservable (§4 rule 10).
+- **Independent review.** A delegated lens pass runs in a *fresh* worker session given the diff and
+  the lens only. The session that authored the work cannot review it.
+- **Verify artifacts, not claims.** A worker that exits successfully having produced nothing is a
+  normal failure mode. Completion is measured on disk.
+- **Track both budgets.** Worker cost and primary tokens. The figure that matters is primary
+  tokens per accepted artifact.
+
+Method, per-phase brief structure, and the acceptance ladder: activate
+`external-worker-delegation`. Process mechanics belong to the worker CLI's own transport skill.
+
 ---
 
 ## 8) Autonomous Bug Fixing

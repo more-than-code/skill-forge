@@ -20,6 +20,10 @@ headless runs fail in specific, repeatable ways. This skill is that harness.
 **Hard rule:** a `grok` run that exits **0 having written nothing is the normal
 failure mode**, not a success. Verify artifacts, never the exit code.
 
+This skill is the **transport** layer: how to spawn, observe, and resume `grok`. For the
+surrounding method — when to hand a task to an external worker at all, how to brief it per
+phase, and how to accept what comes back — activate `external-worker-delegation`.
+
 ## Preflight (always)
 
 ```bash

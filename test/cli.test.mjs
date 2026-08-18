@@ -913,6 +913,38 @@ test('install is non-interactive under --yes and refuses to prompt on closed std
   );
 });
 
+test('home env prints the role line and installs an idempotent, replaceable rc block', async () => {
+  const dir = await tempDir('skf-homeenv-');
+  const rc = path.join(dir, 'rc');
+  const env = ['home', 'env'];
+
+  // Print mode is side-effect free and eval-able.
+  const { stdout: printed } = await run('node', [CLI, ...env], { cwd: REPO_ROOT });
+  assert.equal(printed.trim(), 'export SKILL_FORGE_AGENT_ROLE=orchestrator');
+  assert.equal(await fs.access(rc).then(() => true, () => false), false);
+
+  const { stdout: fishOut } = await run('node', [CLI, ...env, '--shell', 'fish'], { cwd: REPO_ROOT });
+  assert.equal(fishOut.trim(), 'set -gx SKILL_FORGE_AGENT_ROLE orchestrator');
+
+  await assert.rejects(run('node', [CLI, ...env, '--role', 'nope'], { cwd: REPO_ROOT }));
+
+  // Existing rc content is preserved, and re-installing must not stack blocks.
+  await fs.writeFile(rc, 'export FOO=1\n');
+  await run('node', [CLI, ...env, '--install', '--rc', rc], { cwd: REPO_ROOT });
+  await run('node', [CLI, ...env, '--install', '--rc', rc], { cwd: REPO_ROOT });
+  let body = await fs.readFile(rc, 'utf8');
+  assert.match(body, /export FOO=1/);
+  assert.equal(body.match(/# >>> skill-forge >>>/g).length, 1);
+  assert.match(body, /export SKILL_FORGE_AGENT_ROLE=orchestrator/);
+
+  // Changing the role rewrites the managed block in place.
+  await run('node', [CLI, ...env, '--install', '--rc', rc, '--role', 'worker'], { cwd: REPO_ROOT });
+  body = await fs.readFile(rc, 'utf8');
+  assert.equal(body.match(/# >>> skill-forge >>>/g).length, 1);
+  assert.match(body, /export SKILL_FORGE_AGENT_ROLE=worker/);
+  assert.doesNotMatch(body, /ROLE=orchestrator/);
+});
+
 test('home namespace seeds skill-forge-project and syncs the $HOME profile from any cwd', async () => {
   const fx = await skillForgeFixture();
   await fx.runWithStdin(

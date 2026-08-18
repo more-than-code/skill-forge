@@ -85,6 +85,13 @@ New-machine bootstrap after install:
 skf home init && skf home sync
 ```
 
+Declare the machine's agent role, so delegation tooling can tell an orchestrator from a worker
+(writes a managed, idempotent block to your shell rc; omit `--install` to print the line instead):
+
+```bash
+skf home env --install
+```
+
 ## Common Commands
 
 List installable skills:

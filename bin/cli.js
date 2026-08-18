@@ -1598,6 +1598,9 @@ async function runProjectInit(projectRoot, options, { namespace, seedSkills = []
   if (seedSkills.length > 0) {
     console.log(chalk.gray(`Seeded: ${Object.entries(dependencies).map(([name, range]) => `${name} ${range}`).join(', ')}.`));
     console.log(chalk.gray(`Next: "${CLI_NAME} ${namespace} sync"; "${CLI_NAME} ${namespace} add <skills...>" for more.`));
+    if (namespace === 'home') {
+      console.log(chalk.gray(`Also: "${CLI_NAME} home env --install" declares this machine's agent role for delegation tooling.`));
+    }
   } else {
     console.log(chalk.gray(`Next: "${CLI_NAME} ${namespace} add <skills...>" then "${CLI_NAME} ${namespace === 'project' ? 'sync' : `${namespace} sync`}".`));
   }
@@ -1879,6 +1882,90 @@ homeCommand
       await runSyncCommand(os.homedir(), options);
     } catch (error) {
       console.error(chalk.red('Error syncing home profile:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
+// --- Shell environment ($HOME profile) ---
+
+const SHELL_ENV_ROLES = ['orchestrator', 'worker'];
+const SHELL_ENV_START = '# >>> skill-forge >>>';
+const SHELL_ENV_END = '# <<< skill-forge <<<';
+
+/** Shell family from $SHELL; unknown shells fall back to POSIX export syntax. */
+function detectShell(provided) {
+  const name = provided || path.basename(process.env.SHELL || '');
+  if (name.includes('fish')) return 'fish';
+  if (name.includes('zsh')) return 'zsh';
+  return 'bash';
+}
+
+function shellRcPath(shell) {
+  const home = os.homedir();
+  if (shell === 'fish') return path.join(home, '.config', 'fish', 'config.fish');
+  if (shell === 'zsh') return path.join(home, '.zshrc');
+  // macOS Terminal starts login shells, which read .bash_profile rather than .bashrc.
+  return path.join(home, process.platform === 'darwin' ? '.bash_profile' : '.bashrc');
+}
+
+function shellEnvLine(shell, role) {
+  return shell === 'fish'
+    ? `set -gx SKILL_FORGE_AGENT_ROLE ${role}`
+    : `export SKILL_FORGE_AGENT_ROLE=${role}`;
+}
+
+/** Replace the managed block if present, otherwise append one. Idempotent. */
+function withShellEnvBlock(existing, body) {
+  const managed = `${SHELL_ENV_START}\n${body}\n${SHELL_ENV_END}`;
+  const start = existing.indexOf(SHELL_ENV_START);
+  const end = existing.indexOf(SHELL_ENV_END);
+  if (start !== -1 && end > start) {
+    return existing.slice(0, start) + managed + existing.slice(end + SHELL_ENV_END.length);
+  }
+  const prefix = existing.length === 0 || existing.endsWith('\n') ? existing : `${existing}\n`;
+  return `${prefix}${prefix.length > 0 ? '\n' : ''}${managed}\n`;
+}
+
+async function runHomeEnv(options) {
+  const role = options.role || 'orchestrator';
+  if (!SHELL_ENV_ROLES.includes(role)) {
+    throw new Error(`Unknown role "${role}". Use one of: ${SHELL_ENV_ROLES.join(', ')}.`);
+  }
+  const shell = detectShell(options.shell);
+  const line = shellEnvLine(shell, role);
+
+  if (!options.install) {
+    // Printed alone so `eval "$(skf home env)"` works; no side effects.
+    console.log(line);
+    return;
+  }
+
+  const rcPath = options.rc || shellRcPath(shell);
+  await fs.ensureDir(path.dirname(rcPath));
+  const existing = await fs.pathExists(rcPath) ? await fs.readFile(rcPath, 'utf8') : '';
+  const updated = withShellEnvBlock(existing, line);
+  if (updated === existing) {
+    console.log(chalk.gray(`${rcPath} already up to date.`));
+    return;
+  }
+  await fs.writeFile(rcPath, updated);
+  console.log(chalk.green(`Wrote the skill-forge block to ${rcPath} (${shell}).`));
+  console.log(chalk.gray(`  ${line}`));
+  console.log(chalk.gray(`Open a new shell, or run: ${line}`));
+}
+
+homeCommand
+  .command('env')
+  .description('Print the shell line that declares this machine\'s agent role; --install writes it to your shell rc')
+  .option('--install', 'Write a managed block into the shell rc file instead of printing')
+  .option('--role <role>', `Role to declare: ${SHELL_ENV_ROLES.join(' | ')} (default: orchestrator)`)
+  .option('--shell <shell>', 'Override shell detection: zsh, bash, or fish')
+  .option('--rc <path>', 'Override the rc file path (implies --install target)')
+  .action(async (options) => {
+    try {
+      await runHomeEnv(options);
+    } catch (error) {
+      console.error(chalk.red('Error configuring shell environment:'), error.message);
       process.exitCode = 1;
     }
   });

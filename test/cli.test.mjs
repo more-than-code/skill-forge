@@ -836,6 +836,28 @@ test('noun-verb namespaces install and diff; legacy spellings warn', async () =>
   assert.match(addOut, /skills are project-scoped/);
 });
 
+// Bounded: on a regression these invocations block on an inquirer prompt rather
+// than exiting, so the test must fail on time rather than hang the suite.
+test('install is non-interactive under --yes and refuses to prompt on closed stdin', { timeout: 30_000 }, async () => {
+  const dir = await tempDir('skf-noninteractive-');
+  const target = path.join(dir, 'AGENTS.md');
+
+  // --yes supplies the artifact selection; --path is still explicit here.
+  await run('node', [CLI, 'agent', 'install', '--target', 'codex', '--path', target, '--yes'], { cwd: REPO_ROOT });
+  assert.match(await fs.readFile(target, 'utf8'), /Delegation Strategy/);
+
+  // Every prompt the install flow can reach fails with an actionable message
+  // rather than an inquirer ERR_USE_AFTER_CLOSE stack.
+  await assert.rejects(
+    run('node', [CLI, 'agent', 'install'], { cwd: REPO_ROOT }),
+    (error) => /needs a terminal; pass --target <tool>/.test(error.stdout + error.stderr)
+  );
+  await assert.rejects(
+    run('node', [CLI, 'install', '--type', 'skill', '--target', 'codex', '--yes'], { cwd: REPO_ROOT }),
+    (error) => /needs a terminal; pass --path <path>/.test(error.stdout + error.stderr)
+  );
+});
+
 test('home namespace seeds skill-forge-project and syncs the $HOME profile from any cwd', async () => {
   const fx = await skillForgeFixture();
   await fx.runWithStdin(

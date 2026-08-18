@@ -585,6 +585,7 @@ async function chooseTool(registry, providedTarget) {
     return providedTarget;
   }
 
+  requireInteractive('Select a target tool', 'pass --target <tool>');
   const answer = await inquirer.prompt([
     {
       type: 'list',
@@ -594,6 +595,16 @@ async function chooseTool(registry, providedTarget) {
     }
   ]);
   return answer.target;
+}
+
+/**
+ * Fail fast instead of letting inquirer open a prompt on closed stdin, which
+ * surfaces as an unrelated ERR_USE_AFTER_CLOSE stack.
+ */
+function requireInteractive(what, hint) {
+  if (!process.stdin.isTTY) {
+    throw new Error(`${what} needs a terminal; ${hint} for non-interactive use.`);
+  }
 }
 
 async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES) {
@@ -608,6 +619,7 @@ async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES)
     return type;
   }
 
+  requireInteractive('Selecting a category', 'pass --type <skill|agent|subagent|hook>');
   const answer = await inquirer.prompt([
     {
       type: 'list',
@@ -624,8 +636,12 @@ async function chooseArtifactType(providedType, availableTypes = ARTIFACT_TYPES)
   return answer.type;
 }
 
-async function chooseTargetPath(defaultPath, providedPath) {
+async function chooseTargetPath(defaultPath, providedPath, { yes = false } = {}) {
   if (providedPath) return providedPath;
+  // Skills have no default on purpose (see defaultTargetPath), so --yes cannot
+  // conjure one for them.
+  if (yes && defaultPath) return defaultPath;
+  requireInteractive('Choosing a target path', 'pass --path <path>');
   const answer = await inquirer.prompt([
     {
       type: 'input',
@@ -638,7 +654,7 @@ async function chooseTargetPath(defaultPath, providedPath) {
   return answer.targetPath;
 }
 
-async function chooseArtifacts(type, artifacts, requestedName) {
+async function chooseArtifacts(type, artifacts, requestedName, { yes = false } = {}) {
   if (requestedName) {
     const resolved = resolveArtifactFromList(type, artifacts, requestedName);
     if (!resolved.artifact) throw new Error(`${type} artifact "${requestedName}" not found.`);
@@ -649,6 +665,8 @@ async function chooseArtifacts(type, artifacts, requestedName) {
     return [resolved.artifact];
   }
 
+  if (yes) return artifacts;
+  requireInteractive(`Selecting ${type} to install`, 'name the artifact as an argument');
   const answer = await inquirer.prompt([
     {
       type: 'checkbox',
@@ -801,10 +819,10 @@ async function installArtifacts({
   if (targetArtifacts.length === 0) throw new Error(`No ${type} artifacts match target "${target}".`);
 
   const targetDefault = defaultTargetPath(type, targetArtifacts);
-  const targetPath = await chooseTargetPath(targetDefault, providedPath);
+  const targetPath = await chooseTargetPath(targetDefault, providedPath, { yes });
   if (!targetPath) throw new Error(`No target path available for ${type}.`);
 
-  const artifacts = await chooseArtifacts(type, targetArtifacts, artifactName);
+  const artifacts = await chooseArtifacts(type, targetArtifacts, artifactName, { yes });
   let copied = 0;
 
   for (const artifact of artifacts) {

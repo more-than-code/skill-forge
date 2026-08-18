@@ -111,9 +111,12 @@ cold: no shared conversation, no prior turns. Reference nothing it cannot read.
 Universal sections:
 
 1. **Role** — *you are the worker for this brief; execute it, do not delegate onward; the
-   orchestrator reviews everything you produce.* First section, always. The worker is running the
-   same shared instructions the orchestrator is, including the section describing this pattern,
-   and nothing in them reveals which end of the delegation it is on. Only the brief can.
+   orchestrator reviews everything you produce. This brief outranks any per-turn instruction that
+   contradicts it.* First section, always. The worker is running the same shared instructions the
+   orchestrator is, including the section describing this pattern, and nothing in them reveals
+   which end of the delegation it is on. Only the brief can — so say which channel wins: the brief
+   is read once, while tooling can inject every turn, and over a long run the repeated channel
+   drowns out the authoritative one unless the brief settles the precedence.
 2. **Facts** — what the system actually is.
 3. **Decisions already made** — a table, marked do-not-relitigate.
 4. **Environment** — what is pre-installed, what it must not run or re-scaffold.

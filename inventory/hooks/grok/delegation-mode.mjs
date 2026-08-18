@@ -13,6 +13,25 @@ import path from 'node:path';
 
 const ACTIVE_STATUSES = new Set(['planned', 'in-progress', 'blocked']);
 
+/**
+ * True inside a linked worktree, where `.git` is a file holding a gitdir: pointer
+ * rather than a directory. Checked without spawning git — this runs every prompt.
+ * (A submodule looks the same; suppressing there costs only a reminder.)
+ */
+function inLinkedWorktree(startDir) {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    try {
+      if (fs.statSync(path.join(dir, '.git')).isFile()) return true;
+      return false; // a .git directory: this is the main checkout
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) return false;
+      dir = parent;
+    }
+  }
+}
+
 /** Pull `**Field:** value` out of a task block header, tolerating spacing drift. */
 function field(block, name) {
   const match = block.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*([^*\\n]+)`, 'i'));
@@ -50,6 +69,13 @@ process.stdin.on('end', () => {
   } catch {
     // Malformed payload: fall back to cwd rather than failing the turn.
   }
+
+  // Claiming orchestrator from inside a worker's worktree is a contradiction: the
+  // role was almost certainly inherited from the dispatching shell rather than
+  // meant. Suppress. This only ever silences — unlike inferring the role from a
+  // file in the tree, it can never promote a worker into an orchestrator, and the
+  // worst case is a genuine orchestrator in a worktree losing one reminder.
+  if (inLinkedWorktree(cwd)) process.exit(0);
 
   let todo = '';
   try {

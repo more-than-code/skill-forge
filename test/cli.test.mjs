@@ -214,6 +214,27 @@ test('delegation-mode hook speaks only for active external-worker tasks', async 
 
   // A malformed payload must never fail the turn.
   assert.equal(await fire('not json', asOrchestrator), '');
+
+  // A worker inherits `orchestrator` from the dispatching shell unless something
+  // overrides it. Inside a linked worktree that claim is a contradiction, so the
+  // hook suppresses rather than tell a worker to delegate onward. Suppression-only:
+  // it can never promote a worker into an orchestrator.
+  const repo = await tempDir('skf-delegation-wt-');
+  const linked = path.join(repo, 'linked');
+  await fs.mkdir(path.join(repo, 'main', 'tasks'), { recursive: true });
+  const main = path.join(repo, 'main');
+  const todoBody = '## Port billing screens\n**Tier:** 3  **Status:** in-progress  **Delegation:** external-worker  **Date:** 2026-08-18\n';
+  await fs.writeFile(path.join(main, 'tasks', 'todo.md'), todoBody);
+  await run('git', ['init', '-q'], { cwd: main });
+  await run('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: main });
+  await run('git', ['add', '-A'], { cwd: main });
+  await run('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'todo'], { cwd: main });
+  await run('git', ['worktree', 'add', '-q', linked, '-b', 'worker/demo'], { cwd: main });
+
+  const atMain = JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd: main });
+  const atLinked = JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd: linked });
+  assert.match(await fire(atMain, asOrchestrator), /Port billing screens/);
+  assert.equal(await fire(atLinked, asOrchestrator), '');
 });
 
 test('stats record subcommand appends a record from stdin', async () => {

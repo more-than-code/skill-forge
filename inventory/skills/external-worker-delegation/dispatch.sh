@@ -60,14 +60,17 @@ if [ "${1:-}" = "--remove" ]; then
     exit 65
   fi
 
-  # Last chance to lift the worker's cost: run.jsonl is the only place it exists and
-  # the next line deletes it. One `end` record per iteration; sum them. Printed rather
+  # Last chance to lift the worker's cost: the run logs are the only place it exists
+  # and the next line deletes them. One `end` record per iteration; sum them. Printed rather
   # than enforced — record it in the orchestrator's ledger (the main checkout's
   # tasks/), not in the commit message: it is operational bookkeeping, not history.
-  if [ -f "$tree/run.jsonl" ]; then
-    cost=$(grep -o '"total_cost_usd":[0-9.]*' "$tree/run.jsonl" |
-      awk -F: '{ sum += $2 } END { printf "%.4f", sum }')
-    iters=$(grep -c '"total_cost_usd":' "$tree/run.jsonl" || true)
+  if ls "$tree"/run*.jsonl >/dev/null 2>&1; then
+    # Every round, not just the first: a resumed run appends here, and a round driven
+    # into its own run2.jsonl would otherwise be torn down uncounted. `grep -h` because
+    # a filename prefix would land in awk's second field and silently sum to zero.
+    records=$(grep -ho '"total_cost_usd":[0-9.]*' "$tree"/run*.jsonl || true)
+    cost=$(printf '%s\n' "$records" | awk -F: '{ sum += $2 } END { printf "%.4f", sum }')
+    iters=$(printf '%s\n' "$records" | grep -c . || true)
     echo "Worker cost before teardown: \$$cost over $iters iteration(s) — record it in the main checkout's tasks/ ledger."
   fi
   [ -d "$tree" ] && git worktree remove --force "$tree"
@@ -97,10 +100,10 @@ fi
 {
   echo '# >>> skill-forge worker >>>'
   echo 'BRIEF.md'
-  echo 'NOTES.md'
+  echo 'NOTES*.md'
   echo 'tasks/'
-  echo 'run.jsonl'
-  echo 'driver.log'
+  echo 'run*.jsonl'
+  echo 'driver*.log'
   echo '# <<< skill-forge worker <<<'
 } >> "$exclude"
 

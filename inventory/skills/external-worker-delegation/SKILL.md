@@ -75,12 +75,22 @@ while a worktree holds it, and deleting the directory alone leaves a stale `prun
 the worktree**, so a worker's `git add -A` commits them to
 the branch and the merge carries them into your main branch. `dispatch.sh` excludes them all on first
 use, via the repo's `info/exclude` — local, never committed, and it cannot affect a file the repo
-already tracks. Excluding them from the merge is not discarding them: `NOTES.md` is the
+already tracks. The patterns are globs (`NOTES*.md`, `run*.jsonl`, `driver*.log`) so a suffixed
+round cannot slip past them; the cost of that reach is that a worker deliverable must not be
+named `NOTES*.md`. Excluding them from the merge is not discarding them: `NOTES.md` is the
 handoff record and `run.jsonl` holds the only copy of the worker's cost, so lift both before
 teardown. **Cost goes to the orchestrator's ledger in the main checkout (`tasks/`), not into the
 commit message** — it is operational bookkeeping about a run, not a fact about the code, and the
 task block is where the paired primary-token figure already lives. `--remove` prints the
 accumulated cost one last time as it tears the worktree down.
+
+**One task, one worktree, one `run.jsonl` — however many rounds.** `grok -c` and its equivalents
+resume per-cwd, so appending each iteration to the same log is what the transport already does, and
+it is what makes the teardown cost total correct. A round driven into its own `run2.jsonl` is a
+signal, not a mode: either it was the same task and should have appended, or it was a different task
+and should have been its own dispatch with its own slug, branch, and accept/reject decision.
+Teardown sums every `run*.jsonl` it finds so the stray case is counted rather than silently dropped,
+but the stray case still means something went sideways.
 
 `--remove` also refuses a worktree with uncommitted changes. A worker that produced everything and
 committed nothing leaves a branch with no commits, which passes the merge check trivially; without

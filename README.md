@@ -217,17 +217,19 @@ Versions are tracked in `registry.json`; skill frontmatter should not include a
 ### `skill` subcommand (agent-facing)
 
 `skf skill` wraps the same steps into single commands intended for programmatic
-(agent) use — no interactive prompts, `--json` output on every subcommand, and
-`write`/`delete`/`set-version`/`bump` automatically regenerate the lockfile and
-re-validate.
+(agent) use — `--json` never prompts, `--update-pins` applies pin rewrites
+without asking, and `write`/`delete`/`set-version`/`bump` automatically
+regenerate the lockfile and re-validate. On a TTY without `--json`,
+`set-version`/`bump` may confirm rewriting local profile pins that the new
+version no longer satisfies.
 
 ```bash
 skf skill list [--all] [--json]
 skf skill read <name> [--json]
 skf skill write <name> [--set-version <semver>] [--tags <a,b,c>] [--installable <true|false>] \
   [--file <relpath>=<localpath>]... [--remove-file <relpath>]... [--skip-skill-md] [--json]
-skf skill set-version <name> <semver> [--json]
-skf skill bump <name> [--patch|--minor|--major] [--json]
+skf skill set-version <name> <semver> [--update-pins] [--json]
+skf skill bump <name> [--patch|--minor|--major] [--update-pins] [--json]
 skf skill delete <name> --yes [--json]
 ```
 
@@ -253,8 +255,15 @@ companion contents as a `{ "<relative-path>": "<content>" }` map; both
 `inventory/skills`. `set-version` sets the skill's registry version without
 rewriting `SKILL.md`. `bump` increments the current registry version by one
 step — default `--patch`, or `--minor` / `--major` (mutually exclusive);
-minor/major reset lower components to 0. Version commands emit `--json`
-with `previousVersion` / `version` (or `action: "unchanged"` when
+minor/major reset lower components to 0. After a version write, both
+commands scan the registry repo's own `skill-forge.json` and the `$HOME`
+profile: if a declared range no longer satisfies the new version (the
+usual `^0.x` pin after a 0.x minor bump), they report those pins. On a
+TTY without `--json` they offer to rewrite each to `^<newVersion>`;
+`--update-pins` does that without asking; `--json` never prompts and
+lists leftovers in `stalePins` / applied rewrites in `updatedPins`.
+Vendoring is still a separate `sync` / `home sync`. Version commands emit
+`--json` with `previousVersion` / `version` (or `action: "unchanged"` when
 `set-version` is a no-op). `delete` requires `--yes` explicitly since there
 is no interactive confirmation.
 

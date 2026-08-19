@@ -4,10 +4,10 @@
   "skills": {
     "dependencies": {
       "security-baseline": "^0.1.0",
-      "coding-discipline": "^0.1.1",
+      "coding-discipline": "^0.2.0",
       "code-quality": "^0.1.1",
       "podman-utilization": "^0.1.0",
-      "skill-forge-cli": "^0.1.2",
+      "skill-forge-cli": "^0.2.1",
       "testing-strategy": "^0.1.1"
     }
   },

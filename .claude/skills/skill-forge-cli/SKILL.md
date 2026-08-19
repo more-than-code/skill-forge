@@ -39,6 +39,26 @@ Always pass **`--json`** and parse **stdout** even when the exit code is non-zer
 5. **Prefer `bump` after content changes**; use `set-version` for exact targets or initial align.
 6. **Never hand-edit `registry-lock.json`.**
 7. **Do not invent MCP tools** for these ops in-session — shell the CLI.
+8. **Skills hold doctrine, not runtime data.** A skill is vendored into repos you will never
+   see. Anything that stops being true when pointed at a different product belongs in that
+   product's repo.
+
+   Keep out: product, repo and app names in *instructions*; measured benchmarks; thresholds
+   tuned to one codebase; ids, hosts, ports and config values from a live system; suppression
+   or waiver lists describing one product's stubs.
+
+   The line is not "no numbers" — it is **evidence vs specification**:
+
+   - *Evidence for a mechanism* — "on one project (dated), X produced Y, which is why the rule
+     exists" — **keep**, dated, named as one observation, with a pointer to measure your own.
+   - *A figure someone will cite, or a name someone will copy* — **move to the repo**. A
+     benchmark from one product read as a general fact is how a stale number outlives the
+     conditions that produced it.
+
+   Audit trigger: if you can name the project a line came from, ask whether the line still
+   means anything without it. Observed 2026-08-17 — a detection-rate table and a product's
+   suppression rule had both migrated into a shared skill; the second silenced a real defect
+   in an unrelated area for weeks.
 
 ## Command map
 
@@ -47,8 +67,8 @@ skf skill list [--all] [--json]
 skf skill read <name> [--json]
 skf skill write <name> [--set-version <semver>] [--tags a,b] [--installable true|false] \
   [--file <relpath>=<localpath>]... [--remove-file <relpath>]... [--skip-skill-md] [--json]
-skf skill set-version <name> <semver> [--json]
-skf skill bump <name> [--patch|--minor|--major] [--json]   # default --patch
+skf skill set-version <name> <semver> [--update-pins] [--json]
+skf skill bump <name> [--patch|--minor|--major] [--update-pins] [--json]   # default --patch
 skf skill delete <name> --yes [--json]
 ```
 
@@ -93,6 +113,7 @@ skf skill write my-skill --skip-skill-md --file EXAMPLES.md=/tmp/ex.md --json
 skf skill write my-skill --skip-skill-md --remove-file refs/old.md --json
 skf skill set-version my-skill 0.2.0 --json
 skf skill bump my-skill --minor --json
+skf skill bump my-skill --minor --update-pins --json   # rewrite local ^0.x pins the bump just broke
 ```
 
 **Read then edit:**
@@ -122,9 +143,13 @@ registry validation then fails — on `write`, `delete`, `set-version`, and `bum
 { "error": "...", "errors": ["..."], "warnings": ["..."], "partial": true }
 ```
 
-`set-version` / `bump` also include `previousVersion` and `version` on that path.
-Preflight / input errors (bad name, missing source, TTY stdin, etc.) emit
-`{ "error": "..." }` **without** `partial` — nothing durable was committed.
+`set-version` / `bump` also include `previousVersion` and `version` on that path,
+plus `stalePins` / `updatedPins` (local profile ranges the new version no
+longer satisfies — the registry repo's `skill-forge.json` and `$HOME`).
+`--json` never prompts; pass `--update-pins` to rewrite those ranges to
+`^<newVersion>` without asking. Preflight / input errors (bad name, missing
+source, TTY stdin, etc.) emit `{ "error": "..." }` **without** `partial` —
+nothing durable was committed.
 
 **Rules for agents:**
 
@@ -134,6 +159,9 @@ Preflight / input errors (bad name, missing source, TTY stdin, etc.) emit
 4. If `partial === true` after **delete**: the skill dir/registry row were already removed. Fix remaining validation errors and `skf validate`; do not re-delete.
 5. Treat `warnings` as non-fatal (e.g. `--remove-file` missing path).
 6. `set-version` to the current version returns `action: "unchanged"`.
+7. After bump/set-version, if `stalePins` is non-empty, re-run with
+   `--update-pins` (or `project add` / `home add` in each consumer) before
+   the next `sync` — a 0.x `--minor` does not satisfy `^0.x.y`.
 
 ## Safety constraints (CLI-enforced)
 
@@ -149,7 +177,8 @@ Preflight / input errors (bad name, missing source, TTY stdin, etc.) emit
 1. `skill list --json` or `skill read <name> --json` if updating
 2. Stage SKILL.md (+ companions) to temp files if not piping stdin
 3. `skill write ... --json` (include `--set-version` only when creating or intentionally setting)
-4. `skill bump <name> --json` after a meaningful content change if version was not set in write
+4. `skill bump <name> --json` after a meaningful content change if version was not set in write.
+   On `--minor` / `--major` of a 0.x skill, pass `--update-pins` (or inspect `stalePins`).
 5. Confirm stdout `action` and that `partial` is absent
 6. There is **no install step** in the authoring workflow — skill propagation is
    pull-based. Consumers (each repo with a `skill-forge.json`, and `$HOME`) pick
@@ -176,6 +205,7 @@ skf home add <name> && skf home sync      # machine-wide ($HOME profile)
 | `--remove-file refs` to drop a tree | Remove each file path |
 | Create without `--set-version` | Required on create |
 | `install ... --yes` without `--path` (non-interactive hang) | Always pass `--path` + `--yes` |
+| `--minor` a 0.x skill and leave `^0.x` pins | `--update-pins`, then `sync` / `home sync` |
 
 ## Related
 

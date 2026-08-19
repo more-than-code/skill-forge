@@ -1441,6 +1441,102 @@ skillCommand
     }
   });
 
+/** Local profiles this machine can see: the registry repo itself, and $HOME. */
+function localProfileRoots() {
+  const roots = [{ kind: 'project', root: REPO_ROOT }];
+  const home = os.homedir();
+  if (path.resolve(home) !== path.resolve(REPO_ROOT)) {
+    roots.push({ kind: 'home', root: home });
+  }
+  return roots;
+}
+
+/**
+ * Profiles whose declared range for `skillName` does not satisfy `version`.
+ * Missing or unreadable manifests are skipped — a broken home profile must
+ * not fail a registry version write.
+ */
+async function collectStalePins(skillName, version) {
+  const stale = [];
+  for (const { kind, root } of localProfileRoots()) {
+    if (!await fs.pathExists(projectManifestPath(root))) continue;
+    let manifest;
+    try {
+      manifest = await readProjectManifest(root);
+    } catch {
+      continue;
+    }
+    const range = manifest.skills?.dependencies?.[skillName];
+    if (!range) continue;
+    let ok = false;
+    try {
+      ok = satisfiesRange(version, range);
+    } catch {
+      ok = false;
+    }
+    if (!ok) stale.push({ kind, root, range });
+  }
+  return stale;
+}
+
+async function rewritePins(stalePins, skillName, nextVersion) {
+  const nextRange = `^${nextVersion}`;
+  const updated = [];
+  for (const pin of stalePins) {
+    const manifest = await readProjectManifest(pin.root);
+    const from = manifest.skills.dependencies[skillName];
+    manifest.skills.dependencies[skillName] = nextRange;
+    await writeProjectManifest(pin.root, manifest);
+    updated.push({ kind: pin.kind, root: pin.root, from, to: nextRange });
+  }
+  return updated;
+}
+
+function formatPinList(pins) {
+  return pins.map((pin) => `  ${pin.kind} (${pin.root}): ${pin.range}`).join('\n');
+}
+
+/**
+ * After a version write, offer to retarget local profile ranges that the new
+ * version no longer satisfies. `--json` never prompts; `--update-pins` applies
+ * without asking. Silent except for the TTY confirm — the caller prints.
+ */
+async function maybeUpdateStalePins(skillName, nextVersion, options) {
+  const stalePins = await collectStalePins(skillName, nextVersion);
+  if (stalePins.length === 0) return { stalePins: [], updatedPins: [] };
+
+  let shouldUpdate = Boolean(options.updatePins);
+  if (!shouldUpdate && !options.json && process.stdin.isTTY) {
+    const answer = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'update',
+      message: `Update ${stalePins.length} profile pin(s) to ^${nextVersion}?\n${formatPinList(stalePins)}`,
+      default: true
+    }]);
+    shouldUpdate = answer.update;
+  }
+
+  if (shouldUpdate) {
+    return { stalePins: [], updatedPins: await rewritePins(stalePins, skillName, nextVersion) };
+  }
+
+  return {
+    stalePins,
+    updatedPins: [],
+    pinWarning: `Skill "${skillName}"@${nextVersion} does not satisfy ${stalePins.length} profile pin(s). Re-run with --update-pins, or run "${CLI_NAME} project add ${skillName}" / "${CLI_NAME} home add ${skillName}" in each consumer.`
+  };
+}
+
+function printPinResult(nextVersion, pinResult) {
+  if (pinResult.updatedPins.length > 0) {
+    console.log(chalk.green(`Updated ${pinResult.updatedPins.length} profile pin(s) to ^${nextVersion}.`));
+    console.log(chalk.gray(`Run "${CLI_NAME} sync" (or "${CLI_NAME} home sync") to vendor the new copy.`));
+    return;
+  }
+  if (pinResult.stalePins.length === 0) return;
+  console.log(chalk.yellow(`The new version does not satisfy these profile pins:\n${formatPinList(pinResult.stalePins)}`));
+}
+
 /**
  * Update a skill's registry version only (no inventory file changes).
  * Shared by set-version and bump.
@@ -1460,7 +1556,9 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
         skill: toSkillSummary(skill),
         previousVersion: from,
         version: nextVersion,
-        warnings: []
+        warnings: [],
+        stalePins: [],
+        updatedPins: []
       }, null, 2));
       return;
     }
@@ -1472,7 +1570,8 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
   await writeRegistry(registry);
   await writeLock({ silent: options.json });
   const { errors, warnings } = await validateRegistry();
-  if (!options.json) for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
+  const pinResult = await maybeUpdateStalePins(name, nextVersion, options);
+  if (pinResult.pinWarning) warnings.push(pinResult.pinWarning);
 
   if (errors.length > 0) {
     // Version is already written + locked; partial signals durable mutation before validate failed.
@@ -1484,11 +1583,15 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
         warnings,
         previousVersion: from,
         version: nextVersion,
-        partial: true
+        partial: true,
+        stalePins: pinResult.stalePins,
+        updatedPins: pinResult.updatedPins
       }, null, 2));
     } else {
+      for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
       for (const error of errors) console.error(chalk.red(`Error: ${error}`));
       console.error(chalk.red(message));
+      printPinResult(nextVersion, pinResult);
     }
     process.exitCode = 1;
     return;
@@ -1500,16 +1603,21 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
       skill: toSkillSummary(skill),
       previousVersion: from,
       version: nextVersion,
-      warnings
+      warnings,
+      stalePins: pinResult.stalePins,
+      updatedPins: pinResult.updatedPins
     }, null, 2));
     return;
   }
+  for (const warning of warnings) console.log(chalk.yellow(`Warning: ${warning}`));
   console.log(chalk.green(`${skillKey(skill)} ${from} → ${nextVersion}.`));
+  printPinResult(nextVersion, pinResult);
 }
 
 skillCommand
   .command('set-version <name> <semver>')
   .description('Set a skill\'s registry version (auto-runs lock + validate); does not modify SKILL.md')
+  .option('--update-pins', 'Rewrite local profile ranges that the new version no longer satisfies')
   .option('--json', 'Output structured JSON')
   .action(async (name, semver, options) => {
     try {
@@ -1525,6 +1633,7 @@ skillCommand
   .option('--patch', 'Increment patch (default)')
   .option('--minor', 'Increment minor and reset patch to 0')
   .option('--major', 'Increment major and reset minor and patch to 0')
+  .option('--update-pins', 'Rewrite local profile ranges that the new version no longer satisfies')
   .option('--json', 'Output structured JSON')
   .action(async (name, options) => {
     try {

@@ -317,15 +317,15 @@
     },
     "inventory/skills/skill-forge-cli": {
       "name": "skill-forge-cli",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/skill-forge-cli",
-      "integrity": "sha256-+ll6ZV9KRiuFxTdTud61Gg/qlzGVruWqwEYpdOdy5FM=",
+      "integrity": "sha256-35pel4Kxs1u1hmyudOFyiwdPGL7F9nAb0QpkS/VQ1FM=",
       "files": {
-        "EXAMPLES.md": "sha256-f2SMMNcxRHOdghoZ0QTtAMvqalyYp8gLG1MdV/ypg/U=",
-        "SKILL.md": "sha256-qBEJcKB+B92geV59zbmK+xdOO81zltn1VUVyUyMRI8I="
+        "EXAMPLES.md": "sha256-lcvI7Tn+QBu+0ioyKLtZmMru/kf8RnsaVSfNGHsVzaA=",
+        "SKILL.md": "sha256-l34lFjc3c6XU/SXdHffnt+nhn9QQDHcQ1okUtoDx91k="
       }
     },
     "inventory/skills/skill-forge-project": {

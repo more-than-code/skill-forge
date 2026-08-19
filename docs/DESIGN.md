@@ -287,6 +287,11 @@ Behavior:
   would be ceremony.
 - `skf project add <skills...>` searches the registry, shows matching names,
   versions, tags, and descriptions, then updates `skill-forge.json`.
+- `skf skill bump` / `set-version` offer to retarget the registry repo's own
+  profile and the `$HOME` profile when the new version falls outside a
+  declared range (a 0.x minor bump vs `^0.x.y`). `--update-pins` is the
+  non-interactive form; other consumer repos still update on their next
+  `project add` / hand edit + `sync`.
 - `skf sync` resolves the manifest, vendors the skills, and writes or updates
   `skill-forge.lock.json`.
 - `skf sync --check` is read-only and exits non-zero when the manifest,

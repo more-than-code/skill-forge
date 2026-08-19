@@ -699,6 +699,59 @@ test('skill set-version and bump update registry versions without touching SKILL
   assert.match(stdout, /Registry validation passed/);
 });
 
+test('skill bump reports and optionally rewrites local profile pins that the new version breaks', async () => {
+  const fx = await projectFixture();
+  await fx.run(['project', 'init', '--tools', 'claude-code']);
+  await fx.run(['project', 'add', 'demo-skill']);
+
+  const fakeHome = await tempDir('skf-pin-home-');
+  const env = { ...fx.env, HOME: fakeHome };
+  await fs.writeFile(
+    path.join(fakeHome, 'skill-forge.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      extends: [],
+      skills: { dependencies: { 'demo-skill': '^0.1.0' } },
+      tools: { 'claude-code': true }
+    }, null, 2)}\n`
+  );
+
+  const readRootManifest = async () => JSON.parse(await fs.readFile(path.join(fx.root, 'skill-forge.json'), 'utf8'));
+  const readHomeManifest = async () => JSON.parse(await fs.readFile(path.join(fakeHome, 'skill-forge.json'), 'utf8'));
+  const bump = (args) => run('node', [CLI, 'skill', 'bump', 'demo-skill', ...args], { cwd: fx.root, env });
+
+  const patch = JSON.parse((await bump(['--json'])).stdout);
+  assert.equal(patch.version, '0.1.1');
+  assert.deepEqual(patch.stalePins, []);
+  assert.deepEqual(patch.updatedPins, []);
+  assert.equal((await readRootManifest()).skills.dependencies['demo-skill'], '^0.1.0');
+  assert.equal((await readHomeManifest()).skills.dependencies['demo-skill'], '^0.1.0');
+
+  const minor = JSON.parse((await bump(['--minor', '--json'])).stdout);
+  assert.equal(minor.version, '0.2.0');
+  assert.deepEqual(minor.updatedPins, []);
+  assert.equal(minor.stalePins.length, 2);
+  assert.deepEqual(minor.stalePins.map((pin) => pin.kind).sort(), ['home', 'project']);
+  for (const pin of minor.stalePins) {
+    assert.equal(pin.range, '^0.1.0');
+    assert.ok(pin.root);
+  }
+  assert.ok(minor.warnings.some((warning) => /does not satisfy/.test(warning)));
+  assert.equal((await readRootManifest()).skills.dependencies['demo-skill'], '^0.1.0');
+  assert.equal((await readHomeManifest()).skills.dependencies['demo-skill'], '^0.1.0');
+
+  const updated = JSON.parse((await bump(['--minor', '--update-pins', '--json'])).stdout);
+  assert.equal(updated.version, '0.3.0');
+  assert.deepEqual(updated.stalePins, []);
+  assert.equal(updated.updatedPins.length, 2);
+  for (const pin of updated.updatedPins) {
+    assert.equal(pin.from, '^0.1.0');
+    assert.equal(pin.to, '^0.3.0');
+  }
+  assert.equal((await readRootManifest()).skills.dependencies['demo-skill'], '^0.3.0');
+  assert.equal((await readHomeManifest()).skills.dependencies['demo-skill'], '^0.3.0');
+});
+
 test('site command generates a catalog with all sections and stats aggregation', async () => {
   const home = await tempDir('skf-site-stats-');
   await fs.mkdir(path.join(home, 'stats'), { recursive: true });

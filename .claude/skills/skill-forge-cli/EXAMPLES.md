@@ -55,6 +55,20 @@ skf skill write demo-skill --skip-skill-md --remove-file EXAMPLES.md --json
 skf skill set-version demo-skill 0.2.0 --json
 ```
 
+## Minor bump that breaks a ^0.x pin
+
+```bash
+# --json reports stalePins and does not rewrite manifests:
+skf skill bump demo-skill --minor --json
+# → stalePins: [{ kind: "project"|"home", root, range }]
+
+# Rewrite the registry-repo and $HOME pins to ^<newVersion>:
+skf skill bump demo-skill --minor --update-pins --json
+# then, in each updated consumer:
+skf sync
+# skf home sync
+```
+
 ## Read for agent editing
 
 ```bash

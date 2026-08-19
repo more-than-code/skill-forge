@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.3.0",
-    "commit": "782fe3b34c840dbce619a6f48f37ab89b504d7b9",
-    "lockIntegrity": "sha256-fBPxIc76xnZvuMiB8hR0oaOGRh6Tm+f9F654JyVNLpA="
+    "commit": "531edfe83d4596b59bf58030bec289ca38acbb6a",
+    "lockIntegrity": "sha256-7p+7/VOqyq7qmaOv6PBYTCNWB50ixNczpVSZO2jGLAs="
   },
   "skills": {
     "code-quality": {
@@ -13,8 +13,8 @@
       "source": "registry"
     },
     "coding-discipline": {
-      "version": "0.1.1",
-      "integrity": "sha256-QoKanDWT7ajQbgbiUbjHEdHEdmkhjQ1gcyomd4k6gSk=",
+      "version": "0.2.0",
+      "integrity": "sha256-+AwdaB5NhSjGvG2+2uiWyFZ5nKszO+cxPKEDIT8EAkw=",
       "source": "registry"
     },
     "podman-utilization": {
@@ -28,8 +28,8 @@
       "source": "registry"
     },
     "skill-forge-cli": {
-      "version": "0.1.3",
-      "integrity": "sha256-ba2aEcF0BV268vfR9FTJ66Yikz7fcsJI328Wxo2CJVY=",
+      "version": "0.2.1",
+      "integrity": "sha256-35pel4Kxs1u1hmyudOFyiwdPGL7F9nAb0QpkS/VQ1FM=",
       "source": "registry"
     },
     "testing-strategy": {

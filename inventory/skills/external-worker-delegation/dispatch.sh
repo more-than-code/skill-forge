@@ -51,6 +51,25 @@ if [ "${1:-}" = "--remove" ]; then
       exit 65
     }
   fi
+  # A branch with no commits trivially satisfies the ancestor check above, so a worker
+  # that produced everything and committed nothing looks merged. `git worktree remove
+  # --force` would then delete work that exists only in the working tree.
+  if [ -n "$(git -C "$tree" status --porcelain 2>/dev/null)" ] && [ "${2:-}" != "--force" ]; then
+    echo "dispatch.sh: $tree has uncommitted changes; commit or discard them, or re-run with --force" >&2
+    git -C "$tree" status --short >&2
+    exit 65
+  fi
+
+  # Last chance to lift the worker's cost: run.jsonl is the only place it exists and
+  # the next line deletes it. One `end` record per iteration; sum them. Printed rather
+  # than enforced — record it in the orchestrator's ledger (the main checkout's
+  # tasks/), not in the commit message: it is operational bookkeeping, not history.
+  if [ -f "$tree/run.jsonl" ]; then
+    cost=$(grep -o '"total_cost_usd":[0-9.]*' "$tree/run.jsonl" |
+      awk -F: '{ sum += $2 } END { printf "%.4f", sum }')
+    iters=$(grep -c '"total_cost_usd":' "$tree/run.jsonl" || true)
+    echo "Worker cost before teardown: \$$cost over $iters iteration(s) — record it in the main checkout's tasks/ ledger."
+  fi
   [ -d "$tree" ] && git worktree remove --force "$tree"
   git show-ref --verify --quiet "refs/heads/$branch" && git branch -D "$branch"
   echo "Removed $tree and branch $branch."
@@ -61,20 +80,29 @@ fi
 shift
 [ $# -ge 1 ] || usage
 
-# BRIEF.md and NOTES.md live inside the worktree, so a worker's `git add -A` would
+# Orchestrator-side files live inside the worktree, so a worker's `git add -A` would
 # commit them onto the branch and the merge would carry them into the main branch.
 # info/exclude is resolved from the common git dir (a per-worktree copy is ignored),
-# it is never committed, and it cannot affect a file the repo already tracks.
+# it is never committed, and it cannot affect a file the repo already tracks — so a
+# committed pointer stub at tasks/todo.md stays tracked and visible either way.
+#
+# The block is rewritten rather than appended-once, so a repo excluded by an older
+# version of this script picks up entries added since.
 exclude="$(git rev-parse --git-common-dir)/info/exclude"
-if ! grep -q '^# >>> skill-forge worker >>>' "$exclude" 2>/dev/null; then
-  mkdir -p "$(dirname "$exclude")"
-  {
-    echo '# >>> skill-forge worker >>>'
-    echo 'BRIEF.md'
-    echo 'NOTES.md'
-    echo '# <<< skill-forge worker <<<'
-  } >> "$exclude"
+mkdir -p "$(dirname "$exclude")"
+if grep -q '^# >>> skill-forge worker >>>' "$exclude" 2>/dev/null; then
+  sed '/^# >>> skill-forge worker >>>$/,/^# <<< skill-forge worker <<<$/d' "$exclude" > "$exclude.tmp"
+  mv "$exclude.tmp" "$exclude"
 fi
+{
+  echo '# >>> skill-forge worker >>>'
+  echo 'BRIEF.md'
+  echo 'NOTES.md'
+  echo 'tasks/'
+  echo 'run.jsonl'
+  echo 'driver.log'
+  echo '# <<< skill-forge worker <<<'
+} >> "$exclude"
 
 if [ ! -d "$tree" ]; then
   git worktree add "$tree" -b "$branch"

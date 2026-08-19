@@ -146,15 +146,15 @@
     },
     "inventory/skills/external-worker-delegation": {
       "name": "external-worker-delegation",
-      "version": "0.5.0",
+      "version": "0.7.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/external-worker-delegation",
-      "integrity": "sha256-YuudXtm7GlK6x0+HdGtM70xEqdw4eL5P/+MNM5bXSy8=",
+      "integrity": "sha256-EvFagh0O8blWz/QlKoMGaVNecoGKcmFAFVM4YAfU+Ik=",
       "files": {
-        "dispatch.sh": "sha256-KLSLCMJuZyBleZguyu2edFO+EXoJHM0zZ1tuLcOwM5Q=",
-        "SKILL.md": "sha256-XUXi/T3pIpRjB5dF8LlIIQg7y3HA2EW/zMA40ihnOjw="
+        "dispatch.sh": "sha256-ggK1wyd9YfUKnruhqV95AoPkUTaLTRe8CsozVPiFa6o=",
+        "SKILL.md": "sha256-7NCYrXoGXJmJ2SD39NaS58DgQOb8N+TiLBaYQHkkr2M="
       }
     },
     "inventory/skills/failure-analysis": {
@@ -366,15 +366,15 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.2.1",
+      "version": "0.3.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/umbrella-workspace",
-      "integrity": "sha256-BFZ8i13QKrzsY/mTS6izVY0I0Dgr8UbADtq8K999HmA=",
+      "integrity": "sha256-q9uCiL3LJ5xdJOCpwNyPoGIGQ/0UdnfsMwynTZj6H0w=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-eFZ7zrJOzMfQOG8EEsbXNjo8ep1hWACC5ZXzjg3AIR4="
+        "SKILL.md": "sha256-+1AtelsXUmkQcckZgBEmNuECixk1yxL4CORhfKOzLPQ="
       }
     },
     "inventory/agents": {

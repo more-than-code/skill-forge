@@ -71,16 +71,32 @@ while a worktree holds it, and deleting the directory alone leaves a stale `prun
 `dispatch.sh <slug> --remove` does it correctly, refusing an unmerged branch unless you add
 `--force`.
 
-**`BRIEF.md` and `NOTES.md` live inside the worktree**, so a worker's `git add -A` commits them to
-the branch and the merge carries them into your main branch. `dispatch.sh` excludes both on first
+**`BRIEF.md`, `NOTES.md`, and the transport's run artifacts (`run.jsonl`, `driver.log`) live inside
+the worktree**, so a worker's `git add -A` commits them to
+the branch and the merge carries them into your main branch. `dispatch.sh` excludes them all on first
 use, via the repo's `info/exclude` — local, never committed, and it cannot affect a file the repo
-already tracks. Excluding `NOTES.md` from the merge is not discarding it: it is the handoff record,
-so lift anything durable out of it into the commit message or the task block before teardown.
+already tracks. Excluding them from the merge is not discarding them: `NOTES.md` is the
+handoff record and `run.jsonl` holds the only copy of the worker's cost, so lift both before
+teardown. **Cost goes to the orchestrator's ledger in the main checkout (`tasks/`), not into the
+commit message** — it is operational bookkeeping about a run, not a fact about the code, and the
+task block is where the paired primary-token figure already lives. `--remove` prints the
+accumulated cost one last time as it tears the worktree down.
+
+`--remove` also refuses a worktree with uncommitted changes. A worker that produced everything and
+committed nothing leaves a branch with no commits, which passes the merge check trivially; without
+the guard, teardown deletes the only copy of the work.
 
 **Ignore `tasks/` in any repo that dispatches workers.** Untracked files do not travel with a branch
 checkout, so ignoring the directory keeps the orchestrator's ledger out of every worker's worktree
-and out of every merge, structurally rather than by discipline. The trade is real — an untracked
-ledger has no history and no audit trail for anyone else — so make it deliberately.
+and out of every merge, structurally rather than by discipline. `dispatch.sh` also excludes `tasks/`
+locally, which covers a repo that has not adopted the rule yet — but only for files git does not
+already track. A committed pointer stub keeps travelling; that is harmless and intended.
+
+The trade is real: an untracked ledger has no history and no audit trail for anyone else. Status
+narration loses nothing the diff does not say better, but **authorizations are unreconstructable
+from git** — Tier 3 approval, gate waivers, `Delegation: external-worker`, and rejected worker
+branches that `--remove` deletes. Those go in the intent commit's message. `umbrella-workspace` owns
+the full tracking split (committed stub vs ignored ledger) and the `.gitignore` lines.
 
 Pre-build the environment before dispatch (dependencies installed, toolchains verified). Worker
 sandboxes commonly cannot write to package caches, and a worker that burns its run fighting a

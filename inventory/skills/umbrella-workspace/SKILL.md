@@ -61,6 +61,44 @@ Do not duplicate status here — update it at the umbrella level only.
 
 **Single source of truth:** status lives **only** in umbrella `tasks/todo.md`. Stubs link; they never carry their own status (avoids drift).
 
+## Tracking `tasks/`: stub committed, ledger ignored
+
+`tasks/` holds two different things and they have opposite tracking rules. Split them when you
+author a repo or seed a worktree — retrofitting after a worker has run is the expensive order.
+
+| File | Tracked? | Why |
+|---|---|---|
+| Pointer stub (`tasks/todo.md` in a participant child) | **Committed** | Its whole job is discoverability for an agent opened only in that child. A gitignored stub cannot do that job. Static: no status, no specs. |
+| Live ledger (`todo.md` status blocks, `archive.md`, `notes.md`, `lessons.md`) | **Gitignored** | Untracked files do not travel with a branch checkout, so ignoring keeps the ledger out of every worktree and every merge — structurally, not by discipline. |
+
+A repo that participates in an umbrella **and** keeps local tasks cannot use one file for both.
+Keep the stub at `tasks/todo.md` and put local tracking under the ignored paths.
+
+```gitignore
+# Live ledger: never travels with a branch. Pointer stub stays tracked.
+/tasks/*
+!/tasks/todo.md   # stub only — status lives at the umbrella
+```
+
+A repo with no umbrella stub ignores the directory outright (`/tasks/`).
+
+**The commit absorbs what the ledger cannot keep.** An untracked ledger has no history and no audit
+trail for anyone else — accept that for status narration, which the diff and commit message already
+tell better. Do not accept it for authorizations, which git cannot reconstruct. When an intent
+commit involved any of these, the **commit message** carries them:
+
+- Tier 3 spec approval (that it was given, and for what scope)
+- Gate waiver text and timestamp
+- `Delegation: external-worker`, when a worker produced the change
+- Worker branches rejected along the way — `--remove` deletes them and no commit holds them otherwise
+
+Skip this and gitignoring the ledger deletes the only record that the work was authorized.
+
+**Run bookkeeping goes the other way.** Worker cost, iteration counts, and wall-clock belong in the
+ledger's task block, never in the commit message — they describe a run, not the code, and they are
+only meaningful next to the primary-token figure the task block already tracks. Accept that they
+die with the ledger.
+
 ## Parallel sessions (git worktrees)
 
 When **two sessions** would edit the **same child repo** at once:
@@ -104,12 +142,12 @@ umbrella/                 # usually not a git repo
   AGENTS.md               # child inventory + path to this umbrella’s tasks/todo.md
   CLAUDE.md               # @AGENTS.md (if using Claude)
   docs/                   # multi-repo plans only
-  tasks/
+  tasks/                  # live ledger; gitignored in any child that carries one
     todo.md
     archive.md
   child-a/                # each child its own git repo when ready
     AGENTS.md
-    tasks/todo.md         # pointer stubs when participating
+    tasks/todo.md         # pointer stub when participating — committed, status-free
   child-b/
     ...
 ```
@@ -120,6 +158,7 @@ umbrella/                 # usually not a git repo
 - One giant “in progress” section for a multi-phase plan
 - Plan-only docs with no umbrella task tracking for Tier 3 work
 - Putting single-repo bugs/features in umbrella `tasks/`
+- Committing a live ledger, or gitignoring a pointer stub (each defeats the other's purpose)
 - Assuming the next agent has chat context
 - Two sessions editing the same child **folder** on different branches (or the same)
 - Putting ephemeral worktree absolute paths into this portable skill or into long-lived AGENTS as the only SSOT

@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.3.0",
-    "commit": "96f09bdd00215e7fb8de87ba8c6901903081b300",
-    "lockIntegrity": "sha256-VCJIXLh/Pw65Y8bWg7AcLGJ5Cvv85rD8n1N1DyDfbjI="
+    "commit": "531edfe83d4596b59bf58030bec289ca38acbb6a",
+    "lockIntegrity": "sha256-7p+7/VOqyq7qmaOv6PBYTCNWB50ixNczpVSZO2jGLAs="
   },
   "skills": {
     "code-quality": {

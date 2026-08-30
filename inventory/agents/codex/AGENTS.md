@@ -14,7 +14,7 @@ For concrete before/after examples of common failure modes, also check the activ
 
 ## Codex Task Delegation
 
-Use subagents or helper tasks for isolated context, parallel work, or bulk mechanical tasks when the active coding tool supports them. Never delegate when the parent needs to hold reasoning together.
+In this managed configuration, delegate after a direct user request or when applicable project or skill instructions call for it. Use subagents or helper tasks for isolated context, parallel work, or bulk mechanical tasks when the active coding tool supports them. Never delegate when the parent needs to hold reasoning together.
 
 The named agent routes below are Codex-specific. Other tools should map these roles to their nearest available mechanism, or do the work in the main context if no equivalent exists.
 
@@ -32,15 +32,17 @@ Codex subagent rule: if a subagent realizes it's undertiered, it must return to 
 
 ## Codex Agent Reference
 
-Codex model assignments use OpenAI model identifiers because Codex only supports OpenAI model selection. Do not copy non-OpenAI model choices from Copilot CLI or Claude Code into Codex agent definitions.
+Maintained Codex agent definitions pin both `model` and `model_reasoning_effort` to preserve each role's quality, latency, and cost class. Custom-agent file values take precedence over parent and default settings, so update these pins deliberately against the current OpenAI model catalog rather than removing them or relying on inheritance.
 
-| Agent | Model | Best for |
-|---|---|---|
-| `bulk_worker` | `gpt-5.4-mini` | Formatting, renaming, repetitive transforms, file enumeration |
-| `researcher` | `gpt-5.3-codex` | Code exploration, API tracing, reading tests, in-scope synthesis |
-| `validator` | `gpt-5.3-codex` | Command execution, checks, and reusable evidence capture |
-| `planner` | `gpt-5.5` | Architecture decisions, multi-file tradeoffs, design with real stakes |
-| `reviewer` | `gpt-5.3-codex` | One review lens at a time with severity-tagged findings |
+| Agent | Model | Reasoning | Best for |
+|---|---|---|---|
+| `bulk_worker` | `gpt-5.6-luna` | `medium` | Formatting, renaming, repetitive transforms, file enumeration |
+| `researcher` | `gpt-5.6-terra` | `medium` | Code exploration, API tracing, reading tests, in-scope synthesis |
+| `validator` | `gpt-5.6-luna` | `medium` | Command execution, checks, and reusable evidence capture |
+| `planner` | `gpt-5.6-sol` | `high` | Architecture decisions, multi-file tradeoffs, design with real stakes |
+| `reviewer` | `gpt-5.6-sol` | `high` | One review lens at a time with severity-tagged findings |
+
+Codex model pins must use OpenAI model identifiers. Do not copy non-OpenAI model choices from Copilot CLI or Claude Code into Codex configuration.
 
 ## Codex Sandbox Modes
 

@@ -20,6 +20,13 @@ const run = promisify(execFile);
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(REPO_ROOT, 'bin', 'cli.js');
 const HOOK = path.join(REPO_ROOT, 'inventory', 'hooks', 'claude-code', 'skill-forge-stats.mjs');
+const CODEX_AGENT_PINS = {
+  'bulk_worker.toml': ['bulk_worker', 'gpt-5.6-luna', 'medium', 'workspace-write', 'Only modify files explicitly assigned to this task.'],
+  'planner.toml': ['planner', 'gpt-5.6-sol', 'high', 'read-only', 'Do not edit files or run validation commands.'],
+  'researcher.toml': ['researcher', 'gpt-5.6-terra', 'medium', 'read-only', 'Do not implement changes.'],
+  'reviewer.toml': ['reviewer', 'gpt-5.6-sol', 'high', 'read-only', 'Do not implement fixes.'],
+  'validator.toml': ['validator', 'gpt-5.6-luna', 'medium', 'workspace-write', 'Do not edit source, config, tests, docs, or lockfiles intentionally.']
+};
 
 const tempDirs = [];
 
@@ -37,6 +44,14 @@ function runWithStdin(args, options, input) {
   const child = run('node', args, options);
   child.child.stdin.end(input);
   return child;
+}
+
+function tomlStringValue(content, key, file) {
+  const assignments = content.split('\n').filter((line) => new RegExp('^\\s*' + key + '\\s*=').test(line));
+  assert.equal(assignments.length, 1, file + ' must define exactly one ' + key);
+  const match = assignments[0].match(new RegExp('^\\s*' + key + '\\s*=\\s*"([^"]*)"\\s*$'));
+  assert.ok(match, file + ' must define ' + key + ' as a double-quoted string without trailing content');
+  return match[1];
 }
 
 /** Isolated registry+inventory tree so skill mutator tests never touch the checkout. */
@@ -95,7 +110,36 @@ test('composed codex agents resolve placeholders to codex subagent names', async
   await run('node', [CLI, 'install', 'codex-agents', '--type', 'agent', '--target', 'codex', '--path', target, '--yes'], { cwd: REPO_ROOT });
   const composed = await fs.readFile(target, 'utf8');
   assert.match(composed, /`researcher`, `planner`, or `reviewer`/);
+  assert.match(composed, /Regardless of inherited context, every delegated prompt must be self-contained/);
+  assert.match(composed, /For parallel batches, identify which results are required/);
+  assert.match(composed, /Wait for every required result before synthesis/);
+  assert.match(composed, /If an agent fails or remains incomplete, report that state and decide explicitly whether the remaining evidence is sufficient to proceed/);
+  for (const [name, model, effort] of Object.values(CODEX_AGENT_PINS)) {
+    assert.ok(composed.includes('| `' + name + '` | `' + model + '` | `' + effort + '` |'), name);
+  }
   assert.doesNotMatch(composed, /\{\{[a-z0-9_]+\}\}/);
+});
+
+test('codex subagents pin the approved model and reasoning effort', async () => {
+  const sourceDir = path.join(REPO_ROOT, 'inventory', 'subagents', 'codex');
+  const installedDir = path.join(await tempDir('skf-codex-subagents-'), 'agents');
+  await run('node', [CLI, 'subagent', 'install', 'codex-subagents', '--target', 'codex', '--path', installedDir, '--yes'], { cwd: REPO_ROOT });
+
+  for (const dir of [sourceDir, installedDir]) {
+    const files = (await fs.readdir(dir)).filter((file) => file.endsWith('.toml'));
+    assert.deepEqual(files.sort(), Object.keys(CODEX_AGENT_PINS));
+
+    for (const file of files) {
+      const content = await fs.readFile(path.join(dir, file), 'utf8');
+      const [name, model, effort, sandboxMode, contractMarker] = CODEX_AGENT_PINS[file];
+      assert.equal(tomlStringValue(content, 'name', file), name);
+      assert.equal(tomlStringValue(content, 'model', file), model);
+      assert.equal(tomlStringValue(content, 'model_reasoning_effort', file), effort);
+      assert.equal(tomlStringValue(content, 'sandbox_mode', file), sandboxMode);
+      assert.doesNotMatch(content, /gpt-5\.(?:2|3-codex|4(?:-mini)?)/, file);
+      assert.ok(content.includes(contractMarker), file);
+    }
+  }
 });
 
 test('composed grok agents resolve placeholders to built-in agent names', async () => {

@@ -91,7 +91,7 @@ test('first dispatch creates a worktree and seeds info/exclude; second first-run
   const exclude = await fs.readFile(await fx.excludePath(), 'utf8');
   assert.match(exclude, /# >>> skill-forge worker >>>/);
   assert.match(exclude, /^BRIEF\.md$/m);
-  assert.match(exclude, /^NOTES\.md$/m);
+  assert.match(exclude, /^NOTES\*\.md$/m);
   assert.match(exclude, /# <<< skill-forge worker <<</);
 
   // Fresh worktree is already an ancestor of HEAD, so --remove without --force is allowed.
@@ -171,7 +171,7 @@ test('exclude block covers ledger and run artifacts, upgrades a stale block, and
 
   const upgraded = await fs.readFile(exclude, 'utf8');
   assert.equal(upgraded.match(/# >>> skill-forge worker >>>/g).length, 1, 'stale block is rewritten, not duplicated');
-  for (const entry of ['BRIEF\\.md', 'NOTES\\.md', 'tasks/', 'run\\.jsonl', 'driver\\.log']) {
+  for (const entry of ['BRIEF\\.md', 'NOTES\\*\\.md', 'tasks/', 'run\\*\\.jsonl', 'driver\\*\\.log']) {
     assert.match(upgraded, new RegExp(`^${entry}$`, 'm'));
   }
 

@@ -1,6 +1,6 @@
 # Skill Forge — Design
 
-Last updated: 2026-07-20
+Last updated: 2026-08-30
 
 Skill Forge exists for two goals:
 
@@ -63,7 +63,9 @@ mapping prose. `validate` fails on unresolved placeholders and warns on unused v
 ### Delegation model
 
 - **Codex / Copilot CLI:** five maintained roles (`bulk_worker`/`bulk-worker`,
-  `researcher`, `validator`, `planner`, `reviewer`); Codex pins sandbox modes.
+  `researcher`, `validator`, `planner`, `reviewer`). Codex pins sandbox modes,
+  current role-specific models, and reasoning efforts; its custom-agent files are
+  the source of truth because those values take precedence over inherited defaults.
 - **Claude Code:** three maintained roles (`bulk-worker`, `reviewer`, `validator` —
   the latter two with enforcing `tools:` allowlists); exploration and planning use
   the built-in `Explore`/`Plan` agents, which are harness-enforced read-only.

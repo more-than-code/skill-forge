@@ -1,6 +1,6 @@
 name = "researcher"
 description = "Scoped code research, exploration, in-scope synthesis. Use for understanding existing code, reading APIs, tracing call graphs."
-model = "gpt-5.3-codex"
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """

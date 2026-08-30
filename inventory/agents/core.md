@@ -309,7 +309,7 @@ For Tier 3, use a separate review subagent per lens when the active tool support
 
 ## 7) Delegation Strategy
 
-Keep main context clean. Parallelize work when the active tool supports safe parallel delegation. **Drive exploration before spec writing.**
+Keep main context clean. Delegate bounded, independent work when the active tool supports safe parallel delegation. **Drive exploration before spec writing.**
 
 This section is capability-based. Different tools may expose named subagents, helper agents, tasks, or no delegation at all. When delegation is unavailable, perform the same exploration and review steps in the main context and say so briefly.
 
@@ -317,7 +317,9 @@ Maintained tool-specific subagent definitions are installed in each tool's runti
 
 When subagents are available, use one task per subagent and name descriptively.
 
-Every delegated prompt must be self-contained: the subagent does not see this conversation, so include exact file paths and line numbers, the relevant acceptance criteria or constraints already decided, and the required output shape. Never reference "the plan above" or prior discussion.
+Regardless of inherited context, every delegated prompt must be self-contained: include exact file paths and line numbers, the relevant acceptance criteria or constraints already decided, and the required output shape. Never reference "the plan above" or prior discussion.
+
+For parallel batches, identify which results are required. Wait for every required result before synthesis. If an agent fails or remains incomplete, report that state and decide explicitly whether the remaining evidence is sufficient to proceed.
 
 **Naming convention:** `[phase]-[scope]-[task]` (e.g. `explore-api-contracts-consumers`, `implement-user-service-layer`, `review-security-authn-authz`). Avoid generic names like `explore` or `fix-stuff`.
 

@@ -2,6 +2,7 @@
 name: reviewer
 description: Single-lens review that returns severity-tagged findings with locations, reasoning, and suggested fixes.
 model: sonnet
+effort: high
 tools: Read, Grep, Glob
 ---
 

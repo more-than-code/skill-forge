@@ -66,9 +66,12 @@ mapping prose. `validate` fails on unresolved placeholders and warns on unused v
   `researcher`, `validator`, `planner`, `reviewer`). Codex pins sandbox modes,
   current role-specific models, and reasoning efforts; its custom-agent files are
   the source of truth because those values take precedence over inherited defaults.
-- **Claude Code:** three maintained roles (`bulk-worker`, `reviewer`, `validator` —
-  the latter two with enforcing `tools:` allowlists); exploration and planning use
-  the built-in `Explore`/`Plan` agents, which are harness-enforced read-only.
+- **Claude Code:** three maintained roles (`bulk-worker`, `reviewer`, `validator`)
+  with pinned model-family aliases, effort levels, and explicit tool allowlists.
+  `reviewer` is read-only; `validator` excludes direct edit tools but retains
+  `Bash`, so its source-write restriction also relies on instructions and active
+  permissions. Exploration and planning use built-in `Explore`/`Plan`, which
+  inherit model and effort and are harness-enforced read-only.
 - **Grok:** three maintained roles (`bulk-worker`, `reviewer`, `validator`);
   exploration and planning use the built-in `explore`/`plan` agents (read-only).
   `reviewer` uses `permission_mode: plan`; parent may pass `capability_mode` on
@@ -539,6 +542,7 @@ any new component.
 
 | Date | Decision | Rationale |
 |---|---|---|
+| 2026-08-30 | Claude maintained subagents pin model-family aliases and effort; built-in `Explore`/`Plan` remain inherited | Preserve role-specific cost/quality without replacing Claude's harness-managed built-ins |
 | 2026-07-13 | Claude Code drops `researcher`/`planner` for built-in `Explore`/`Plan`; `reviewer`/`validator` get `tools:` allowlists | Harness enforcement beats prose contracts; less maintenance |
 | 2026-07-13 | Dedupe `coding-discipline` (process) vs `code-quality` (artifact) | Both always co-activate; duplicated rules are paid context |
 | 2026-07-13 | Bug Fix Report Template moved into `testing-strategy` | §8 already mandates activating that skill — guaranteed load without always-on cost |

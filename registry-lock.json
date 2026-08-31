@@ -415,14 +415,14 @@
     },
     "inventory/agents/claude-code": {
       "name": "claude-code-agents",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "type": "agents",
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/CLAUDE.md",
-      "integrity": "sha256-a6gRTulFyFFuCLSQPHWZUmemd0AimzkZnoFkx7G8kgk=",
+      "integrity": "sha256-CQ8nw/nVpzRD5PrlHFDDIn9kCsHSXlPLDhmeZoLkWMw=",
       "files": {
-        "CLAUDE.md": "sha256-bgUuG4EgWtbQ+RDZ2L7a2dwraPMbAI84LhzoPPMIO3M="
+        "CLAUDE.md": "sha256-qRPPtabMwyvhMK+Xz/UX9U/worOq0m3MF+RM6+WC/Sg="
       }
     },
     "inventory/agents/grok": {
@@ -471,16 +471,16 @@
     },
     "inventory/subagents/claude-code": {
       "name": "claude-code-subagents",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "type": "subagents",
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents",
-      "integrity": "sha256-jjAG8B9zcGEtyS43m6w/sFOWx6aPiZUrxu0AsUkNWzI=",
+      "integrity": "sha256-3p3St3MajTKx7VYWH5kpG2TU7wyUkY9LwebW64iCzGc=",
       "files": {
-        "bulk-worker.md": "sha256-2SM8dpFNrEmfYajOHj0aXmBLD5DZDkwNidCNeTaGKTM=",
-        "reviewer.md": "sha256-0CbHUv6w4bfzNtc8sRkjOzNdEOOgja/a48YUQAeNmjc=",
-        "validator.md": "sha256-tWiDBcC1gdf/e9ydSx6Lm0GCCdiqKJaAVSL+ZDaADV0="
+        "bulk-worker.md": "sha256-tDFMAiWupFJ1W9m2Wr2oPfFkGvnErpRZuPI4noT+yTA=",
+        "reviewer.md": "sha256-+PcLQ4L2G37kqhp06tVf57S+FIH1Kc9zIbR54gXIFvQ=",
+        "validator.md": "sha256-4y7nORTzUMyGkoc6iMzvvyHdCya3XyuC3duMv8geKZA="
       }
     },
     "inventory/subagents/grok": {

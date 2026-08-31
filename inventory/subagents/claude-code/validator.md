@@ -2,6 +2,7 @@
 name: validator
 description: "Run assigned validation commands or checks and return reusable evidence: command, cwd, exit code, output summary, artifacts, and timestamp."
 model: sonnet
+effort: medium
 tools: Bash, Read, Grep, Glob
 ---
 

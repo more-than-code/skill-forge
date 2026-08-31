@@ -322,7 +322,9 @@ Role sets intentionally differ per tool. Codex and Copilot CLI define five roles
 (`bulk_worker`/`bulk-worker`, `researcher`, `validator`, `planner`, `reviewer`).
 Claude Code and Grok define only `bulk-worker`, `reviewer`, and `validator`;
 exploration and planning map to their built-in agents (`Explore`/`Plan`,
-`explore`/`plan`), as documented in each overlay.
+`explore`/`plan`), as documented in each overlay. Claude's maintained roles pin
+model-family aliases and effort levels; its built-in exploration and planning
+roles inherit those settings from the parent session.
 
 Install them with:
 

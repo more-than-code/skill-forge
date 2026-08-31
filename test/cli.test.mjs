@@ -27,6 +27,11 @@ const CODEX_AGENT_PINS = {
   'reviewer.toml': ['reviewer', 'gpt-5.6-sol', 'high', 'read-only', 'Do not implement fixes.'],
   'validator.toml': ['validator', 'gpt-5.6-luna', 'medium', 'workspace-write', 'Do not edit source, config, tests, docs, or lockfiles intentionally.']
 };
+const CLAUDE_AGENT_PINS = {
+  'bulk-worker.md': ['bulk-worker', 'haiku', 'medium', 'Read, Edit, Write, Grep, Glob, Bash', 'Only modify files explicitly assigned to this task.'],
+  'reviewer.md': ['reviewer', 'sonnet', 'high', 'Read, Grep, Glob', 'Do not implement fixes.'],
+  'validator.md': ['validator', 'sonnet', 'medium', 'Bash, Read, Grep, Glob', 'Do not edit source, config, tests, docs, or lockfiles intentionally.']
+};
 
 const tempDirs = [];
 
@@ -52,6 +57,23 @@ function tomlStringValue(content, key, file) {
   const match = assignments[0].match(new RegExp('^\\s*' + key + '\\s*=\\s*"([^"]*)"\\s*$'));
   assert.ok(match, file + ' must define ' + key + ' as a double-quoted string without trailing content');
   return match[1];
+}
+
+function yamlFrontmatterValue(content, key, file) {
+  const frontmatter = content.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
+  assert.ok(frontmatter, file + ' must start with YAML frontmatter');
+  const allowedKeys = new Set(['name', 'description', 'model', 'effort', 'tools']);
+  const seenKeys = new Set();
+  for (const line of frontmatter[1].split('\n')) {
+    const match = line.match(/^([A-Za-z][A-Za-z0-9]*):\s*.+$/);
+    assert.ok(match, file + ' must use one-line key/value frontmatter entries');
+    assert.ok(allowedKeys.has(match[1]), file + ' has unsupported frontmatter field ' + match[1]);
+    assert.ok(!seenKeys.has(match[1]), file + ' repeats frontmatter field ' + match[1]);
+    seenKeys.add(match[1]);
+  }
+  const assignments = frontmatter[1].split('\n').filter((line) => new RegExp('^' + key + ':').test(line));
+  assert.equal(assignments.length, 1, file + ' must define exactly one ' + key);
+  return assignments[0].slice(assignments[0].indexOf(':') + 1).trim().replace(/^"|"$/g, '');
 }
 
 /** Isolated registry+inventory tree so skill mutator tests never touch the checkout. */
@@ -101,7 +123,38 @@ test('composed claude-code agents resolve placeholders to built-in agent names',
   await run('node', [CLI, 'install', 'claude-code-agents', '--type', 'agent', '--target', 'claude-code', '--path', target, '--yes'], { cwd: REPO_ROOT });
   const composed = await fs.readFile(target, 'utf8');
   assert.match(composed, /`Explore`, `Plan`, or `reviewer`/);
+  for (const [name, model, effort] of Object.values(CLAUDE_AGENT_PINS)) {
+    assert.ok(composed.includes('| `' + name + '` | maintained | `' + model + '` | `' + effort + '` |'), name);
+  }
+  assert.match(composed, /\| `Explore` \| built-in \| inherited \| inherited \|/);
+  assert.match(composed, /environment, invocation, and organization-policy precedence can still override or substitute/);
+  assert.match(composed, /`Bash` can still write/);
   assert.doesNotMatch(composed, /\{\{[a-z0-9_]+\}\}/);
+});
+
+test('claude-code subagents pin the approved model and effort', async () => {
+  const sourceDir = path.join(REPO_ROOT, 'inventory', 'subagents', 'claude-code');
+  const installedDir = path.join(await tempDir('skf-claude-code-subagents-'), 'agents');
+  await run('node', [CLI, 'subagent', 'install', 'claude-code-subagents', '--target', 'claude-code', '--path', installedDir, '--yes'], { cwd: REPO_ROOT });
+
+  const sourceFiles = (await fs.readdir(sourceDir)).filter((file) => file.endsWith('.md')).sort();
+  const installedFiles = (await fs.readdir(installedDir)).filter((file) => file.endsWith('.md')).sort();
+  assert.deepEqual(sourceFiles, Object.keys(CLAUDE_AGENT_PINS));
+  assert.deepEqual(installedFiles, sourceFiles);
+
+  for (const file of sourceFiles) {
+    const content = await fs.readFile(path.join(sourceDir, file), 'utf8');
+    const installedContent = await fs.readFile(path.join(installedDir, file), 'utf8');
+    const [name, model, effort, tools, contractMarker] = CLAUDE_AGENT_PINS[file];
+    assert.equal(installedContent, content, file + ' must install byte-for-byte');
+    assert.equal(yamlFrontmatterValue(content, 'name', file), name);
+    assert.equal(yamlFrontmatterValue(content, 'model', file), model);
+    assert.equal(yamlFrontmatterValue(content, 'effort', file), effort);
+    assert.equal(yamlFrontmatterValue(content, 'tools', file), tools);
+    assert.ok(['haiku', 'sonnet', 'opus', 'fable'].includes(model), file);
+    assert.ok(['low', 'medium', 'high', 'xhigh', 'max'].includes(effort), file);
+    assert.ok(content.includes(contractMarker), file);
+  }
 });
 
 test('composed codex agents resolve placeholders to codex subagent names', async () => {

@@ -2,6 +2,8 @@
 name: bulk-worker
 description: "Bulk mechanical work: formatting, renaming, repetitive transforms."
 model: haiku
+effort: medium
+tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 Execute straightforward mechanical tasks. Do not plan, debate tradeoffs, or make design decisions.

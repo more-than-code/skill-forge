@@ -26,16 +26,16 @@ Maintained Claude Code subagent definitions are installed at `~/.claude/agents/`
 
 ## Claude Code Agent Reference
 
-Claude Code model assignments use Claude model aliases because Claude Code does not select OpenAI models for subagents. Prefer aliases over pinned Anthropic model IDs so Claude Code can resolve them to the user's configured provider defaults.
+Maintained Claude Code subagents pin a Claude model-family alias and effort level to preserve each role's quality, latency, and cost class. Aliases resolve to a current model available through the user's configured provider; Claude Code's documented environment, invocation, and organization-policy precedence can still override or substitute the definition.
 
-| Agent | Source | Model | Best for |
-|---|---|---|---|
-| `Explore` | built-in | default | Code exploration, API tracing, reading tests, in-scope synthesis |
-| `Plan` | built-in | default | Architecture decisions, multi-file tradeoffs, design with real stakes (pass a `model` override such as `opus` for high-stakes design) |
-| `general-purpose` | built-in | default | Catch-all for multi-step delegated tasks when no maintained role or built-in above fits |
-| `bulk-worker` | maintained | `haiku` | Formatting, renaming, repetitive transforms, file enumeration |
-| `validator` | maintained | `sonnet` | Command execution, checks, and reusable evidence capture |
-| `reviewer` | maintained | `sonnet` | One review lens at a time with severity-tagged findings |
+| Agent | Source | Model | Effort | Best for |
+|---|---|---|---|---|
+| `Explore` | built-in | inherited | inherited | Code exploration, API tracing, reading tests, in-scope synthesis |
+| `Plan` | built-in | inherited | inherited | Architecture decisions, multi-file tradeoffs, design with real stakes (pass a `model` override such as `opus` for high-stakes design) |
+| `general-purpose` | built-in | inherited | inherited | Catch-all for multi-step delegated tasks when no maintained role or built-in above fits |
+| `bulk-worker` | maintained | `haiku` | `medium` | Formatting, renaming, repetitive transforms, file enumeration |
+| `validator` | maintained | `sonnet` | `medium` | Command execution, checks, and reusable evidence capture |
+| `reviewer` | maintained | `sonnet` | `high` | One review lens at a time with severity-tagged findings |
 
 Other built-in utility agents (for example `claude-code-guide`, `statusline-setup`) vary by Claude Code version and surface; use them for their stated purpose, not for §7 delegation roles.
 
@@ -49,8 +49,8 @@ Other built-in utility agents (for example `claude-code-guide`, `statusline-setu
 Claude Code subagent files do not pin Codex-style `sandbox_mode`. Enforcement is layered:
 
 - Built-in `Explore` and `Plan` are harness-enforced read-only.
-- `reviewer` and `validator` declare a `tools` allowlist in frontmatter (`reviewer` is read-only; `validator` can run commands but cannot edit files).
-- `bulk-worker` inherits full tools; its limit to explicitly assigned files is a behavioral contract — use active session or tool permission controls to enforce it when available.
+- All maintained roles declare a `tools` allowlist in frontmatter. `reviewer` is read-only. `validator` excludes the `Edit` and `Write` tools. `bulk-worker` receives file tools and `Bash`, but no browser, MCP, or delegation tools.
+- `Bash` can still write, so the validator's source-file restriction and the bulk-worker's assigned-file restriction remain behavioral contracts reinforced by active session permissions.
 
 ## Claude Code Target Notes
 

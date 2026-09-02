@@ -70,15 +70,15 @@
     },
     "inventory/skills/coding-discipline": {
       "name": "coding-discipline",
-      "version": "0.2.0",
+      "version": "0.3.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/coding-discipline",
-      "integrity": "sha256-+AwdaB5NhSjGvG2+2uiWyFZ5nKszO+cxPKEDIT8EAkw=",
+      "integrity": "sha256-jS3r/aYrv7m5msRqm8PkAZqwyuVXNNTrNfMRiK1zMBg=",
       "files": {
-        "EXAMPLES.md": "sha256-Pp+wGBnkqXg2un6HKiPzKCfZljEzQUb/wGyX0ctOH68=",
-        "SKILL.md": "sha256-X1BWJvnrEsbNglji8PZb12agTV32WxF5pUTamSAU2+w="
+        "EXAMPLES.md": "sha256-LmcMHC3qrvAVpL81cPyg/Ff85fm2obcvHd1N9to4whE=",
+        "SKILL.md": "sha256-lwDN5zA4HH2gq7vc8cfApqQciRJI+oHGiUTN5/c0Cno="
       }
     },
     "inventory/skills/data-migration": {
@@ -354,27 +354,27 @@
     },
     "inventory/skills/ui-portability-baseline": {
       "name": "ui-portability-baseline",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/ui-portability-baseline",
-      "integrity": "sha256-TE6dGtwTozOUsxaNy3Kt0S+uU7gwOJ5QrUILNwvaQlE=",
+      "integrity": "sha256-dL2aKMurLJySGa4oU8xO+UymCQCfIqlz/5hKTyMKzwc=",
       "files": {
-        "SKILL.md": "sha256-fPftQ+Z9tmAF2oDcD/K2TMjf+KWPOqvzd1jBsOlFlpE="
+        "SKILL.md": "sha256-AIJJpqv2EtBYqVcUNqCtlsFdxvGaNvJZFo9DiiPp6pU="
       }
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/umbrella-workspace",
-      "integrity": "sha256-q9uCiL3LJ5xdJOCpwNyPoGIGQ/0UdnfsMwynTZj6H0w=",
+      "integrity": "sha256-U+ooySnkIESJZ03lmitZehdWWrMfk1K86uU0E08ffOo=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-+1AtelsXUmkQcckZgBEmNuECixk1yxL4CORhfKOzLPQ="
+        "SKILL.md": "sha256-TT81/gHWeFaaBLtBWsiRJw65prTMaI5SWcIRY33msZY="
       }
     },
     "inventory/agents": {

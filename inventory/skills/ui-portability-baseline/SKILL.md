@@ -3,8 +3,11 @@ name: ui-portability-baseline
 description: >
   Lightweight UI maintainability and portability baseline for frontend work that
   should remain easy to migrate across repositories or align with a stricter
-  design system later. Use when implementing or reviewing UI where full
-  design-system governance is not required yet.
+  design system later, including components that must survive being embedded in a
+  host container (side panel, drawer, split view, modal) where viewport
+  breakpoints, viewport units and fixed positioning stop meaning what they say.
+  Use when implementing or reviewing UI where full design-system governance is
+  not required yet.
 ---
 
 # UI Portability Baseline
@@ -67,6 +70,24 @@ Treat these as portability debt unless intentionally justified:
 - Styling that only works in one supported theme.
 - Custom interactions without keyboard, focus, label, or accessible-name coverage.
 - UI changes that were not checked in supported themes or relevant viewport sizes.
+- Viewport breakpoints or viewport units inside a component a host may embed.
+- Fixed-position overlays rendered inside the component tree rather than into `body`.
+- Components that reach for a specific sibling surface instead of routing through a host interface.
+
+### 8. Do Not Assume You Own The Window
+
+A component that renders as a full page today may be embedded tomorrow - in a side panel, a drawer, a split view, a modal, an inline preview. Four viewport assumptions break the moment it is:
+
+- **Breakpoints ask about the window, not the container.** Responsive utilities and `@media (min-width: ...)` measure the viewport, so a narrow container on a wide screen keeps every wide-layout rule. Choose layout from an explicit "am I hosted" signal, or from container queries where they are available - never from a viewport breakpoint.
+- **Viewport units mean the screen.** `100vh`, `100dvh` and `vw` size to the display, not to the container. Inside a host, size to `100%`.
+- **`position: fixed` is not reliably viewport-relative.** It resolves against the nearest ancestor carrying a `transform`, `filter` or `perspective` - and hosts commonly carry one for slide-in animation. Render fixed overlays into `body` so no ancestor can redefine what their coordinates mean.
+- **The host supplies its own chrome.** A title, a close control, a surrounding frame. A component that draws its own gives the reader two, and offers actions that make no sense from inside the host.
+
+**Anything aimed at the surrounding surface must be routed through the host, not assumed.** A component cannot know what it is embedded next to, so "send this somewhere" interactions - quoting into a nearby conversation, sharing, opening a related record - belong behind an interface the host provides, exactly as a close control does. A component that reaches for a specific sibling works in one placement and silently does nothing in the next.
+
+**The failure modes are not equally visible.** Chrome, sizing and layout fail loudly - the shape is obviously wrong. Fixed positioning fails silently: the overlay is created correctly and placed outside the visible area, which is indistinguishable from the feature being dead. On a report that "the control never appears", instrument early rather than re-reading the component.
+
+Observed 2026-09-02: one set of pages reused inside a side panel produced four separate defects - duplicated chrome, a sidebar that never collapsed, a view sized to the screen, and an overlay placed off-screen - all four traceable to these assumptions and to nothing else.
 
 ## Review Checklist
 
@@ -79,6 +100,10 @@ Before completing UI work, check:
 - [ ] Control sizing matches surrounding operational UI.
 - [ ] No unnecessary local component fork was introduced.
 - [ ] Feature logic remains separate from design-system implementation details.
+- [ ] Components a host may embed choose layout from a hosted signal or container query, not a viewport breakpoint.
+- [ ] Hosted-capable components size to `100%` rather than to viewport units.
+- [ ] Fixed-position overlays render into `body`.
+- [ ] Actions aimed at the surrounding surface go through the host interface.
 - [ ] Any portability debt is named in completion notes.
 
 ## Verification
@@ -86,6 +111,7 @@ Before completing UI work, check:
 - Run the normal lint, typecheck, and test gates expected by the repository.
 - Render or manually inspect the changed UI in each supported theme, or at minimum the default and dark/high-contrast theme when those exist.
 - Check the changed UI at the viewport sizes relevant to the surrounding page or component.
+- Where a component can be embedded, exercise it in **both** placements - standalone and hosted - and test any overlay in each, since an off-screen overlay is indistinguishable from a dead control.
 - Exercise keyboard navigation and visible focus for any changed interactive control.
 - Run stricter design-system checks only when the task or repo requires strict compliance.
 - If advisory governance findings are available, report them as portability debt rather than automatic blockers.

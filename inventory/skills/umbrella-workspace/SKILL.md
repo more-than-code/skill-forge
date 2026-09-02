@@ -3,11 +3,13 @@ name: umbrella-workspace
 description: >
   Cooperation rules for multi-repo (umbrella) workspaces: where docs and tasks live,
   self-contained task entries, pointer stubs in child repos, handoff checklists,
-  plan-vs-status split, and parallel agent sessions via git worktrees (SESSION.md
+  plan-vs-status split, where skill profiles belong (child repos, never the umbrella),
+  and parallel agent sessions via git worktrees (SESSION.md
   markers, AGENTS load hooks, thin feature umbrellas, worktree vs copy, retire
   on primary). Use when working in a multi-repo container directory, starting or
   resuming cross-repo plans, writing umbrella tasks/todo.md, adding pointer
-  stubs, seeding a second checkout for parallel work, or when the user mentions
+  stubs, scaffolding or vendoring skills into a child repo, seeding a second checkout
+  for parallel work, or when the user mentions
   umbrella workspace, cross-repo handoff, multi-repo cooperation, worktree,
   feature umbrella, or parallel session.
   Slash: /umbrella-workspace.
@@ -32,6 +34,34 @@ Do **not** put single-repo work in the umbrella `tasks/` or `docs/`.
 - `tasks/` (`todo.md`, `archive.md`) — live status for those same efforts (Tier 3 tracking, gates, approvals)
 
 **Rule of thumb:** if the work is fully executable from one repo’s files alone, track it in that repo. If correct planning/execution needs **≥2 repos**, the plan and status live at the umbrella and reference children by path.
+
+## Skill profiles across the workspace
+
+The umbrella is not a consumer profile. It holds cross-repo plans and status; skills belong to the repo holding the code they apply to.
+
+Two sources, narrowest wins:
+
+- **`$HOME` profile** - what applies regardless of stack, declared once for the machine.
+- **Child repo profile** - `skill-forge.json` in that child, for skills its own stack signals justify.
+- **Umbrella** - none. Anything declared here loads while working in every child, including the ones it does not fit.
+
+**Never re-declare a home skill in a child.** The same skill then surfaces twice to the agent.
+
+**Why child-scoped beats home-scoped for anything stack-specific:** tools that support directory-scoped skills resolve the copy whose directory contains the files being worked on. A frontend skill declared in the frontend child stays quiet during backend work in the same session; the same skill declared at `$HOME` does not.
+
+Per child that needs one:
+
+```bash
+cd <child>
+skf project init
+skf project add <name>...   # only what that child's own signals justify
+skf sync
+skf sync --check            # must exit 0
+```
+
+**A child whose only signals are already covered by `$HOME` gets no profile.** A stub with no code yet is not a consumer - revisit when it becomes one. Declaring skills there costs noise and buys nothing.
+
+**A newly vendored skill loads on the next session, not the current one.** The skill list is read at session start, so a profile changed mid-session is a handoff note, not a live change.
 
 ## Task entries must be self-contained
 
@@ -148,12 +178,20 @@ umbrella/                 # usually not a git repo
   child-a/                # each child its own git repo when ready
     AGENTS.md
     tasks/todo.md         # pointer stub when participating — committed, status-free
+    skill-forge.json      # this child's own skills; absent when $HOME covers it
+    skill-forge.lock.json
+    .agents/skills/       # vendored by `skf sync`; never hand-copied
+    .claude/skills/
   child-b/
     ...
 ```
 
 ## Anti-patterns
 
+- Declaring a stack-specific skill at the umbrella or at `$HOME` so "every repo has it" - it then loads for children it does not fit
+- Adding a child repo without deciding its skill profile, leaving it silently on the home baseline
+- Hand-copying a vendored skill directory between children instead of declaring it in that child's profile
+- Splitting a child's `skill-forge.json`, lockfile and vendored skill directories across separate commits
 - Duplicating live status in both umbrella and child `todo.md`
 - One giant “in progress” section for a multi-phase plan
 - Plan-only docs with no umbrella task tracking for Tier 3 work
@@ -170,5 +208,5 @@ umbrella/                 # usually not a git repo
 ## Related
 
 - Global agent process: risk tiers, mandatory gates, `tasks/` format (§13 style) — already in core instructions
-- Project skills stay in each child for stack-specific conventions; this skill is only multi-repo cooperation
+- `skill-forge-project` - choosing and applying a child's skill set; this skill covers only where profiles belong in a multi-repo layout
 - Companion: `PARALLEL-WORKTREES.md` — seed, thin feature umbrella, worktree vs copy, one DB file per tree, retire on primary, cleanup

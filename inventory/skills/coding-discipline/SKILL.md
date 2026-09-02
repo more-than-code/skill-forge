@@ -2,10 +2,11 @@
 name: coding-discipline
 description: >
   Behavioral guardrails against common LLM coding pitfalls: overengineering, hidden
-  assumptions, drive-by edits, vague execution, post-hoc documentation, and unsafe git
-  commits (outside workspace; main/master without asking). Activate on all implementation
-  tasks alongside security-baseline. Derived from Andrej Karpathy's observations on LLM
-  coding failure modes.
+  assumptions, drive-by edits, vague execution, post-hoc documentation, diagnosing a
+  runtime failure by re-reading source instead of observing it, and unsafe git commits
+  (outside workspace; main/master without asking). Activate on all implementation tasks
+  alongside security-baseline, and when a bug resists its first explanation. Derived from
+  Andrej Karpathy's observations on LLM coding failure modes.
 ---
 
 # Coding Discipline
@@ -142,6 +143,25 @@ For multi-step tasks, verify at each step:
 
 Each step is independently verifiable. Don't batch all verification to the end.
 
+### Diagnosis From Evidence
+
+A failure you cannot observe is not diagnosed by reading the code again. The first explanation drawn from source is a hypothesis. The second, drawn from the same source, is usually another hypothesis rather than a correction - source reading pattern-matches into a plausible story, and it will produce a fresh story every pass.
+
+**The trigger is one wrong explanation, not four.** When a runtime symptom outlives your first theory, stop reading and make the failure describe itself:
+
+```
+1. Name every branch that could produce the symptom
+2. Make each one say so - log which test rejected the input, and the values it computed
+3. Run it; read which branch actually fired
+4. Fix that cause, and delete the instrumentation in the same change
+```
+
+Passing types and passing unit tests are not evidence that a wired path works: a transport can hold its own green tests while the path through it is broken end to end. Ask what was actually observed, not what compiles.
+
+When the behavior is only reachable somewhere you cannot run it - behind a login, on another machine, in someone else's browser - say so on the **first** failure and ask for the observation. Turns spent theorizing about state you cannot reach are turns spent producing confident wrong answers.
+
+Observed 2026-09-02: four successive rounds of source reading produced four confident and incorrect causes for one UI defect; roughly twenty lines of branch logging identified it on the next round.
+
 ### Docs-with-code batch
 
 ```
@@ -172,10 +192,15 @@ Agent:
 - [ ] Doc co-delivery: required docs present with code (or N/A stated)
 - [ ] Doc completeness: final behavior reflected in every owning surface
 - [ ] Commit reply includes Docs commit report when a commit was made
+- [ ] Runtime claims rest on something observed - a log, a run, a report - not on source reading
 
 ## Anti-Patterns
 
 Artifact-level anti-patterns (over-abstraction, speculative features, over-parameterization) are owned by `code-quality`. Worked before/after examples for all of them live in `EXAMPLES.md` beside this skill.
+
+### Speculative Diagnosis
+
+Explaining a runtime failure from source, repeatedly, without observing it. Every pass yields a fresh plausible cause and no evidence, and the confident tone hides that nothing has been established. Instrument after the first wrong answer.
 
 ### Drive-By Refactoring
 **Wrong:** While fixing an empty-email crash, also add username validation, change comments, add docstrings, and "improve" email validation.

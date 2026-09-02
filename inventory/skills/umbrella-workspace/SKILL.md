@@ -3,7 +3,8 @@ name: umbrella-workspace
 description: >
   Cooperation rules for multi-repo (umbrella) workspaces: where docs and tasks live,
   self-contained task entries, pointer stubs in child repos, handoff checklists,
-  plan-vs-status split, where skill profiles belong (child repos, never the umbrella),
+  plan-vs-status split, where the skill profile belongs (umbrella or child, decided by
+  whether the agent tool descends into subdirectories),
   and parallel agent sessions via git worktrees (SESSION.md
   markers, AGENTS load hooks, thin feature umbrellas, worktree vs copy, retire
   on primary). Use when working in a multi-repo container directory, starting or
@@ -37,31 +38,36 @@ Do **not** put single-repo work in the umbrella `tasks/` or `docs/`.
 
 ## Skill profiles across the workspace
 
-The umbrella is not a consumer profile. It holds cross-repo plans and status; skills belong to the repo holding the code they apply to.
+Two sources: the **`$HOME` profile** for what applies regardless of stack, and **one project profile** for stack-specific skills. Never re-declare a home skill in the project profile - it then surfaces twice to the agent.
 
-Two sources, narrowest wins:
+**Where the project profile goes depends on whether your agent tool descends into subdirectories, and you must verify that rather than assume it.**
 
-- **`$HOME` profile** - what applies regardless of stack, declared once for the machine.
-- **Child repo profile** - `skill-forge.json` in that child, for skills its own stack signals justify.
-- **Umbrella** - none. Anything declared here loads while working in every child, including the ones it does not fit.
+Some tools read skills only from the directory the session was started in. Others resolve a directory-scoped copy against the files being edited. The difference decides the layout, and guessing wrong fails *silently*: the profile is declared, `skf sync` vendors it, the lockfile is written, `sync --check` passes - and the skills never load. Nothing reports this. Check the tool's own behavior, then confirm by starting a session and looking at what actually loaded.
 
-**Never re-declare a home skill in a child.** The same skill then surfaces twice to the agent.
+**Tool reads only the session root (verify first - this is the common case).** The umbrella carries the whole project profile; children carry none. Every skill any child needs is declared once at the top, because that is the only place a session rooted at the umbrella will look.
 
-**Why child-scoped beats home-scoped for anything stack-specific:** tools that support directory-scoped skills resolve the copy whose directory contains the files being worked on. A frontend skill declared in the frontend child stays quiet during backend work in the same session; the same skill declared at `$HOME` does not.
+- Cost: a session started *inside* a child gets no project skills at all. Accept it deliberately and write it down, or work from the umbrella.
+- Cost: a stack skill is loaded while working in siblings it does not fit. Usually cheaper than the alternative failing silently.
 
-Per child that needs one:
+**Tool resolves directory-scoped skills.** Each child declares only what its own signals justify, so a frontend skill stays quiet during backend work in the same session. Better isolation - available only if the tool really does this.
 
 ```bash
-cd <child>
+cd <the directory sessions actually start in>
 skf project init
-skf project add <name>...   # only what that child's own signals justify
+skf project add <name>...   # everything the children between them need
 skf sync
 skf sync --check            # must exit 0
 ```
 
-**A child whose only signals are already covered by `$HOME` gets no profile.** A stub with no code yet is not a consumer - revisit when it becomes one. Declaring skills there costs noise and buys nothing.
+**Do not split the same concern across both levels.** One project profile, in one place. A skill declared at the umbrella *and* in a child is the duplicate problem again, one level down.
+
+**A child whose signals `$HOME` already covers needs nothing.** A stub with no code yet is not a consumer - revisit when it becomes one.
+
+**When the profile lives at an umbrella that is not a git repo, it is unversioned.** Children commit their own; an umbrella that is only a container commits nothing. Record which skill serves which child in the umbrella's `AGENTS.md`: that table plus `skf sync` is the profile's only durable record, and it is what rebuilds the workspace after the container is lost.
 
 **A newly vendored skill loads on the next session, not the current one.** The skill list is read at session start, so a profile changed mid-session is a handoff note, not a live change.
+
+Observed 2026-09-02: skills were declared and vendored per child on the assumption that the tool would resolve them by directory. It read only the session root, so for a full working session five skills were installed, in sync, and never loaded - including the UI skill for the frontend work being done at the time.
 
 ## Task entries must be self-contained
 
@@ -188,10 +194,11 @@ umbrella/                 # usually not a git repo
 
 ## Anti-patterns
 
-- Declaring a stack-specific skill at the umbrella or at `$HOME` so "every repo has it" - it then loads for children it does not fit
-- Adding a child repo without deciding its skill profile, leaving it silently on the home baseline
+- Assuming an agent tool loads skills from child directories without confirming it - the failure is silent, and `sync --check` passes either way
+- Declaring a stack-specific skill at `$HOME` so "every repo has it", when one project profile would do
+- Adding a child repo without deciding which skills it needs, leaving it silently on the home baseline
 - Hand-copying a vendored skill directory between children instead of declaring it in that child's profile
-- Splitting a child's `skill-forge.json`, lockfile and vendored skill directories across separate commits
+- Splitting a profile's `skill-forge.json`, lockfile and vendored skill directories across separate commits, where they are committed at all
 - Duplicating live status in both umbrella and child `todo.md`
 - One giant “in progress” section for a multi-phase plan
 - Plan-only docs with no umbrella task tracking for Tier 3 work

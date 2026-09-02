@@ -112,7 +112,7 @@ how carefully you redirect `HOME` and `PUB_CACHE`.
 to a bare `flutter` on PATH, silently using a different SDK than the pin.
 
 ```bash
-SDK="$(cd app && readlink .fvm/flutter_sdk)"   # e.g. /Users/me/fvm/versions/3.44.6
+SDK="$(cd app && readlink .fvm/flutter_sdk)"   # e.g. ~/fvm/versions/3.44.6
 ```
 
 ### Case A — SDK path IS writable (normal dev, most CI)

@@ -95,9 +95,22 @@ mapping prose. `validate` fails on unresolved placeholders and warns on unused v
 
 ### Verification
 
-`npm test` (node:test, 6 e2e cases): registry validation, placeholder resolution
+`npm test` (node:test): registry validation, placeholder resolution
 per tool, stats writers (including the no-prompt-content guarantee), site
 generation. `validate` + `diff-*` are the standing gates after any inventory change.
+
+**Portability gate (skills).** `validate` rejects two classes of hardcoded path in
+any skill file — an absolute home path (`/Users/<name>/…`, `/home/<name>/…`) and a
+reference to the skill's *own* vendor location (`.agents/skills/<self>`,
+`~/.claude/skills/<self>`, …). Both are wrong the moment the skill is vendored
+somewhere else, and a skill is vendored into whichever profile declares it: a repo,
+an umbrella, or `$HOME`. The check runs inside `skill write`/`bump` as well, so a
+bad path is reported as a partial write rather than reaching the registry.
+
+Observed 2026-09-03: `product-parity` documented its own harness as
+`~/.agents/skills/product-parity/scripts/parity-gate.mjs`. Moving the skill from the
+`$HOME` profile to a project profile broke all three documented commands, silently,
+in the only repo that ran them.
 
 ## Project Skill Profiles (shipped 2026-07-19)
 

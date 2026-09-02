@@ -65,6 +65,18 @@ skf sync --check            # must exit 0
 
 **When the profile lives at an umbrella that is not a git repo, it is unversioned.** Children commit their own; an umbrella that is only a container commits nothing. Record which skill serves which child in the umbrella's `AGENTS.md`: that table plus `skf sync` is the profile's only durable record, and it is what rebuilds the workspace after the container is lost.
 
+**A child's own local skill reaches the umbrella by symlink, not by copy.** A repo-local overlay (`skills.local`) has its source inside the child that owns it, and that child is the only place it can be edited and committed. An umbrella-rooted session still needs to see it, so link down rather than duplicating:
+
+```bash
+# from the umbrella, pointing into the child that owns the source
+ln -s ../<child>/.agents/skills/<name> .agents/skills/<name>
+ln -s ../../.agents/skills/<name>      .claude/skills/<name>
+```
+
+`skf sync` leaves these alone - it vendors registry skills and prunes by registry name, so a link named after a local skill is neither created nor removed for you. Declare the child's real path in the umbrella's `skills.local` so `integrity` tracks the source. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.
+
+Umbrella-level links are unversioned when the umbrella is not a git repo - the child commits the source and its own links, the umbrella commits nothing. Note them in the umbrella `AGENTS.md` beside the skill table, or a lost container takes them with it.
+
 **A newly vendored skill loads on the next session, not the current one.** The skill list is read at session start, so a profile changed mid-session is a handoff note, not a live change.
 
 Observed 2026-09-02: skills were declared and vendored per child on the assumption that the tool would resolve them by directory. It read only the session root, so for a full working session five skills were installed, in sync, and never loaded - including the UI skill for the frontend work being done at the time.
@@ -198,6 +210,7 @@ umbrella/                 # usually not a git repo
 - Declaring a stack-specific skill at `$HOME` so "every repo has it", when one project profile would do
 - Adding a child repo without deciding which skills it needs, leaving it silently on the home baseline
 - Hand-copying a vendored skill directory between children instead of declaring it in that child's profile
+- Copying a child's local overlay up to the umbrella instead of symlinking it - the copy never refreshes and `sync --check` still passes
 - Splitting a profile's `skill-forge.json`, lockfile and vendored skill directories across separate commits, where they are committed at all
 - Duplicating live status in both umbrella and child `todo.md`
 - One giant “in progress” section for a multi-phase plan

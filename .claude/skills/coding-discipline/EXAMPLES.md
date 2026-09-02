@@ -200,3 +200,33 @@ Umbrella glossary: updated | unversioned path only (../docs/naming-glossary.md)
 Goal: improve readability while preserving inputs, outputs, and error behavior.
 Verify: existing parser tests pass before and after the refactor.
 ```
+
+
+## 5. Diagnosis From Evidence
+
+### Example: A Defect You Cannot Reproduce
+
+**Situation:** A user reports that a control never appears in one context, while the same control works elsewhere. The agent cannot run that context itself.
+
+**Bad response**
+- Reads the component; explains the event listener is probably not attached
+- Told it still fails; reads the same component; now explains the container reference is wrong
+- Told it still fails; reads it again; now blames a scroll handler
+- Each answer is confident, none is checked, and each costs the user a round trip
+
+**Better response**
+```text
+My first explanation was wrong, so I am going to stop guessing and make the failure
+report itself rather than read the file a third time.
+
+There are five ways this function returns nothing. I have made each one log which
+test rejected the input, and log the coordinates when it gets through. Reload,
+reproduce it once, and paste what appears.
+
+I cannot run this context myself - it is behind a login I do not have - so one line
+of your console output is worth more than anything further I can infer.
+```
+
+Then: read the branch that actually fired, fix that cause, and remove the logging in the same change.
+
+**Why it matters:** the instrumentation showed the control was being created all along and positioned off-screen - a cause none of the three readings had proposed, and one no further reading was likely to reach.

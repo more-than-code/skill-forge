@@ -388,6 +388,31 @@ test('skill write/read/list/delete manage an inventory skill end-to-end', async 
   assert.match(stdout, /Registry validation passed/);
 });
 
+test('skill authoring pipeline rejects hardcoded absolute home and self-vendor paths', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'test-hardcoded-path-skill';
+  const body = (line) => `---\nname: ${name}\ndescription: Fixture.\n---\n\n# Fixture\n\n${line}\n`;
+
+  await fx.runWithStdin(['skill', 'write', name, '--set-version', '0.1.0', '--json'], body('Nothing to see.'));
+  assert.match((await fx.run(['validate'])).stdout, /Registry validation passed/);
+
+  // The gate runs inside `skill write` (which locks + validates), so a bad path
+  // is reported as a partial write rather than passing through to the registry.
+  const abs = await fx.runWithStdin(['skill', 'write', name, '--json'], body('See `/Users/someone/tools/x.mjs`.')).catch((error) => error);
+  const absPayload = JSON.parse(abs.stdout);
+  assert.equal(absPayload.partial, true);
+  assert.ok(absPayload.errors.some((e) => /hardcodes an absolute home path/.test(e)));
+
+  const self = await fx.runWithStdin(['skill', 'write', name, '--json'], body(`See \`~/.agents/skills/${name}/scripts/x.mjs\`.`)).catch((error) => error);
+  const selfPayload = JSON.parse(self.stdout);
+  assert.equal(selfPayload.partial, true);
+  assert.ok(selfPayload.errors.some((e) => /hardcodes this skill's own vendor location/.test(e)));
+
+  await fx.runWithStdin(['skill', 'write', name, '--json'], body('Clean again.'));
+  await fx.run(['skill', 'delete', name, '--yes', '--json']);
+  assert.match((await fx.run(['validate'])).stdout, /Registry validation passed/);
+});
+
 test('skill write manages companion files and rejects path traversal via --file', async () => {
   const fx = await skillForgeFixture();
   const name = 'test-companion-skill';

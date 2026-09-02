@@ -214,20 +214,6 @@
     },
     {
       "type": "skill",
-      "name": "skill-forge-cli",
-      "version": "0.2.1",
-      "scope": "custom",
-      "path": "inventory/skills/skill-forge-cli",
-      "installable": true,
-      "runtimeTarget": "~/.codex/skills/skill-forge-cli",
-      "tags": [
-        "skill-forge",
-        "agent-facing",
-        "inventory"
-      ]
-    },
-    {
-      "type": "skill",
       "name": "codex-config-toml",
       "version": "0.1.0",
       "scope": "custom",
@@ -244,7 +230,7 @@
     {
       "type": "skill",
       "name": "umbrella-workspace",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "scope": "custom",
       "path": "inventory/skills/umbrella-workspace",
       "installable": true,
@@ -316,7 +302,7 @@
     {
       "type": "skill",
       "name": "skill-forge-project",
-      "version": "0.1.2",
+      "version": "0.3.0",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-project",
       "installable": true,
@@ -344,7 +330,7 @@
     {
       "type": "skill",
       "name": "fvm-flutter",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "scope": "custom",
       "path": "inventory/skills/fvm-flutter",
       "installable": true,
@@ -359,7 +345,7 @@
     {
       "type": "skill",
       "name": "product-parity",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,
@@ -401,6 +387,20 @@
         "delegation",
         "process",
         "cost"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "skill-forge-authoring",
+      "version": "0.3.1",
+      "scope": "custom",
+      "path": "inventory/skills/skill-forge-authoring",
+      "installable": true,
+      "runtimeTarget": "~/.codex/skills/skill-forge-authoring",
+      "tags": [
+        "skill-forge",
+        "agent-facing",
+        "inventory"
       ]
     }
   ],

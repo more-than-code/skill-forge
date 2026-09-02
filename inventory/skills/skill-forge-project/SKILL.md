@@ -12,7 +12,7 @@ description: >
 
 Helps an agent pick which registry skills a repository should depend on, and
 apply that choice safely. This is the *fit-analysis* layer on top of the
-lower-level `skill-forge-cli` skill (which mutates skill content/versions —
+lower-level `skill-forge-authoring` skill (which mutates skill content/versions —
 not used here).
 
 ## When to activate
@@ -23,7 +23,7 @@ not used here).
   sync".
 
 **Do not use this skill for:** authoring or versioning registry skills under
-`inventory/skills/` (that's `skill-forge-cli`), or installing managed
+`inventory/skills/` (that's `skill-forge-authoring`), or installing managed
 agents/subagents/hooks (`skf agent|subagent|hook install`).
 
 ## Decision workflow
@@ -79,9 +79,89 @@ agents/subagents/hooks (`skf agent|subagent|hook install`).
   Skill Forge", a pre-existing hand-authored directory is at that vendor path —
   ask the user whether to declare it under `skills.local` or move it aside.
   Never delete it to make sync pass.
+- **Local skills are declared where they already live.** `sync` does not copy
+  `skills.local` entries anywhere — the source dir must already be at a path the
+  tool reads. See "Authoring a repo-local skill" below.
 - **Commit together.** `skill-forge.json`, `skill-forge.lock.json`, and the
   vendored `.agents/skills/`/`.claude/skills/` directories change as one unit —
   don't split them across commits.
+
+## Authoring a repo-local skill
+
+Some doctrine is true only for one repo — a house pattern, a workaround for a
+quirk in that codebase, a convention no other project shares. That belongs in
+`skills.local`, not the registry. The registry rule applies in reverse here: if a
+line stops being true when pointed at a different product, it must **not** go to
+`inventory/skills`.
+
+**The mechanic that surprises people: `sync` does not vendor local skills.** It
+copies registry skills into every target dir; for a local skill it only records
+`path` + `integrity` in the lockfile. Nothing is moved or copied. So the source
+directory has to already sit where the agent tool looks:
+
+```
+<repo>/.agents/skills/<name>/SKILL.md      # the source itself, not a copy
+<repo>/.claude/skills/<name>/SKILL.md      # a second source if Claude Code is a target
+```
+
+Declare it against that same path:
+
+```json
+{ "skills": { "local": { "my-house-rule": ".agents/skills/my-house-rule" } } }
+```
+
+Then `skf sync` and confirm `skf sync --check` exits 0.
+
+**What declaring it buys you.** Without the declaration the directory is an
+undeclared stranger in a vendor dir: `sync` refuses to run (`exists but is not
+managed by Skill Forge`), or prunes it as an orphan. Declaring it exempts the
+path from pruning and puts the tree under integrity tracking, so a later edit
+shows up as drift in `sync --check` instead of passing silently.
+
+**Constraints the CLI enforces:**
+
+- A name cannot be both a registry dependency and a local skill — `sync` fails
+  outright rather than picking one.
+- The path must be relative and inside the repo; `..` and absolute paths are
+  rejected.
+- The path must exist when `sync` runs, or it fails with
+  `skills.local["<name>"] path "<p>" does not exist`.
+
+**Constraints the CLI does *not* enforce** — the agent tools do, silently:
+
+- Frontmatter still needs `name` (matching the directory) and `description`.
+  A local skill is never validated by `skf validate`; a malformed one simply
+  never activates.
+- No `version:` in frontmatter. Versions live in the registry, and a local
+  skill has no registry row — its lockfile `integrity` hash is its identity.
+
+**Exposing one source at two paths — symlink, never copy.** A repo whose profile
+targets more than one tool has more than one vendor dir, and a local skill has to
+appear in each. Keep one real directory and link the rest:
+
+```bash
+# source of truth
+<repo>/.agents/skills/<name>/SKILL.md
+# same skill, second tool dir
+ln -s ../../.agents/skills/<name> <repo>/.claude/skills/<name>
+```
+
+Git stores that link as a symlink (mode `120000`), so it survives clone and review
+as one line instead of a duplicated tree, and an edit to the source is instantly
+true everywhere. Declare the **source** path in `skills.local`, not the link —
+`integrity` then tracks the real directory.
+
+Confirm the link is actually *discovered*, not merely readable: `cat` through a
+symlink proves nothing about whether a tool's skill scanner followed it. Start a
+session and look at what loaded, the same way you would verify directory-scoped
+discovery.
+
+**One source, one place.** A local skill's source directory lives in exactly one
+repo. Copying it to a second location — say, an umbrella mirroring a child's
+skill so umbrella-rooted sessions can see it — produces a copy `sync` will never
+refresh and `integrity` never covers, because tracking follows the declared path
+only. If a skill is needed at both levels, promote it to the registry
+(`skill-forge-authoring`) and declare it as a dependency in both profiles.
 
 ## Command map
 
@@ -105,8 +185,12 @@ skf sync --check                       # read-only staleness check (exit non-zer
 | Delete a colliding hand-authored `.agents/skills/<name>` dir to unblock `sync` | Ask the user; use `skills.local` or move it aside |
 | Propose every tag-matching skill in the registry | Propose the minimal set that maps to a detected signal |
 | Re-declare home-profile skills (e.g. the baseline trio) in the repo manifest | Let `$HOME` provide machine-wide skills; repo declares only what home doesn't cover |
+| Declare `skills.local` and expect `sync` to place the directory for you | Put the source at `.agents/skills/<name>` first, then declare that path |
+| Copy a local skill's source into a second repo or level so both see it | One source dir; if both levels need it, promote it to the registry |
+| Put a product-specific house rule in `inventory/skills` so it is "reusable" | `skills.local` in the repo it is true for |
 
 ## Related
 
-- `skill-forge-cli` skill — authoring/versioning registry skills (not this workflow)
+- `skill-forge-authoring` skill — authoring/versioning **registry** skills; it refuses paths
+  outside `inventory/skills`, so it cannot touch a consumer repo's `skills.local`
 - `docs/DESIGN.md` § "Project Skill Profiles" — why skills are project-scoped

@@ -673,9 +673,15 @@ directory layout, or language is hardcoded. Drop a `parity.config.json` at the
 repo root and run:
 
 ```bash
-node ~/.agents/skills/product-parity/scripts/parity-gate.mjs
-node ~/.agents/skills/product-parity/scripts/parity-review.mjs
+SKILL_DIR=<the directory this SKILL.md was loaded from>
+node "$SKILL_DIR/scripts/parity-gate.mjs"
+node "$SKILL_DIR/scripts/parity-review.mjs"
 ```
+
+**Resolve `SKILL_DIR` from where the skill actually landed** — do not hardcode it.
+`skf sync` vendors this skill into whichever profile declared it — a repo, an
+umbrella, or `$HOME` — and the path differs in each case. Writing any one of them
+into a runbook breaks the harness the day the skill moves between profiles.
 
 Route discovery covers file-router frameworks via `{dir, filename}` — SvelteKit
 `+page.svelte`, Next.js `app` + `page.tsx`, and similar — with `"list": [...]`

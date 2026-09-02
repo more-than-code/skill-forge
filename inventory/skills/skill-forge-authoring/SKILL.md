@@ -1,11 +1,14 @@
 ---
-name: skill-forge-cli
+name: skill-forge-authoring
 description: >
-  Manage skill-forge inventory skills via the agent-facing `skf skill` CLI
-  (list/read/write/delete/set-version/bump). Activate when creating, updating,
-  removing, or versioning skills under inventory/skills, or when an agent would
-  otherwise hand-edit registry.json for skill entries. Prefer this over raw
-  file edits so lock + validate stay in sync.
+  Author registry skills in the skill-forge inventory — create, update, remove, or
+  version a skill under inventory/skills — via the agent-facing `skf skill` CLI
+  (list/read/write/delete/set-version/bump). Activate when writing or editing a
+  SKILL.md under inventory/skills, adding companion files, bumping or setting a
+  skill's version, or when an agent would otherwise hand-edit registry.json for
+  skill entries; prefer this over raw file edits so lock + validate stay in sync.
+  Not for choosing which skills a consumer repo declares (that is
+  skill-forge-project), nor for managed agents, subagents, or hooks.
 ---
 
 # Skill Forge CLI (agent-facing)
@@ -39,7 +42,18 @@ Always pass **`--json`** and parse **stdout** even when the exit code is non-zer
 5. **Prefer `bump` after content changes**; use `set-version` for exact targets or initial align.
 6. **Never hand-edit `registry-lock.json`.**
 7. **Do not invent MCP tools** for these ops in-session — shell the CLI.
-8. **Skills hold doctrine, not runtime data.** A skill is vendored into repos you will never
+8. **No hardcoded paths.** `validate` (and therefore `write` / `bump`) rejects any skill
+   file containing an absolute home path (`/Users/<name>/…`, `/home/<name>/…`) or a
+   reference to the skill's **own** vendor location (`.agents/skills/<self>`,
+   `~/.claude/skills/<self>`, …). A skill is vendored into whichever profile declares
+   it — a repo, an umbrella, or `$HOME` — so either form is wrong for most consumers.
+   Write commands against a resolved directory the reader supplies, not a literal path.
+
+   Observed 2026-09-03 — `product-parity` documented its harness as
+   `~/.agents/skills/product-parity/scripts/parity-gate.mjs`; moving the skill from the
+   `$HOME` profile to a project profile broke all three documented commands, silently.
+
+9. **Skills hold doctrine, not runtime data.** A skill is vendored into repos you will never
    see. Anything that stops being true when pointed at a different product belongs in that
    product's repo.
 
@@ -203,6 +217,7 @@ skf home add <name> && skf home sync      # machine-wide ($HOME profile)
 | `skf install --type skill --path ~/.codex/skills` (retired global dirs) | Consumers declare the skill in their profile and run `skf sync` |
 | Ignore non-zero exit without reading stdout | Parse JSON error / `partial` |
 | `--remove-file refs` to drop a tree | Remove each file path |
+| Document a script as `~/.agents/skills/<this-skill>/…` | Resolve the skill dir at read time; the gate rejects self-vendor paths |
 | Create without `--set-version` | Required on create |
 | `install ... --yes` without `--path` (non-interactive hang) | Always pass `--path` + `--yes` |
 | `--minor` a 0.x skill and leave `^0.x` pins | `--update-pins`, then `sync` / `home sync` |

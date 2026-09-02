@@ -331,6 +331,55 @@ async function writeLock({ silent = false } = {}) {
   if (!silent) console.log(chalk.green(`Wrote ${path.relative(process.cwd(), REGISTRY_LOCK_PATH)}`));
 }
 
+const SKILL_TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.cjs', '.json', '.sh', '.txt', '.yaml', '.yml']);
+const ABSOLUTE_HOME_PATH = /\/(?:Users|home)\/[A-Za-z0-9._-]+\//;
+const VENDOR_TOOL_DIRS = 'agents|claude|codex|copilot|grok';
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function listSkillTextFiles(dir) {
+  const out = [];
+  const walk = async (current) => {
+    const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (SKILL_TEXT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) out.push(full);
+    }
+  };
+  await walk(dir);
+  return out;
+}
+
+/**
+ * Skills are vendored into whichever profile declares them, so a path naming a
+ * particular home directory or a particular vendor location is wrong for every
+ * consumer that does not happen to match it. Observed 2026-09-03: product-parity
+ * documented its own harness as `~/.agents/skills/product-parity/scripts/...`;
+ * moving the skill from the $HOME profile to a project profile broke all three
+ * documented commands, silently, in the only repo that ran them.
+ */
+async function findHardcodedSkillPaths(skillName, skillDir) {
+  const selfVendorPath = new RegExp(`\\.(?:${VENDOR_TOOL_DIRS})/skills/${escapeRegExp(skillName)}(?![A-Za-z0-9_-])`);
+  const findings = [];
+  for (const file of await listSkillTextFiles(skillDir)) {
+    const rel = path.relative(REPO_ROOT, file);
+    const lines = (await fs.readFile(file, 'utf8')).split('\n');
+    lines.forEach((line, index) => {
+      const at = `${rel}:${index + 1}`;
+      if (ABSOLUTE_HOME_PATH.test(line)) {
+        findings.push(`${at} hardcodes an absolute home path; use "~" or a placeholder`);
+      }
+      if (selfVendorPath.test(line)) {
+        findings.push(`${at} hardcodes this skill's own vendor location; resolve it from where the skill was loaded`);
+      }
+    });
+  }
+  return findings;
+}
+
 function reportValidationError(errors, message) {
   errors.push(message);
 }
@@ -383,6 +432,10 @@ async function validateRegistry() {
     }
     if (frontmatter.version) {
       reportValidationError(errors, `${key} frontmatter must not include version; keep versions in registry.json`);
+    }
+
+    for (const finding of await findHardcodedSkillPaths(skill.name, path.join(REPO_ROOT, skill.path))) {
+      reportValidationError(errors, `${key} ${finding}`);
     }
   }
 

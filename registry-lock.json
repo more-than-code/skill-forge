@@ -119,42 +119,42 @@
     },
     "inventory/skills/design-sync-flutter": {
       "name": "design-sync-flutter",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-flutter",
-      "integrity": "sha256-1dMNidFHobPSSb/vtt3acxbd3BcxAjrsXxxK0UKd/UQ=",
+      "integrity": "sha256-7zHpXdg9qH4fdZymDqE5whvAgRtaKcKtM/KSOq3QWgk=",
       "files": {
-        "references/ds-layout.md": "sha256-vpT1ESXbsLqJgHwXOASuWpeKCtJ1gpP3e1UfzWJuXUo=",
+        "references/ds-layout.md": "sha256-X45e+GZdqU1t3JzwM8LRT77or8RU14hdk7gFcgWDuOk=",
         "SKILL.md": "sha256-3lQQjcVpts0sakkw/8pT1UuhP7S263FpIKKcjxJe7Es="
       }
     },
     "inventory/skills/design-sync-svelte": {
       "name": "design-sync-svelte",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/design-sync-svelte",
-      "integrity": "sha256-Dxm/gMHEB15jipD6QdQcF2ViOSeyIRRONwdZAcHKfew=",
+      "integrity": "sha256-WTo91kCf/YxZgVCTS+uX+5WTuC/sgcSTRUJaYgFfE2w=",
       "files": {
         "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
-        "references/ds-layout.md": "sha256-NRK2dAoFuvkbv7+DW0Bw95mMGeUfkrPJMlrh3ZDIGPA=",
+        "references/ds-layout.md": "sha256-SzuQKE6TxAliUrX4hrKRmXJHlJxe6+MQJVuvzdpuSAE=",
         "SKILL.md": "sha256-hUmWwKa37UTP0L8k4lffmHl8qOB2ElXoKGzuiwX1BIo="
       }
     },
     "inventory/skills/external-worker-delegation": {
       "name": "external-worker-delegation",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/external-worker-delegation",
-      "integrity": "sha256-h4XV9P4Q7GvcYqwM0qGQRBLP63DJhhAgEuzY5eBElJs=",
+      "integrity": "sha256-YUxfB9d3eglSbLjXtet2aukpq2SVvbqiMoSKfEfb4/c=",
       "files": {
         "dispatch.sh": "sha256-ixdd/ZFgOWQOVyj70aBWVQJ+osMTX4hRYiY/RxPxOg0=",
-        "SKILL.md": "sha256-qFDqueKuUHDszJ2zjOLZLHPDaQp3JlQELzdK8tvlmIk="
+        "SKILL.md": "sha256-TjXOZzbIwDso6jsfF0AFYOTkwDUendbJAhj1qhlkx0g="
       }
     },
     "inventory/skills/failure-analysis": {
@@ -366,15 +366,15 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.6.0",
+      "version": "0.7.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
       "runtimeTarget": "~/.codex/skills/umbrella-workspace",
-      "integrity": "sha256-icJubby46MIQgNtJ0OmAeu3j9t6T5wRGbiSw7cHAfRg=",
+      "integrity": "sha256-tvqqT0wsFQzEwe5ycJcJxBhzMLebOzGI1lejFbUMrfE=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-atcQzl1wDlNy56ZjtJ5HaUCIZUDH6Q5GJHITpTSy0pQ="
+        "SKILL.md": "sha256-7W4aG0sMeazYeXAduoxD62cTh+c0M0AEtRn5WmFU0Ek="
       }
     },
     "inventory/agents": {

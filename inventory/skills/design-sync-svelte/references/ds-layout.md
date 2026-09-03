@@ -121,7 +121,7 @@ creating a duplicate.
    | `components/**/*.prompt.md` | this skill, on earlier runs | Usage docs. They are typically NOT in the current output dir, so a delete-diff removes every one of them. |
    | `_ds_manifest.json`, `_adherence.*` | the app's self-check | Regenerated, but never yours to write. |
 
-   Verified 2026-08-06 (`tutored`): creating one blank page added `Test from joe.dc.html`
+   Verified 2026-08-06 (`tutored`): creating one blank page added `Test from untitled.dc.html`
    and `support.js` at the root of a design-system project — both plainly inside the
    blast radius of a broadened write or delete glob. Enumerate deletes explicitly.
    `list_files` before every push and treat unrecognised paths as someone else's.

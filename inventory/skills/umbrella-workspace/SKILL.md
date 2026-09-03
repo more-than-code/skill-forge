@@ -44,6 +44,8 @@ Two sources: the **`$HOME` profile** for what applies regardless of stack, and *
 
 Some tools read skills only from the directory the session was started in. Others resolve a directory-scoped copy against the files being edited. The difference decides the layout, and guessing wrong fails *silently*: the profile is declared, `skf sync` vendors it, the lockfile is written, `sync --check` passes - and the skills never load. Nothing reports this. Check the tool's own behavior, then confirm by starting a session and looking at what actually loaded.
 
+**A symlinked skill directory needs its own probe.** `readdirSync(dir, { withFileTypes: true })` reports a symlink as `isSymbolicLink()` and **not** `isDirectory()`, so a scan filtering on `isDirectory()` skips it while a `*/SKILL.md` glob resolves through it. Which idiom a tool uses is not inferable from the outside, and the failure is the silent kind again. Probe it: a real skill and a symlinked one side by side in a scratch directory, start a session there, ask which it lists - the real one is the control that proves the directory was read at all.
+
 **Tool reads only the session root (verify first - this is the common case).** The umbrella carries the whole project profile; children carry none. Every skill any child needs is declared once at the top, because that is the only place a session rooted at the umbrella will look.
 
 - Cost: a session started *inside* a child gets no project skills at all. Accept it deliberately and write it down, or work from the umbrella.
@@ -59,7 +61,30 @@ skf sync
 skf sync --check            # must exit 0
 ```
 
-**Do not split the same concern across both levels.** One project profile, in one place. A skill declared at the umbrella *and* in a child is the duplicate problem again, one level down.
+**Child-owned, linked up (verify links load first).** Each child declares and *commits* its own profile; the umbrella carries **no `skill-forge.json`** at all - its skill directories hold only symlinks into the children. Reach for this when workers run in `git worktree` checkouts of a child, because it is the only layout that reaches them.
+
+Two mechanisms carry it, and both are structural rather than disciplinary:
+
+- A worktree materializes the child's **tracked** content, so committed skills arrive in every worker checkout for free. An umbrella-held profile never arrives: it sits one level above the child the worktree belongs to, and is untracked besides.
+- `skf sync` refuses to run where there is no `skill-forge.json`, so nothing at the umbrella prunes or overwrites the links. A profile there fires both destructive paths instead - a declared name is removed and re-copied as a real directory, an undeclared one is pruned by name.
+
+The cost is the familiar one, moved: the links are hand-maintained, and unversioned at a container-only umbrella. A child that gains a skill leaves the umbrella link simply absent, `sync --check` passes in that child, and nothing reports the gap. Re-link after any child profile change:
+
+```bash
+cd <umbrella>
+for c in <child>...; do
+  for sd in .agents/skills .claude/skills; do
+    [ -d "$c/$sd" ] || continue
+    mkdir -p "$sd"
+    for d in "$c/$sd"/*/; do
+      n=$(basename "$d")
+      ln -sfn "../../$c/$sd/$n" "$sd/$n"
+    done
+  done
+done
+```
+
+**Do not split the same concern across both levels.** One project profile, in one place. A skill declared at the umbrella *and* in a child is the duplicate problem again, one level down. Linking up is not a split: the umbrella declares nothing and owns nothing, it only points at the child that does.
 
 **A child whose signals `$HOME` already covers needs nothing.** A stub with no code yet is not a consumer - revisit when it becomes one.
 
@@ -69,8 +94,9 @@ skf sync --check            # must exit 0
 
 ```bash
 # from the umbrella, pointing into the child that owns the source
-ln -s ../<child>/.agents/skills/<name> .agents/skills/<name>
-ln -s ../../.agents/skills/<name>      .claude/skills/<name>
+# a relative target resolves from the link's own directory, not the umbrella root
+ln -s ../../<child>/.agents/skills/<name> .agents/skills/<name>
+ln -s ../../.agents/skills/<name>         .claude/skills/<name>
 ```
 
 `skf sync` leaves these alone - it vendors registry skills and prunes by registry name, so a link named after a local skill is neither created nor removed for you. Declare the child's real path in the umbrella's `skills.local` so `integrity` tracks the source. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.

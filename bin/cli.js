@@ -335,6 +335,30 @@ const SKILL_TEXT_EXTENSIONS = new Set(['.md', '.mjs', '.js', '.cjs', '.json', '.
 const ABSOLUTE_HOME_PATH = /\/(?:Users|home)\/[A-Za-z0-9._-]+\//;
 const VENDOR_TOOL_DIRS = 'agents|claude|codex|copilot|grok';
 
+/**
+ * A verification status is a fact about the authoring session, not about the
+ * mechanism a skill teaches. It is true on one machine on one day, it goes stale
+ * with the next probe, and nothing updates it - while a reader who matches the
+ * stated case skips the check the surrounding rule exists to require. Dated
+ * *evidence* for a mechanism is a different thing and stays welcome.
+ */
+/**
+ * The authoring machine's account name has no meaning in a repo that vendors the
+ * skill, and it is usually a fragment of a real path or filename that leaked into
+ * an example. Best-effort by nature: it can only catch the author's own name, so a
+ * different contributor's leak passes here and must be caught in review.
+ * Skipped for generic build-account names, which would match ordinary prose.
+ */
+const GENERIC_ACCOUNT_NAMES = new Set(['root', 'admin', 'administrator', 'user', 'test', 'dev', 'build', 'builder', 'runner', 'ubuntu', 'debian', 'ci', 'node', 'app']);
+
+function currentAccountNamePattern() {
+  const name = (os.userInfo().username || '').trim();
+  if (name.length < 3 || GENERIC_ACCOUNT_NAMES.has(name.toLowerCase())) return null;
+  return new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i');
+}
+
+const VERIFICATION_STATUS = /\b(?:untested|not yet tested|at the time of writing|as of (?:now|today)|currently (?:untested|unsupported|unverified))\b/i;
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -363,6 +387,7 @@ async function listSkillTextFiles(dir) {
  */
 async function findHardcodedSkillPaths(skillName, skillDir) {
   const selfVendorPath = new RegExp(`\\.(?:${VENDOR_TOOL_DIRS})/skills/${escapeRegExp(skillName)}(?![A-Za-z0-9_-])`);
+  const accountName = currentAccountNamePattern();
   const findings = [];
   for (const file of await listSkillTextFiles(skillDir)) {
     const rel = path.relative(REPO_ROOT, file);
@@ -374,6 +399,12 @@ async function findHardcodedSkillPaths(skillName, skillDir) {
       }
       if (selfVendorPath.test(line)) {
         findings.push(`${at} hardcodes this skill's own vendor location; resolve it from where the skill was loaded`);
+      }
+      if (accountName && accountName.test(line)) {
+        findings.push(`${at} contains this machine's account name; use a neutral placeholder`);
+      }
+      if (VERIFICATION_STATUS.test(line)) {
+        findings.push(`${at} states a verification status that goes stale; give the mechanism and tell the reader to check, or drop it`);
       }
     });
   }

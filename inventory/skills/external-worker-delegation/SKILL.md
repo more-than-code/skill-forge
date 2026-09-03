@@ -65,6 +65,8 @@ git worktree add ../work-<task> -b worker/<task>
 Dispatch with that as cwd. The orchestrator reviews the branch and merges. This satisfies the
 verify-write-scope rule without needing to watch the worker, and makes rejection free.
 
+**A worktree carries only tracked content, and that includes the skill profile.** Project skills reach the worker if the repo commits them and not otherwise: a profile held one level up at an umbrella, or vendored but untracked, is absent from the checkout. The worker then runs on `$HOME` skills alone - the stack-specific ones it most needs are the ones missing - and nothing reports it. `umbrella-workspace` covers the layouts that survive a worktree.
+
 **The orchestrator owns the worktree's whole life** — it created it, it removes it, whether the work
 was accepted or thrown away. Order matters and is easy to get wrong: git refuses to delete a branch
 while a worktree holds it, and deleting the directory alone leaves a stale `prunable` entry behind.

@@ -103,7 +103,7 @@ creating a duplicate.
    `support.js` (canvas runtime, appears with the first page), `components/**/*.prompt.md`
    (usage docs from earlier runs, typically absent from the current output dir, so a
    delete-diff removes all of them), and `_ds_manifest.json` / `_adherence.*`.
-   Verified 2026-08-06 in `tutored`: one blank page added `Test from joe.dc.html` and
+   Verified 2026-08-06 in `tutored`: one blank page added `Test from untitled.dc.html` and
    `support.js` at the root of a design-system project. Enumerate deletes explicitly,
    `list_files` before every push, and treat unrecognised paths as someone else's.
 

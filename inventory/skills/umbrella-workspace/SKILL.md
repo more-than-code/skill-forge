@@ -99,7 +99,9 @@ ln -s ../../<child>/.agents/skills/<name> .agents/skills/<name>
 ln -s ../../.agents/skills/<name>         .claude/skills/<name>
 ```
 
-`skf sync` leaves these alone - it vendors registry skills and prunes by registry name, so a link named after a local skill is neither created nor removed for you. Declare the child's real path in the umbrella's `skills.local` so `integrity` tracks the source. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.
+`skf sync` leaves these alone - it vendors registry skills and prunes by registry name, so a link named after a local skill is neither created nor removed for you. Where the umbrella holds the profile, declare the child's real path in its `skills.local` so `integrity` tracks the source; under the child-owned layout the umbrella declares nothing and the child's own lock already tracks it.
+
+**Put the local skill's source in a tool skill directory the child already vendors to**, `<child>/.claude/skills/<name>`, and declare that path. `skills.local` maps a name to exactly one path, so the other tool directories need a link inside the child - `ln -sfn ../../.claude/skills/<name> .agents/skills/<name>` - which `sync` also leaves alone. The payoff is that one relink loop at the umbrella picks up registry and local skills together, through the two-hop chain, with nothing to special-case. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.
 
 Umbrella-level links are unversioned when the umbrella is not a git repo - the child commits the source and its own links, the umbrella commits nothing. Note them in the umbrella `AGENTS.md` beside the skill table, or a lost container takes them with it.
 

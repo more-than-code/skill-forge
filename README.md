@@ -268,7 +268,8 @@ Vendoring is still a separate `sync` / `home sync`. Version commands emit
 is no interactive confirmation.
 
 `write` validates everything it can — SKILL.md frontmatter, every `--file`
-local source's existence (including `SKILL.md=`), every `--remove-file`
+local source's existence (including `SKILL.md=`) and that it is not the
+destination it would be copied onto, every `--remove-file`
 target's existence/type, duplicate `--file`/`--remove-file` targets —
 *before* touching the filesystem, so a bad input never leaves a partial
 write behind: on a new-skill create, if mutation fails before the registry

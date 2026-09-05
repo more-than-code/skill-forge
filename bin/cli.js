@@ -125,10 +125,15 @@ function parseFileAssignment(raw) {
   return { relPath, localPath };
 }
 
-async function assertLocalSourceFile(relPath, localPath) {
+async function assertLocalSourceFile(relPath, localPath, destPath) {
   const stat = await fs.stat(localPath).catch(() => null);
   if (!stat) throw new Error(`--file "${relPath}=${localPath}": local source not found.`);
   if (!stat.isFile()) throw new Error(`--file "${relPath}=${localPath}": local source must be a regular file.`);
+  // Copying a file onto itself throws from fs.copy mid-mutation, which reports partial: true
+  // for what is really a bad argument. Caught here, nothing has been written yet.
+  if (destPath && path.resolve(localPath) === path.resolve(destPath)) {
+    throw new Error(`--file "${relPath}=${localPath}": local source is the skill's own "${relPath}"; drop the flag (it is already in place).`);
+  }
 }
 
 async function pruneEmptyParents(dir, skillDir) {
@@ -1353,7 +1358,7 @@ skillCommand
       let body = null;
       if (!options.skipSkillMd) {
         if (!skillMdAssignment) assertSkillMdStdinAvailable(Boolean(process.stdin.isTTY));
-        if (skillMdAssignment) await assertLocalSourceFile('SKILL.md', skillMdAssignment.localPath);
+        if (skillMdAssignment) await assertLocalSourceFile('SKILL.md', skillMdAssignment.localPath, path.join(skillDir, 'SKILL.md'));
         body = skillMdAssignment ? await fs.readFile(skillMdAssignment.localPath, 'utf8') : await readStdin();
         if (!body.trim()) {
           throw new Error('No SKILL.md content received (via stdin or --file SKILL.md=<path>). Pass --skip-skill-md to leave SKILL.md untouched on an update.');
@@ -1368,7 +1373,7 @@ skillCommand
       }
 
       for (const { relPath, localPath } of companionAssignments) {
-        await assertLocalSourceFile(relPath, localPath);
+        await assertLocalSourceFile(relPath, localPath, path.join(skillDir, relPath));
       }
 
       const removalPlans = [];

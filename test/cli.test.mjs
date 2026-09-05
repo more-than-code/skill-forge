@@ -627,6 +627,42 @@ test('skill write rejects duplicate --file/--remove-file targets and directory r
   assert.match(stdout, /Registry validation passed/);
 });
 
+test('skill write rejects a --file source that is the destination itself, before mutating', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'self-source-skill';
+  const skillDir = fx.skillDir(name);
+  const staging = await tempDir('skf-self-source-');
+  const companionPath = path.join(staging, 'EXAMPLES.md');
+  await fs.writeFile(companionPath, 'staged companion\n');
+
+  const created = await fx.runWithStdin(
+    ['skill', 'write', name, '--set-version', '0.1.0', '--file', `EXAMPLES.md=${companionPath}`, '--json'],
+    `---\nname: ${name}\ndescription: Self source test.\n---\n\nOriginal body.\n`
+  );
+  assert.equal(JSON.parse(created.stdout).action, 'created');
+
+  const beforeSkillMd = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8');
+  const inPlaceCompanion = path.join(skillDir, 'EXAMPLES.md');
+
+  const rejected = await fx.runWithStdin(
+    ['skill', 'write', name, '--file', `EXAMPLES.md=${inPlaceCompanion}`, '--json'],
+    `---\nname: ${name}\ndescription: Self source test.\n---\n\nShould not persist.\n`
+  ).then(
+    (ok) => ok,
+    (err) => err
+  );
+  const payload = JSON.parse(rejected.stdout);
+  assert.match(payload.error, /is the skill's own "EXAMPLES.md"/);
+  assert.equal(payload.partial, undefined, 'a same-path --file is an input error; nothing durable was written');
+
+  const afterSkillMd = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8');
+  assert.equal(afterSkillMd, beforeSkillMd, 'SKILL.md must not change when --file points at its own destination');
+  assert.equal(await fs.readFile(inPlaceCompanion, 'utf8'), 'staged companion\n');
+
+  const { stdout } = await fx.run(['validate']);
+  assert.match(stdout, /Registry validation passed/);
+});
+
 test('skill delete and read refuse registry paths that escape inventory/skills', async () => {
   const fx = await skillForgeFixture();
   const outside = await tempDir('skf-outside-');

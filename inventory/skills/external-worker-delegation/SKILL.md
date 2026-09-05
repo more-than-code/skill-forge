@@ -4,7 +4,8 @@ description: >
   Run an external agent CLI as the worker for most of a task — planning, implementation,
   validation, review — while the primary agent shrinks to orchestrator and reviewer of record.
   Covers the cost asymmetry that motivates it, the mode switch off in-harness subagents, worktree
-  isolation, per-phase brief structure, the acceptance ladder, independent review in a fresh
+  isolation and the dirty-tree fallback for when a checkout would omit uncommitted code,
+  per-phase brief structure, the acceptance ladder, independent review in a fresh
   worker session, and dual-budget accounting. Activate when delegating bulk work to a cheaper or
   faster external agent, when the primary's token budget is the binding constraint, when deciding
   what an orchestrator must keep versus hand off, or when reviewing work the primary did not watch
@@ -66,6 +67,52 @@ Dispatch with that as cwd. The orchestrator reviews the branch and merges. This 
 verify-write-scope rule without needing to watch the worker, and makes rejection free.
 
 **A worktree carries only tracked content, and that includes the skill profile.** Project skills reach the worker if the repo commits them and not otherwise: a profile held one level up at an umbrella, or vendored but untracked, is absent from the checkout. The worker then runs on `$HOME` skills alone - the stack-specific ones it most needs are the ones missing - and nothing reports it. `umbrella-workspace` covers the layouts that survive a worktree.
+
+### When the tree is dirty, the worktree is the wrong tool
+
+`git worktree add` checks out **committed** content. In an active repo the tree is usually dirty,
+and the part of it that matters most to a cold worker — files you just added and have not committed
+— is exactly the part the checkout omits. The worker gets a codebase that compiles differently, or
+does not compile, and nothing reports it: the checkout succeeds, the brief still looks right, and
+the first error the worker hits gets attributed to its own work.
+
+**The tell: if the code your plan references is not committed, the worktree will silently hand the
+worker a different codebase.** Untracked (`??`) files are the dangerous case — a modified tracked
+file at least arrives in its committed form, and the delta is recoverable. `dispatch.sh` checks this
+at worktree creation: it **refuses** on untracked files, **warns** on modified ones, and takes
+`--allow-dirty` when the brief genuinely does not reference them.
+
+```bash
+git status --porcelain                        # what the checkout will omit
+./dispatch.sh <slug> --allow-dirty -- <cli>   # override, once you have checked
+```
+
+The cheapest fix is to commit first; a worktree off a clean tree is the pattern working as designed.
+When you cannot — work genuinely in flight, or a commit that would be a WIP commit — fall back:
+
+**In-tree delegation with an observed write scope.** The worker runs in the primary working tree,
+and isolation moves from the filesystem to the brief plus verification:
+
+1. **New-files-only brief.** Every deliverable is a file that does not yet exist, named explicitly.
+   The worker creates; it does not edit. State that existing files are out of scope.
+2. **Byte-exact backups** of anything the worker could plausibly touch, taken before dispatch.
+3. **Full-tree checksum sweep** before and after. The diff of the two manifests *is* the write
+   scope — observed rather than assumed:
+
+```bash
+find . -path ./.git -prune -o -type f -print0 | xargs -0 shasum | sort > /tmp/<slug>-before.txt
+# dispatch
+find . -path ./.git -prune -o -type f -print0 | xargs -0 shasum | sort > /tmp/<slug>-after.txt
+diff /tmp/<slug>-before.txt /tmp/<slug>-after.txt
+```
+
+Anything in that diff outside the declared deliverables is an out-of-scope write: restore it from
+the backup and treat it as a finding against the run, not as a merge conflict to resolve.
+
+This is strictly weaker than a worktree. It **detects** violations instead of preventing them, and
+rejection is no longer free — there is no branch to throw away. Use it when the alternative is
+dispatching against a codebase that does not exist. `dispatch.sh` implements the worktree path only,
+so this fallback is run by hand — the refusal above is the prompt to reach for it.
 
 **The orchestrator owns the worktree's whole life** — it created it, it removes it, whether the work
 was accepted or thrown away. Order matters and is easy to get wrong: git refuses to delete a branch
@@ -259,6 +306,7 @@ artifacts on disk, never the worker's claim of completion.
 | Spawn in-harness reviewers "because they're cheap" | They bill to the primary; use fresh worker sessions |
 | Same session writes and reviews | Fresh session, diff + lens only |
 | Worker writes to the primary working tree | Dedicated worktree/branch the orchestrator merges |
+| Dispatch a worktree off a dirty tree | Commit first; else the in-tree fallback with a checksum sweep |
 | Accept the worker's verification as §5 evidence | Re-run gates in the orchestrator's shell |
 | A brief that references prior conversation | Self-contained file in the working directory |
 | A brief that leaves the role implicit | State it first: the worker does not delegate onward |

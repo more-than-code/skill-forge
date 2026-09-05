@@ -315,7 +315,7 @@
     {
       "type": "skill",
       "name": "grok-build-harness",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "scope": "custom",
       "path": "inventory/skills/grok-build-harness",
       "installable": true,
@@ -378,7 +378,7 @@
     {
       "type": "skill",
       "name": "external-worker-delegation",
-      "version": "0.7.3",
+      "version": "0.8.1",
       "scope": "custom",
       "path": "inventory/skills/external-worker-delegation",
       "installable": true,

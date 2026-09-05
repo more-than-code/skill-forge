@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 # Dispatch an external worker: isolated worktree, verified brief, role marked.
 #
-#   dispatch.sh <task-slug> -- <worker-cli> [args...]   dispatch
-#   dispatch.sh <task-slug> --remove [--force]          tear down when done
+#   dispatch.sh <task-slug> [--allow-dirty] -- <worker-cli> [args...]   dispatch
+#   dispatch.sh <task-slug> --remove [--force]                        tear down
 #
 # First dispatch scaffolds the worktree and stops so you can write the brief.
 # Second run verifies the brief and execs the worker with its role set.
@@ -15,7 +15,7 @@
 set -eu
 
 usage() {
-  echo "usage: dispatch.sh <task-slug> -- <worker-cli> [args...]" >&2
+  echo "usage: dispatch.sh <task-slug> [--allow-dirty] -- <worker-cli> [args...]" >&2
   echo "       dispatch.sh <task-slug> --remove [--force]" >&2
   exit 64
 }
@@ -24,6 +24,12 @@ usage() {
 slug=$1
 shift
 case $slug in -*|'') usage ;; esac
+
+allow_dirty=0
+if [ "${1:-}" = "--allow-dirty" ]; then
+  allow_dirty=1
+  shift
+fi
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   echo "dispatch.sh: not a git repository" >&2
@@ -108,6 +114,27 @@ fi
 } >> "$exclude"
 
 if [ ! -d "$tree" ]; then
+  # A worktree checks out committed content only, so anything uncommitted is absent
+  # from what the worker sees. Untracked files are the silent case: the checkout
+  # succeeds, the worker gets a codebase the brief was not written against, and the
+  # first error it hits looks like its own. Modified tracked files at least arrive in
+  # their committed form, and the delta is recoverable — those only warn.
+  # Both lists are post-exclude, so this script's own BRIEF.md/tasks/ block is skipped.
+  untracked=$(git status --porcelain | grep '^??' | cut -c4- || true)
+  if [ -n "$untracked" ] && [ "$allow_dirty" -eq 0 ]; then
+    echo "dispatch.sh: these new files are uncommitted and would be missing from $tree:" >&2
+    printf '%s\n' "$untracked" | sed 's/^/  /' >&2
+    echo "Commit them, or re-run with --allow-dirty if the brief does not reference them." >&2
+    echo "If they cannot be committed, do not dispatch a worktree — see the dirty-tree" >&2
+    echo "fallback in the external-worker-delegation skill." >&2
+    exit 65
+  fi
+  modified=$(git status --porcelain | grep -v '^??' | cut -c4- || true)
+  if [ -n "$modified" ]; then
+    echo "dispatch.sh: warning — $tree checks out HEAD; these local edits are not in it:" >&2
+    printf '%s\n' "$modified" | sed 's/^/  /' >&2
+  fi
+
   git worktree add "$tree" -b "$branch"
   echo
   echo "Worktree ready: $tree"

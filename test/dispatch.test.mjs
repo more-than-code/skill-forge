@@ -101,6 +101,44 @@ test('first dispatch creates a worktree and seeds info/exclude; second first-run
   assert.equal(again.match(/# >>> skill-forge worker >>>/g).length, 1);
 });
 
+test('dispatch refuses untracked files, warns on modified ones, and honours --allow-dirty', async () => {
+  const fx = await dispatchRepo();
+
+  // Untracked: absent from the checkout with nothing to report it. Refuse.
+  await fs.writeFile(path.join(fx.repo, 'newfile.txt'), 'new\n');
+  const refused = failed(await fx.dispatch(['dirty', '--', 'true']).catch((error) => error));
+  assert.match(refused.stderr, /uncommitted and would be missing/);
+  assert.match(refused.stderr, /newfile\.txt/);
+  assert.match(refused.stderr, /--allow-dirty/);
+  assert.equal(refused.code, 65);
+  assert.equal(await fs.access(fx.tree('dirty')).then(() => true, () => false), false, 'no worktree on refusal');
+
+  // --allow-dirty is the escape hatch, not a silent default.
+  const allowed = await fx.dispatch(['dirty', '--allow-dirty', '--', 'true']);
+  assert.match(allowed.stdout, /Worktree ready/);
+
+  // Modified tracked files arrive in committed form, so they warn and proceed.
+  const fx2 = await dispatchRepo();
+  await fs.writeFile(path.join(fx2.repo, 'tracked.txt'), 'v1\n');
+  await git(fx2.repo, ['add', 'tracked.txt']);
+  await git(fx2.repo, ['commit', '-q', '-m', 'add tracked']);
+  await fs.writeFile(path.join(fx2.repo, 'tracked.txt'), 'v2\n');
+  const warned = await fx2.dispatch(['modified', '--', 'true']);
+  assert.match(warned.stderr, /these local edits are not in it/);
+  assert.match(warned.stderr, /tracked\.txt/);
+  assert.match(warned.stdout, /Worktree ready/);
+
+  // Files the exclude block covers are orchestrator-side and must not trip the guard.
+  const fx3 = await dispatchRepo();
+  await fx3.dispatch(['seed', '--', 'true']);
+  await fs.mkdir(path.join(fx3.repo, 'tasks'), { recursive: true });
+  await fs.writeFile(path.join(fx3.repo, 'tasks', 'todo.md'), 'ledger\n');
+  await fs.writeFile(path.join(fx3.repo, 'run.jsonl'), '{}\n');
+  const clean = await fx3.dispatch(['excluded', '--', 'true']);
+  assert.match(clean.stdout, /Worktree ready/);
+  assert.doesNotMatch(clean.stderr, /uncommitted and would be missing/);
+});
+
 test('dispatch refuses a linked worktree and requires a Role brief before exec', async () => {
   const fx = await dispatchRepo();
   await fx.dispatch(['demo', '--', 'true']);

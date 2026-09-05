@@ -27,13 +27,18 @@ phase, and how to accept what comes back — activate `external-worker-delegatio
 ## Preflight (always)
 
 ```bash
-grok --version            # e.g. 0.2.102
+grok --version            # observations here span 0.2.102 and 1.0.13
 grok models               # confirms login + available models
 grok inspect              # skills, agents, permissions for THIS directory
 ```
 
 `grok models` failing or printing a login prompt means the delegation cannot run —
 the user must `grok login` themselves.
+
+**Record the version alongside any observation you make about the wire format.** The
+event schema has changed across majors — the streaming-json tool-visibility note below
+is one instance — so a claim about what `grok` emits means nothing without the version
+that emitted it.
 
 ## Observing the run — always use `--output-format streaming-json`
 
@@ -51,8 +56,9 @@ grok -p "…" --output-format streaming-json | tee run.jsonl
 ```
 
 Event `type` values: `text` (response chunks), `thought` (reasoning), `end` (final),
-`error`. Also `max_turns_reached` and `auto_compact_*` — the list is **not
-exhaustive**, so switch on `type` and ignore unknowns.
+`error`. Also `max_turns_reached` and `auto_compact_*`, and on 1.0.13 `tool_call` /
+`tool_call_update`. The list is **not exhaustive** and it grows between majors, so
+switch on `type` and ignore unknowns.
 
 The `end` event is the run's post-mortem, verified shape:
 
@@ -67,13 +73,20 @@ Read three fields every time:
 - **`num_turns`** — how much it actually did. `1` on a large brief means it barely started.
 - **`total_cost_usd`** — accumulate across iterations; a driver loop spends real money.
 
-**Caveat:** streaming-json has **no tool-call events** — you see narration and
-reasoning, not file writes. (The ACP transport below *does* emit them; this is a
-limitation of the headless format, not of Grok.) With `-p`, watch the filesystem:
+**Caveat — tool visibility is version-dependent.** On **0.2.102** streaming-json
+emitted no tool-call events at all: narration and reasoning, nothing about file writes.
+On **1.0.13** both `tool_call` and `tool_call_update` appear in ordinary `-p` runs.
+Check your own version before assuming either.
+
+Where they are absent, and as a cross-check where they are not — the events report what
+Grok *attempted*, not what landed — watch the filesystem:
 
 ```bash
 find work/src work/static -type f -newer work/BRIEF.md | sort
 ```
+
+The ACP transport below emits the full tool stream regardless, and remains the option to
+choose when live tool visibility is a requirement rather than a convenience.
 
 ## Gotcha 1 — `-p` is single-turn (the big one)
 
@@ -123,7 +136,7 @@ paths sit **outside** the writable set:
 | Tool | Writes to | Result inside sandbox |
 |------|-----------|-----------------------|
 | npm / `npx` | `~/.npm` | cache write fails → scaffolder crashes |
-| pnpm | `~/Library/pnpm` (macOS) | install fails |
+| pnpm | `~/Library/pnpm` (macOS) | install fails — and often segfaults outright (Gotcha 3) |
 | Playwright | `~/Library/Caches/ms-playwright` | browser download fails |
 
 **Fix — do the environment work yourself, outside the sandbox, before spawning:**
@@ -135,12 +148,26 @@ paths sit **outside** the writable set:
 3. Redirect caches on the spawn: `npm_config_cache=/tmp/... XDG_CACHE_HOME=/tmp/...`.
 4. Tell Grok in the brief that this is done and it must not re-scaffold.
 
-## Gotcha 3 — headless Chromium segfaults inside the sandbox
+## Gotcha 3 — keychain denial segfaults binaries, and not only Chromium
 
-Playwright/Chromium crashes under the sandbox (keychain `SecItemCopyMatching` /
-crashpad). Anything depending on headless capture — screenshots, HTML→PNG, frame
-rendering for video — needs a fallback. Native rendering (e.g. Swift/AppKit on macOS)
-works. State the fallback in the brief so Grok doesn't silently drop the deliverable.
+Inside the sandbox, macOS keychain access fails (`SecItemCopyMatching` returning `-50`)
+and processes that expect it die on a signal rather than erroring cleanly.
+Playwright/Chromium is the familiar case (crashpad, headless capture) — but **`pnpm`
+itself segfaults the same way**, exiting **139** on a plain install. The package manager
+is the more likely casualty of the two: every run that installs anything touches it,
+while only some runs render.
+
+**The tell:** exit 139 (or 133/134) and no error message, from a tool that has no
+business crashing. Not a permission error, not an ENOENT — a signal.
+
+Two consequences:
+
+- Gotcha 2's fix — do environment work outside the sandbox — covers the **package
+  manager**, not just cache paths. A pre-installed `node_modules` is read-safe inside;
+  an in-sandbox `pnpm install` is not, and redirecting caches does not save it.
+- Anything depending on headless capture — screenshots, HTML→PNG, frame rendering for
+  video — needs a fallback. Native rendering (e.g. Swift/AppKit on macOS) works. State
+  the fallback in the brief so Grok doesn't silently drop the deliverable.
 
 ## Gotcha 4 — native-toolchain builds may need a clean env
 
@@ -295,6 +322,8 @@ paper over it with flag variations.
 | Wrong | Right |
 |-------|-------|
 | Treat `grok -p` exit 0 as success | Check artifacts; read `stopReason` |
+| Trust a wire-format claim written against an older major | `grok --version` first; record it with the observation |
+| Read exit 139 from `pnpm` as a broken lockfile | Keychain denial under the sandbox; install outside it |
 | Run with default `plain` output and guess at progress | `--output-format streaming-json` + watch the filesystem |
 | Raise `--max-turns` to stop early exits | Driver loop with `grok -c` |
 | Assume batch (`-p`) is the only mode | `grok agent stdio` (ACP) for tool visibility + steering |

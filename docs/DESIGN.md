@@ -285,7 +285,7 @@ All sync outputs are committed.
 The current installer writes selected artifacts directly to a target directory:
 
 ```bash
-skf install frontend-engineering --type skill --target codex --path ~/.codex/skills/frontend-engineering
+skf install frontend-engineering --type skill --path /tmp/skill-export/frontend-engineering
 ```
 
 That remains available as a low-level escape hatch for bootstrapping and
@@ -412,9 +412,9 @@ cleanup exist, so no workflow is ever without a working path.
 
 ### Migration
 
-- Once the home profile is synced, delete Skill Forge-managed skills from the
-  per-tool global directories (`~/.codex/skills`, `~/.claude/skills`,
-  `~/.copilot/skills`, `~/.grok/skills`); `skf` can ship a one-shot cleanup.
+- Migration off the per-tool global skill directories is complete: nothing
+  writes or reads them, and `$HOME` skills live in `~/.agents/skills` and
+  `~/.claude/skills` via the home profile.
 - `diff-global`'s skill half is superseded (`sync --check` in `$HOME`); its
   agents, subagents, and hooks drift checks remain, since those stay global.
 - The registry repo's change workflow becomes pull-based for skills: after a
@@ -538,8 +538,12 @@ any new component.
 
 - `diff-global` is retired (hidden, deprecation notice): skills are checked by
   `sync --check`/`home sync --check`; agents, subagents, and hooks have their
-  own `<type> diff` commands. Registry `runtimeTarget` on skill entries is now
-  vestigial and could be dropped in a future schema pass.
+  own `<type> diff` commands. Registry `runtimeTarget` has been **dropped from
+  skill entries** (it pointed at the retired per-tool global dirs and nothing
+  installed skills there); `validate` no longer requires it for skills and
+  `skill list/read --json` no longer emit it. Agents, subagents and hooks still
+  carry it. `diff-global` filters on that field, so it now lists nothing — it
+  remains only to print its deprecation notice, and can be removed outright.
 - No registry version archive: only the current version of each skill is
   resolvable. Vendoring shrinks the need (pinned bodies live in consumer repos),
   but re-resolving an older version from the registry would require a

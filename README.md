@@ -168,10 +168,15 @@ skf home add <skill>... && skf home sync
 skf home status
 ```
 
-Per-tool global skill directories (`~/.codex/skills`, `~/.claude/skills`, …)
-are retired. The legacy `add` command is deprecated, and `skf install` for
-skills remains only as a low-level escape hatch that requires an explicit
-`--path`.
+Skills are never written to per-tool global directories. `sync` and `home sync`
+write only into a profile's own `.agents/skills/` and `.claude/skills/`. The
+legacy `add` command is deprecated, and `skf install` for skills remains only as
+a low-level escape hatch that requires an explicit `--path`.
+
+Consequently, registry **skill** entries carry no `runtimeTarget` — skills are
+materialized by `sync` into a profile's own directories, never to a global
+per-tool path. Agents, subagents and hooks still carry one, because they are
+installed rather than vendored.
 
 ## Installing Agents, Subagents, Hooks (global)
 

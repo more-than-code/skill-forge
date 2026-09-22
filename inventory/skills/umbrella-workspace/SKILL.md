@@ -38,7 +38,9 @@ Do **not** put single-repo work in the umbrella `tasks/` or `docs/`.
 
 ## Skill profiles across the workspace
 
-Two sources: the **`$HOME` profile** for what applies regardless of stack, and **one project profile** for stack-specific skills. Never re-declare a home skill in the project profile - it then surfaces twice to the agent.
+Two sources: the **`$HOME` profile** for what applies regardless of stack, and **one project profile** for stack-specific skills. Don't re-declare a home skill in the project profile.
+
+Not because it double-loads - it doesn't. Observed 2026-09-22, six names present in *both* the project and `$HOME` trees surfaced exactly once each, resolved project-over-home, on two tools independently (`grok inspect` labels the winner `project`; the other listed ten unique names from sixteen directories). The real costs are two: you store, commit and update a second copy, and **the project copy shadows the home one unconditionally**. While the two match, the duplication is invisible. The moment the project's pin lags a `$HOME` bump, the stale project copy is what loads - `sync --check` passes at both levels, because each is internally consistent, and nothing reports the shadowing. A skill that applies regardless of stack belongs at `$HOME` only.
 
 **Where the project profile goes depends on whether your agent tool descends into subdirectories, and you must verify that rather than assume it.**
 
@@ -224,7 +226,9 @@ umbrella/                 # usually not a git repo
   child-a/                # each child its own git repo when ready
     AGENTS.md
     tasks/todo.md         # pointer stub when participating — committed, status-free
-    skill-forge.json      # this child's own skills; absent when $HOME covers it
+    skill-forge.json      # this child's own skills. Absent for either reason: $HOME
+                          #   already covers it, OR the umbrella holds the whole
+                          #   project profile - see the layout table above
     skill-forge.lock.json
     .agents/skills/       # vendored by `skf sync`; never hand-copied
     .claude/skills/

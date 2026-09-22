@@ -14,7 +14,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/api-contracts",
       "integrity": "sha256-49RjFOkIjO4LhrwrHrXWJbjZXGYh/zdk/Gi2Hpo4TqY=",
       "files": {
         "SKILL.md": "sha256-qkkGfblJz4dUpFarOQqBT3gzXlr7U28XIn1z9FxgIiw="
@@ -26,7 +25,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/audio-webkit-cleanup",
       "integrity": "sha256-QkuvD6xfdgpXJcfY5rDH+lhX3hPHApGlfLIUNTO4a6Y=",
       "files": {
         "SKILL.md": "sha256-BY/boS0e6LAyNHKSd3RvjA5aawlLNWwL/NVW+xGvKDQ="
@@ -38,7 +36,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/audit-trail",
       "integrity": "sha256-aGZ93cdx9clo/87gWFmFufiF5oEnhC5WNx4+rAbVH+o=",
       "files": {
         "SKILL.md": "sha256-E/Bc8VSovxeVcj4t1GqU4ben2KnKIyHcUzfPNKuldw4="
@@ -50,7 +47,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/code-quality",
       "integrity": "sha256-URPCJOroQR0mJlQPoOkRpTe0xtF/qps48iLkoTwKAEo=",
       "files": {
         "SKILL.md": "sha256-dT/pGEfR5F2YjVKchmPZxRlkpwJsHxSnca5E7jTAmpk="
@@ -62,7 +58,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/codex-config-toml",
       "integrity": "sha256-5s/ahLtXHFKZkb6+E+hf+Tgen5L2SCEaUkAIHgAjfMY=",
       "files": {
         "SKILL.md": "sha256-oy83iSS4O0NEv28xbG8hFusgNWShMgLMV+gptUzkRrk="
@@ -74,7 +69,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/coding-discipline",
       "integrity": "sha256-jS3r/aYrv7m5msRqm8PkAZqwyuVXNNTrNfMRiK1zMBg=",
       "files": {
         "EXAMPLES.md": "sha256-LmcMHC3qrvAVpL81cPyg/Ff85fm2obcvHd1N9to4whE=",
@@ -87,7 +81,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/data-migration",
       "integrity": "sha256-A0ow8wOqCGdobWUVEj5uVR5/6AQyoSaZCCfL+T+WoZA=",
       "files": {
         "SKILL.md": "sha256-mrgzf9dHh8JKspgAUrJsmXtetqCRF4oLZ8GY60GTJwY="
@@ -99,7 +92,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/defect-drainer-intake",
       "integrity": "sha256-QUz5qlr9mXBSUcHi4J5jJCn1wqbKSho4ylyXfhax1Gg=",
       "files": {
         "SKILL.md": "sha256-DflyrXrCbnCayyQ+LxCC6xl6HpGq1v6tEwjQ2YMDD2Q="
@@ -111,7 +103,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/deployment-strategy",
       "integrity": "sha256-0k5QYC+0OiR971+2BhVt6ADDZx0WU9ugNvrN/IfhZ2I=",
       "files": {
         "SKILL.md": "sha256-ZFVlM297XNB2q7FFGAxeJs9kTZ6S5iZB1V/htumranc="
@@ -123,7 +114,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/design-sync-flutter",
       "integrity": "sha256-7zHpXdg9qH4fdZymDqE5whvAgRtaKcKtM/KSOq3QWgk=",
       "files": {
         "references/ds-layout.md": "sha256-X45e+GZdqU1t3JzwM8LRT77or8RU14hdk7gFcgWDuOk=",
@@ -136,7 +126,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/design-sync-svelte",
       "integrity": "sha256-WTo91kCf/YxZgVCTS+uX+5WTuC/sgcSTRUJaYgFfE2w=",
       "files": {
         "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
@@ -150,7 +139,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/external-worker-delegation",
       "integrity": "sha256-0wSb+FxOw2DP1QEgfzwI05Lawc+q64n3OR2vEmcCjjA=",
       "files": {
         "dispatch.sh": "sha256-0QdjfGdxt+blSIkNKpX6Doxc3wkiuHUnUMcH+LCsPSI=",
@@ -163,7 +151,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/failure-analysis",
       "integrity": "sha256-8QY5zvT0Lj9mqhyva/I4RiaA8+EJZdA7RnoESjgmQdQ=",
       "files": {
         "SKILL.md": "sha256-JOsHJ3TXjy182U7gjYgvsiRAw/Z9sAxy/0q5jE0TyaU="
@@ -175,7 +162,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/frontend-engineering",
       "integrity": "sha256-rbOEDp8wUACQMwcT8Z/G9XQNb36SM1Y7d1EhhCFld/E=",
       "files": {
         "react.md": "sha256-eUQ+eaye6m1J1CQC2qiHzTTcO60WZHEf5DqbkqKZq8E=",
@@ -190,7 +176,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/fvm-flutter",
       "integrity": "sha256-aEGlAOj6Xk2rpI0tasc464KeV17t0OPATkw49kNATGA=",
       "files": {
         "SKILL.md": "sha256-BPlyUhoWHKl8Fb50Fw3Npu5vRxy8chGcX5UOTkA7N3A="
@@ -202,7 +187,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/grok-build-harness",
       "integrity": "sha256-WTAOAUU1zTLvcBEGc/Y4rC3e0ZPuIIZdE2+xEHp1rSg=",
       "files": {
         "EXAMPLES.md": "sha256-fQDUrRUNwEiWpyKVRMSWV7QQDT0PdZFuRI7IyPPihMw=",
@@ -215,7 +199,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/llm-integration",
       "integrity": "sha256-hke/XWo9kPnBocXeb8Dnfdjp1pI9O1Axs0qM1Mcz1go=",
       "files": {
         "SKILL.md": "sha256-dhKT1V6Mqe/I50Aa4RFcBPamHvpA80FLihWP5uU8md0="
@@ -227,7 +210,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/llm-json-portable",
       "integrity": "sha256-wWpl3RUJYocvbH4muZysT0+Flxy0Xbpkl/Bg2pl3ZfI=",
       "files": {
         "SKILL.md": "sha256-3ihNJppKlt+AFf6CBjhLWuYE4Y8GL2YjYMzY1fghxOU="
@@ -239,7 +221,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/migration-deprecation",
       "integrity": "sha256-Dp9FsMz9+8dqDt+F5ZKOJZ2T3uF9vzxYm7vSvcSfulk=",
       "files": {
         "SKILL.md": "sha256-OYYA3g///k+/Za8rzEWtrz8Tx2Vuw9/2RjTLb3nhRfg="
@@ -251,7 +232,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/performance-analysis",
       "integrity": "sha256-ymou6yaB1SM5lcU1t/zrv2O9wRZ7yJX6vGksd34gyNw=",
       "files": {
         "SKILL.md": "sha256-66aEQdz68hQrq4YBk7pVGX3AT1adOIyYg9oHVOSr3vA="
@@ -263,7 +243,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/podman-utilization",
       "integrity": "sha256-P43XjXAyNVO+qHLfviWPhapje1lINUjIKdQEUlLxE5M=",
       "files": {
         "SKILL.md": "sha256-/CzB52pYpU7Y7j9WtQVbf8VFrYIMWyE1/EszD4jSouE="
@@ -275,7 +254,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/product-parity",
       "integrity": "sha256-+nc7kUZriQWrYrYYe5CiIAtrRMYoNy506f694FvQeJw=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-sHEVbKt2eyEWR9BE20MdQq11QjbE0/uKQA5h4P4meEE=",
@@ -297,7 +275,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/production-readiness",
       "integrity": "sha256-RvzyXYtNUwHgqUIVyx9xXD/MoB5XKz//0NiHWetkyPg=",
       "files": {
         "SKILL.md": "sha256-hoA12WYCsn+PYTm5kcB+5B616uOi1qy9XKxGmadlrtg="
@@ -309,7 +286,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/security-baseline",
       "integrity": "sha256-6BrEv3S5yb6PakSghKmbONVwHilAxmkNQppRNPTv9tc=",
       "files": {
         "SKILL.md": "sha256-TmQqkT9LCc6dfrnEBO9fqvWVq8O/SKmyp0gucm55MGE="
@@ -317,15 +293,14 @@
     },
     "inventory/skills/skill-forge-authoring": {
       "name": "skill-forge-authoring",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/skill-forge-authoring",
-      "integrity": "sha256-dyoDw7FKmX+t4V/JRRMT2/zqILh7ODttHyKQWuHTT4s=",
+      "integrity": "sha256-gD9K6kh0xEZRuzxokb3t9cQe+PFkwpBguizjhv7eXjE=",
       "files": {
-        "EXAMPLES.md": "sha256-lcvI7Tn+QBu+0ioyKLtZmMru/kf8RnsaVSfNGHsVzaA=",
-        "SKILL.md": "sha256-JPlEPacRvFRzc+oxV6d+uMQd2/inXJkqVAmOBPYiq/E="
+        "EXAMPLES.md": "sha256-3z2V7oYWi5lSa7dOZ3PYH1RQGifoEVkbQvx/somkhXY=",
+        "SKILL.md": "sha256-Q+qovT1i3vXyVFow6y5JZPyG2ZB/u2C2M6AdW+LHcuI="
       }
     },
     "inventory/skills/skill-forge-project": {
@@ -334,7 +309,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/skill-forge-project",
       "integrity": "sha256-VJKkHFcImdJnujxuWVqxIQAVuG14fTS63f+q/Li7HhU=",
       "files": {
         "SKILL.md": "sha256-YLldK0WujNFoHRtzcnR5LFLEhlnQ8saT2qWqxmJHQWY="
@@ -346,7 +320,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/testing-strategy",
       "integrity": "sha256-KsqNmZ/F+oxg+PFicC4Q/6LMl+1FtbkwoX7JCgJ8h4A=",
       "files": {
         "SKILL.md": "sha256-Nl/s8uWLK48RERQ3XKOwVV7KTqqZjzj1PG1lOuRJCp8="
@@ -358,7 +331,6 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/ui-portability-baseline",
       "integrity": "sha256-dL2aKMurLJySGa4oU8xO+UymCQCfIqlz/5hKTyMKzwc=",
       "files": {
         "SKILL.md": "sha256-AIJJpqv2EtBYqVcUNqCtlsFdxvGaNvJZFo9DiiPp6pU="
@@ -366,15 +338,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.7.2",
+      "version": "0.8.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/umbrella-workspace",
-      "integrity": "sha256-dhAOAspTZVKENBDN7TpwmOsXb+RdSF/+Gkd/aZRQjWI=",
+      "integrity": "sha256-CXBWXCpPxRI4OQzpgHfYZWVFoCviflTeBUFl8+M4NHM=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-6Qco7H4yPqntVoI+EwUuRQiMPMXatqRnN25Hasqx2yY="
+        "SKILL.md": "sha256-xPPpBYstcln4yIeMaKlF8YpmBDvBCY/otv0Gq5KsW2E="
       }
     },
     "inventory/agents": {
@@ -396,9 +367,9 @@
       "scope": "codex",
       "installable": false,
       "runtimeTarget": "~/.codex/AGENTS.md",
-      "integrity": "sha256-77qO+umvTUaltVbeQNTMrj7E2R/D2XvrDAVTf2w2mD8=",
+      "integrity": "sha256-ckKVadcB+O9psuwLsSRE/g5pol7R5ERt64nQjRi/x8k=",
       "files": {
-        "AGENTS.md": "sha256-k6LuDDAkGVM290qSTtrHJMNlbKC2APV2iTWwV2DOrVQ="
+        "AGENTS.md": "sha256-HBXPUB3bLVa8au+HyKpMMBr8pNXlibYilWvT85Y9ms4="
       }
     },
     "inventory/agents/copilot-cli": {
@@ -408,9 +379,9 @@
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/instructions/agents.instructions.md",
-      "integrity": "sha256-Jol5bwgVwhTmkJ3qiOwIBhqWs19tf4MkU5sBJDEYSa4=",
+      "integrity": "sha256-V4oK1P50hBrCOVEIPGrTDUp+rGchvTB+t5dcqT/IF7w=",
       "files": {
-        "agents.instructions.md": "sha256-/wTqx3pIEhX3LqF7HQhL4/fHHDWeVx2eQTvPH+gvAAQ="
+        "agents.instructions.md": "sha256-jcihEaHvju0yUl9eRptZjnB0ok8wSfrzq4Xlz2DLxHI="
       }
     },
     "inventory/agents/claude-code": {
@@ -432,9 +403,9 @@
       "scope": "grok",
       "installable": false,
       "runtimeTarget": "~/.grok/AGENTS.md",
-      "integrity": "sha256-CroD+SOE7fSRaBB8PiXdwmiRry0vFITyk0Rmjvpra2c=",
+      "integrity": "sha256-qhUyyoazhhvmtIaoZh/ZJt0hBuobnVpTXW4jNsOarOE=",
       "files": {
-        "AGENTS.md": "sha256-YNi0dLn269LG9mo8IP77gM6KthS1Z1VYV0ikxi1ur9E="
+        "AGENTS.md": "sha256-PYD4XyUQPAZWmkvQcHJZU1ffzbV6WNo35p5A0F6L0TA="
       }
     },
     "inventory/subagents/codex": {

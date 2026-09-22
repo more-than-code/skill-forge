@@ -9,7 +9,7 @@ Grok-specific skill discovery extends the core skill activation protocol with:
 - Project Grok skills: `.grok/skills/*/SKILL.md` (unmanaged, Grok-native; rank with project skills)
 - Bundled skills: Grok platform skills (only when relevant to the requested workflow)
 
-`~/.grok/skills/` is retired as a shared-skill location — do not place or expect Skill Forge skills there. Grok reads project skills from `.agents/skills/` and home-profile skills from `~/.agents/skills/` per the core protocol; Grok's Claude/Cursor compatibility scanning may also surface the same `skf`-managed copies — never activate two copies of one name.
+Grok reads project skills from `.agents/skills/` and home-profile skills from `~/.agents/skills/` per the core protocol; Grok's Claude/Cursor compatibility scanning may also surface the same `skf`-managed copies — never activate two copies of one name.
 
 For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 

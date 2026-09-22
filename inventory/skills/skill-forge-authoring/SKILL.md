@@ -204,8 +204,9 @@ skf project add <name> && skf sync        # in a consumer repo
 skf home add <name> && skf home sync      # machine-wide ($HOME profile)
 ```
 
-   Per-tool global skill directories (`~/.codex/skills`, `~/.claude/skills`, …)
-   are retired; never write skills there.
+   Skills live only where a profile puts them: `.agents/skills/` and
+   `.claude/skills/` in a consumer repo, and the `~/` equivalents for `$HOME`.
+   Never write a skill to a tool's own global directory.
 
 ## Anti-patterns
 
@@ -214,7 +215,7 @@ skf home add <name> && skf home sync      # machine-wide ($HOME profile)
 | Edit `registry.json` skill version by hand | `set-version` / `bump` |
 | Put `version:` in SKILL.md frontmatter | Registry only |
 | `rm -rf inventory/skills/foo` + manual registry edit | `skill delete foo --yes` |
-| `skf install --type skill --path ~/.codex/skills` (retired global dirs) | Consumers declare the skill in their profile and run `skf sync` |
+| `skf install --type skill --path <a tool's global dir>` | Consumers declare the skill in their profile and run `skf sync` |
 | Ignore non-zero exit without reading stdout | Parse JSON error / `partial` |
 | `--remove-file refs` to drop a tree | Remove each file path |
 | Document a script as `~/.agents/skills/<this-skill>/…` | Resolve the skill dir at read time; the gate rejects self-vendor paths |

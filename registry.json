@@ -10,7 +10,6 @@
       "scope": "custom",
       "path": "inventory/skills/api-contracts",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/api-contracts",
       "tags": [
         "contracts",
         "tier-3"
@@ -23,7 +22,6 @@
       "scope": "custom",
       "path": "inventory/skills/audit-trail",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/audit-trail",
       "tags": [
         "provenance",
         "tier-3"
@@ -36,7 +34,6 @@
       "scope": "custom",
       "path": "inventory/skills/code-quality",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/code-quality",
       "tags": [
         "implementation",
         "review-lens"
@@ -49,7 +46,6 @@
       "scope": "custom",
       "path": "inventory/skills/coding-discipline",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/coding-discipline",
       "tags": [
         "implementation",
         "behavior"
@@ -62,7 +58,6 @@
       "scope": "custom",
       "path": "inventory/skills/data-migration",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/data-migration",
       "tags": [
         "data",
         "tier-3"
@@ -75,7 +70,6 @@
       "scope": "custom",
       "path": "inventory/skills/deployment-strategy",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/deployment-strategy",
       "tags": [
         "operations",
         "tier-3"
@@ -88,7 +82,6 @@
       "scope": "custom",
       "path": "inventory/skills/failure-analysis",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/failure-analysis",
       "tags": [
         "operations",
         "tier-3"
@@ -101,7 +94,6 @@
       "scope": "custom",
       "path": "inventory/skills/frontend-engineering",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/frontend-engineering",
       "tags": [
         "frontend",
         "architecture"
@@ -114,7 +106,6 @@
       "scope": "custom",
       "path": "inventory/skills/llm-integration",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/llm-integration",
       "tags": [
         "llm",
         "workflow"
@@ -127,7 +118,6 @@
       "scope": "custom",
       "path": "inventory/skills/migration-deprecation",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/migration-deprecation",
       "tags": [
         "contracts",
         "tier-3"
@@ -140,7 +130,6 @@
       "scope": "custom",
       "path": "inventory/skills/performance-analysis",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/performance-analysis",
       "tags": [
         "performance",
         "review-lens"
@@ -153,7 +142,6 @@
       "scope": "custom",
       "path": "inventory/skills/podman-utilization",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/podman-utilization",
       "tags": [
         "containers",
         "operations"
@@ -166,7 +154,6 @@
       "scope": "custom",
       "path": "inventory/skills/production-readiness",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/production-readiness",
       "tags": [
         "operations",
         "tier-3"
@@ -179,7 +166,6 @@
       "scope": "custom",
       "path": "inventory/skills/security-baseline",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/security-baseline",
       "tags": [
         "security",
         "implementation",
@@ -193,7 +179,6 @@
       "scope": "custom",
       "path": "inventory/skills/testing-strategy",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/testing-strategy",
       "tags": [
         "testing",
         "review-lens"
@@ -206,7 +191,6 @@
       "scope": "custom",
       "path": "inventory/skills/ui-portability-baseline",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/ui-portability-baseline",
       "tags": [
         "frontend",
         "review-lens"
@@ -219,7 +203,6 @@
       "scope": "custom",
       "path": "inventory/skills/codex-config-toml",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/codex-config-toml",
       "tags": [
         "codex",
         "config",
@@ -230,11 +213,10 @@
     {
       "type": "skill",
       "name": "umbrella-workspace",
-      "version": "0.7.2",
+      "version": "0.8.0",
       "scope": "custom",
       "path": "inventory/skills/umbrella-workspace",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/umbrella-workspace",
       "tags": [
         "multi-repo",
         "cooperation",
@@ -249,7 +231,6 @@
       "scope": "custom",
       "path": "inventory/skills/llm-json-portable",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/llm-json-portable",
       "tags": [
         "llm",
         "portable",
@@ -263,7 +244,6 @@
       "scope": "custom",
       "path": "inventory/skills/audio-webkit-cleanup",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/audio-webkit-cleanup",
       "tags": [
         "audio",
         "webkit",
@@ -278,7 +258,6 @@
       "scope": "custom",
       "path": "inventory/skills/design-sync-svelte",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/design-sync-svelte",
       "tags": [
         "design",
         "svelte",
@@ -292,7 +271,6 @@
       "scope": "custom",
       "path": "inventory/skills/design-sync-flutter",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/design-sync-flutter",
       "tags": [
         "design",
         "flutter",
@@ -306,7 +284,6 @@
       "scope": "custom",
       "path": "inventory/skills/skill-forge-project",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/skill-forge-project",
       "tags": [
         "meta",
         "workflow"
@@ -319,7 +296,6 @@
       "scope": "custom",
       "path": "inventory/skills/grok-build-harness",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/grok-build-harness",
       "tags": [
         "grok",
         "delegation",
@@ -334,7 +310,6 @@
       "scope": "custom",
       "path": "inventory/skills/fvm-flutter",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/fvm-flutter",
       "tags": [
         "flutter",
         "fvm",
@@ -349,7 +324,6 @@
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/product-parity",
       "tags": [
         "parity",
         "mirroring",
@@ -366,7 +340,6 @@
       "scope": "custom",
       "path": "inventory/skills/defect-drainer-intake",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/defect-drainer-intake",
       "tags": [
         "defects",
         "intake",
@@ -382,7 +355,6 @@
       "scope": "custom",
       "path": "inventory/skills/external-worker-delegation",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/external-worker-delegation",
       "tags": [
         "delegation",
         "process",
@@ -392,11 +364,10 @@
     {
       "type": "skill",
       "name": "skill-forge-authoring",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-authoring",
       "installable": true,
-      "runtimeTarget": "~/.codex/skills/skill-forge-authoring",
       "tags": [
         "skill-forge",
         "agent-facing",

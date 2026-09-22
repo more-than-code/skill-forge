@@ -8,7 +8,7 @@ Codex-specific skill discovery extends the core skill activation protocol with:
 
 - Global system skills: `~/.codex/skills/.system/*/SKILL.md` for Codex/platform workflows only.
 
-`~/.codex/skills/` is retired as a shared-skill location — do not place or expect Skill Forge skills there. Codex reads project skills from `.agents/skills/` and home-profile skills from `~/.agents/skills/` per the core protocol; `.system` platform skills rank after both.
+Codex reads project skills from `.agents/skills/` and home-profile skills from `~/.agents/skills/` per the core protocol; `.system` platform skills rank after both.
 
 For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 

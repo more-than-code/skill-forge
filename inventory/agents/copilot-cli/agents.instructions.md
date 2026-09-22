@@ -6,8 +6,6 @@ This overlay extends the shared core instructions with Copilot CLI-specific beha
 
 Copilot CLI adds no skill paths beyond the core protocol: project skills at `.agents/skills/` and home-profile skills at `~/.agents/skills/`.
 
-`~/.copilot/skills/` is retired as a shared-skill location — do not place or expect Skill Forge skills there.
-
 For concrete before/after examples of common failure modes, also check the activated `coding-discipline` skill's `EXAMPLES.md` companion.
 
 ## Copilot CLI Delegation

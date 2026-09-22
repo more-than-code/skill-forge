@@ -104,8 +104,7 @@ function toSkillSummary(skill) {
     scope: skill.scope,
     tags: skill.tags || [],
     installable: skill.installable,
-    path: skill.path,
-    runtimeTarget: skill.runtimeTarget
+    path: skill.path
   };
 }
 
@@ -447,7 +446,8 @@ async function validateRegistry() {
     if (!skill.scope) reportValidationError(errors, `${key} missing scope`);
     if (!skill.path) reportValidationError(errors, `${key} missing path`);
     if (!Object.prototype.hasOwnProperty.call(skill, 'installable')) reportValidationError(errors, `${key} missing installable`);
-    if (!Object.prototype.hasOwnProperty.call(skill, 'runtimeTarget')) reportValidationError(errors, `${key} missing runtimeTarget`);
+    // No runtimeTarget requirement: skills propagate by `sync` into a profile's own
+    // directories, never to a per-tool global path. Agents/subagents/hooks still need one.
 
     const skillFile = path.join(REPO_ROOT, skill.path || '', 'SKILL.md');
     if (!await fs.pathExists(skillFile)) {
@@ -1427,7 +1427,6 @@ skillCommand
               scope: 'custom',
               path: `inventory/skills/${name}`,
               installable: options.installable === undefined ? true : options.installable === 'true',
-              runtimeTarget: `~/.codex/skills/${name}`,
               tags: options.tags ? splitTags(options.tags) : []
             }
           : { ...registry.skills[existingIndex] };

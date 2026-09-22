@@ -501,7 +501,6 @@ test('skill delete post-validation failure JSON includes partial: true', async (
     scope: 'custom',
     path: 'inventory/skills/broken-sibling',
     installable: true,
-    runtimeTarget: '~/.codex/skills/broken-sibling',
     tags: []
   });
   await fx.writeRegistry(registry);
@@ -534,7 +533,6 @@ test('skill set-version/bump post-validation failure JSON includes partial: true
     scope: 'custom',
     path: 'inventory/skills/broken-sibling',
     installable: true,
-    runtimeTarget: '~/.codex/skills/broken-sibling',
     tags: []
   });
   await fx.writeRegistry(registry);
@@ -682,7 +680,6 @@ test('skill delete and read refuse registry paths that escape inventory/skills',
       scope: 'custom',
       path: outside,
       installable: true,
-      runtimeTarget: '~/.codex/skills/abs-escape',
       tags: []
     },
     {
@@ -692,7 +689,6 @@ test('skill delete and read refuse registry paths that escape inventory/skills',
       scope: 'custom',
       path: 'inventory/skills/../../../tmp-should-not-delete',
       installable: true,
-      runtimeTarget: '~/.codex/skills/rel-escape',
       tags: []
     },
     {
@@ -702,7 +698,6 @@ test('skill delete and read refuse registry paths that escape inventory/skills',
       scope: 'custom',
       path: 'inventory/skills',
       installable: true,
-      runtimeTarget: '~/.codex/skills/boundary-escape',
       tags: []
     },
     {
@@ -712,7 +707,6 @@ test('skill delete and read refuse registry paths that escape inventory/skills',
       scope: 'custom',
       path: 'inventory/skills/keep-me',
       installable: true,
-      runtimeTarget: '~/.codex/skills/keep-me',
       tags: []
     }
   );

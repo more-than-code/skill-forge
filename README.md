@@ -49,7 +49,7 @@ registry-lock.json         # generated integrity lockfile
 skill-forge.json           # this repo's own skill profile (it is also a consumer)
 skill-forge.lock.json      # generated profile lockfile
 .agents/skills/            # vendored profile skills (committed) - the one real copy
-.claude/skills/            # symlink -> ../.agents/skills (the path claude-code reads)
+.claude/skills/            # symlink -> ../.agents/skills, written by `skf sync`
 ```
 
 ## Install Dependencies
@@ -157,9 +157,15 @@ skf sync [--check]               # vendor + lock; --check is the CI drift gate
 skf project status [--json]
 ```
 
-The `tools` map decides the sync targets: `.agents/skills/` when a tool
-without native project-skill support (codex, copilot-cli, grok) is enabled,
-`.claude/skills/` when `claude-code` is.
+Skills are stored **once**, in `.agents/skills/`, whatever the `tools` map says.
+Each enabled tool that reads its own directory gets a symlink to that copy —
+today only `claude-code`, as `.claude/skills/ -> ../.agents/skills`. So the
+`tools` map decides which links exist, never how many copies are on disk.
+
+`sync` migrates an existing real tool directory to a link, and refuses if that
+directory holds anything Skill Forge does not manage. If a symlink cannot be
+created, `sync` fails rather than silently falling back to a second copy — a
+platform without symlinks is not supported.
 
 `$HOME` is the same mechanism for machine-wide skills, with its own spelling:
 

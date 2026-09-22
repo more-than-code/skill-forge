@@ -1010,17 +1010,61 @@ function resolveProjectProfile(registry, manifest) {
  * (instruction-protocol discovery); a Claude-Code-only profile skips it so
  * skills aren't committed twice for a single reader.
  */
-function projectSkillDirs(manifest) {
-  const dirs = [];
-  const needsNeutralDir = PROJECT_TOOLS.some((tool) => !TOOL_PROJECT_SKILL_DIRS[tool] && manifest.tools?.[tool]);
-  if (needsNeutralDir) dirs.push(PROJECT_NEUTRAL_SKILL_DIR);
-  for (const [tool, dir] of Object.entries(TOOL_PROJECT_SKILL_DIRS)) {
-    if (manifest.tools?.[tool]) dirs.push(dir);
-  }
-  if (dirs.length === 0) {
+function projectSkillLayout(manifest) {
+  const enabled = PROJECT_TOOLS.filter((tool) => manifest.tools?.[tool]);
+  if (enabled.length === 0) {
     throw new Error(`No tools enabled in ${PROJECT_MANIFEST_NAME}; enable at least one under "tools".`);
   }
-  return dirs;
+  const linkDirs = enabled.map((tool) => TOOL_PROJECT_SKILL_DIRS[tool]).filter(Boolean);
+  return { realDir: PROJECT_NEUTRAL_SKILL_DIR, linkDirs };
+}
+
+function projectSkillDirs(manifest) {
+  const { realDir, linkDirs } = projectSkillLayout(manifest);
+  return [realDir, ...linkDirs];
+}
+
+/** Link target is relative, so the pair survives being cloned or moved. */
+function toolDirLinkTarget(projectRoot, linkDir, realDir) {
+  return path.relative(path.dirname(path.join(projectRoot, linkDir)), path.join(projectRoot, realDir));
+}
+
+async function toolDirLinkStatus(projectRoot, linkDir, realDir) {
+  const linkPath = path.join(projectRoot, linkDir);
+  const expected = toolDirLinkTarget(projectRoot, linkDir, realDir);
+  const stat = await fs.lstat(linkPath).catch(() => null);
+  if (!stat) return { status: 'missing', linkPath, expected };
+  if (!stat.isSymbolicLink()) return { status: 'real-dir', linkPath, expected };
+  const actual = await fs.readlink(linkPath);
+  return { status: actual === expected ? 'clean' : 'wrong-target', linkPath, expected, actual };
+}
+
+/**
+ * Skills are stored once, in the tool-neutral directory; every tool-specific
+ * directory is a symlink to it. One copy on disk and in git, and no directory a
+ * narrowed tool set can prune out from under another tool's reader.
+ */
+async function ensureToolDirLink(projectRoot, linkDir, realDir, managedNames) {
+  const info = await toolDirLinkStatus(projectRoot, linkDir, realDir);
+  if (info.status === 'clean') return false;
+
+  if (info.status === 'real-dir') {
+    // Migration off the copy layout. Only Skill Forge's own copies may be
+    // removed; anything hand-placed must not vanish into a symlink silently.
+    const entries = await fs.readdir(info.linkPath).catch(() => []);
+    const foreign = entries.filter((name) => !managedNames.has(name));
+    if (foreign.length > 0) {
+      throw new Error(`${linkDir} holds entries Skill Forge does not manage (${foreign.join(', ')}); move or remove them, then re-run "${CLI_NAME} sync".`);
+    }
+  }
+  await fs.remove(info.linkPath);
+  await fs.ensureDir(path.dirname(info.linkPath));
+  try {
+    await fs.symlink(info.expected, info.linkPath);
+  } catch (error) {
+    throw new Error(`Could not create the symlink ${linkDir} -> ${info.expected}: ${error.message}. Skills are stored once and every tool directory links to that copy; a filesystem or platform that cannot create symlinks is not supported.`);
+  }
+  return true;
 }
 
 function allCandidateSkillDirs() {
@@ -1078,7 +1122,8 @@ async function computeProjectState(projectRoot) {
   const registry = await readRegistry();
   const manifest = await readProjectManifest(projectRoot);
   const resolution = resolveProjectProfile(registry, manifest);
-  const targetDirs = projectSkillDirs(manifest);
+  const { realDir, linkDirs } = projectSkillLayout(manifest);
+  const targetDirs = [realDir, ...linkDirs];
   const expectedLock = await buildProjectLock(projectRoot, registry, resolution);
   const lockPath = projectLockPath(projectRoot);
   const storedLock = await fs.pathExists(lockPath) ? await fs.readJson(lockPath) : null;
@@ -1090,10 +1135,12 @@ async function computeProjectState(projectRoot) {
     issues.push(`${PROJECT_LOCK_NAME} is stale (manifest, registry, or local skill changed); run "${CLI_NAME} sync".`);
   }
 
+  // Content is checked only in the real directory: the tool dirs are symlinks to
+  // it, so walking them would re-report the same files under a second path.
   const vendored = [];
   for (const { name } of resolution.resolved) {
     const expected = expectedLock.skills[name];
-    for (const dir of targetDirs) {
+    for (const dir of [realDir]) {
       const destPath = path.join(projectRoot, dir, name);
       if (!await fs.pathExists(destPath)) {
         vendored.push({ name, dir, status: 'missing' });
@@ -1112,16 +1159,35 @@ async function computeProjectState(projectRoot) {
     .filter(([name, entry]) => entry.source === 'registry' && !resolvedNames.has(name))
     .map(([name]) => name);
   for (const name of staleNames) {
-    for (const dir of targetDirs) {
+    for (const dir of [realDir]) {
       if (await fs.pathExists(path.join(projectRoot, dir, name))) {
         issues.push(`${path.join(dir, name)} is no longer in the profile; run "${CLI_NAME} sync" to prune it.`);
       }
     }
   }
 
+  for (const dir of linkDirs) {
+    const info = await toolDirLinkStatus(projectRoot, dir, realDir);
+    if (info.status === 'missing') {
+      issues.push(`${dir} is missing; run "${CLI_NAME} sync".`);
+    } else if (info.status === 'real-dir') {
+      issues.push(`${dir} is a directory; it should be a symlink to ${info.expected}. Run "${CLI_NAME} sync".`);
+    } else if (info.status === 'wrong-target') {
+      issues.push(`${dir} points at ${info.actual}; expected ${info.expected}. Run "${CLI_NAME} sync".`);
+    }
+  }
+
   // Copies left in dirs the current tool set no longer targets (e.g. after
   // narrowing tools to claude-code only). Declared local paths are exempt.
   const inactiveDirs = allCandidateSkillDirs().filter((dir) => !targetDirs.includes(dir));
+  const inactiveLinks = [];
+  for (const dir of inactiveDirs) {
+    const stat = await fs.lstat(path.join(projectRoot, dir)).catch(() => null);
+    if (stat?.isSymbolicLink()) {
+      inactiveLinks.push(dir);
+      issues.push(`${dir} is not a sync target for the enabled tools; run "${CLI_NAME} sync" to remove the link.`);
+    }
+  }
   const localPaths = new Set(resolution.locals.map(({ relPath }) => path.normalize(relPath)));
   const registryNames = new Set([
     ...resolvedNames,
@@ -1131,7 +1197,7 @@ async function computeProjectState(projectRoot) {
   ]);
   const orphaned = [];
   for (const name of registryNames) {
-    for (const dir of inactiveDirs) {
+    for (const dir of inactiveDirs.filter((entry) => !inactiveLinks.includes(entry))) {
       const relPath = path.join(dir, name);
       if (localPaths.has(path.normalize(relPath))) continue;
       if (await fs.pathExists(path.join(projectRoot, relPath))) {
@@ -1141,38 +1207,54 @@ async function computeProjectState(projectRoot) {
     }
   }
 
-  return { registry, manifest, resolution, targetDirs, expectedLock, storedLock, staleNames, orphaned, vendored, issues };
+  return { registry, manifest, resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, staleNames, orphaned, inactiveLinks, vendored, issues };
 }
 
 async function syncProject(projectRoot) {
   const state = await computeProjectState(projectRoot);
-  const { resolution, targetDirs, expectedLock, storedLock } = state;
+  const { resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock } = state;
 
+  // One real copy, in the tool-neutral directory.
   for (const { name, skill } of resolution.resolved) {
     const sourcePath = assertPathWithinInventorySkills(skill.path);
-    for (const dir of targetDirs) {
-      const destPath = path.join(projectRoot, dir, name);
-      if (await fs.pathExists(destPath)) {
-        const owned = storedLock?.skills?.[name]?.source === 'registry';
-        const { integrity } = await hashTree(destPath);
-        if (!owned && integrity !== expectedLock.skills[name].integrity) {
-          throw new Error(`${path.join(dir, name)} exists but is not managed by Skill Forge. Declare it in skills.local, rename it, or remove it.`);
-        }
-        await fs.remove(destPath);
+    const destPath = path.join(projectRoot, realDir, name);
+    if (await fs.pathExists(destPath)) {
+      const owned = storedLock?.skills?.[name]?.source === 'registry';
+      const { integrity } = await hashTree(destPath);
+      if (!owned && integrity !== expectedLock.skills[name].integrity) {
+        throw new Error(`${path.join(realDir, name)} exists but is not managed by Skill Forge. Declare it in skills.local, rename it, or remove it.`);
       }
-      await fs.ensureDir(path.dirname(destPath));
-      await fs.copy(sourcePath, destPath);
+      await fs.remove(destPath);
     }
+    await fs.ensureDir(path.dirname(destPath));
+    await fs.copy(sourcePath, destPath);
     console.log(chalk.green(`  ${name}@${skill.version} -> ${targetDirs.join(', ')}`));
   }
 
+  // Every tool directory is a link to that copy. Done after the copies exist so
+  // a link never briefly resolves to nothing.
+  const managedNames = new Set([
+    ...resolution.resolved.map(({ name }) => name),
+    ...Object.entries(storedLock?.skills || {})
+      .filter(([, entry]) => entry.source === 'registry')
+      .map(([name]) => name)
+  ]);
+  for (const dir of linkDirs) {
+    if (await ensureToolDirLink(projectRoot, dir, realDir, managedNames)) {
+      console.log(chalk.green(`  ${dir} -> ${toolDirLinkTarget(projectRoot, dir, realDir)}`));
+    }
+  }
+
+  for (const dir of state.inactiveLinks) {
+    await fs.remove(path.join(projectRoot, dir));
+    console.log(chalk.yellow(`  removed ${dir} (not a target for the enabled tools)`));
+  }
+
   for (const name of state.staleNames) {
-    for (const dir of targetDirs) {
-      const destPath = path.join(projectRoot, dir, name);
-      if (await fs.pathExists(destPath)) {
-        await fs.remove(destPath);
-        console.log(chalk.yellow(`  pruned ${path.join(dir, name)}`));
-      }
+    const destPath = path.join(projectRoot, realDir, name);
+    if (await fs.pathExists(destPath)) {
+      await fs.remove(destPath);
+      console.log(chalk.yellow(`  pruned ${path.join(realDir, name)}`));
     }
   }
 

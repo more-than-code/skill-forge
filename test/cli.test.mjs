@@ -1197,32 +1197,69 @@ test('home namespace seeds skill-forge-project and syncs the $HOME profile from 
   await assert.rejects(run('node', [CLI, 'home', 'init'], { cwd: fx.root, env }), /already exists/);
 });
 
-test('claude-code-only profiles vendor to .claude/skills only; tool-set changes prune', async () => {
+test('skills are stored once in .agents/skills; tool dirs are symlinks to it', async () => {
   const fx = await projectFixture();
   await fx.runInProject(['project', 'init', '--tools', 'claude-code']);
   await fx.runInProject(['project', 'add', 'demo-skill']);
   await fx.runInProject(['sync']);
-  await fs.access(path.join(fx.projectRoot, '.claude', 'skills', 'demo-skill', 'SKILL.md'));
-  assert.equal(await fs.access(path.join(fx.projectRoot, '.agents')).then(() => true, () => false), false);
+
+  // The real copy lives in the neutral dir even for a claude-code-only profile.
+  await fs.access(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
+  const linkPath = path.join(fx.projectRoot, '.claude', 'skills');
+  assert.equal((await fs.lstat(linkPath)).isSymbolicLink(), true, '.claude/skills must be a symlink');
+  assert.equal(await fs.readlink(linkPath), path.join('..', '.agents', 'skills'));
+  // ...and the skill is readable through the link.
+  await fs.access(path.join(linkPath, 'demo-skill', 'SKILL.md'));
   await fx.runInProject(['sync', '--check']);
 
-  // Widening the tool set adds the neutral dir; narrowing back prunes it.
+  // One stored copy, not two.
+  const viaReal = await fs.stat(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
+  const viaLink = await fs.stat(path.join(linkPath, 'demo-skill', 'SKILL.md'));
+  assert.equal(viaReal.ino, viaLink.ino, 'both paths must resolve to the same file');
+
+  // Widening the tool set changes nothing about storage.
   const manifest = await fx.readManifest();
   manifest.tools.codex = true;
   await fx.writeManifest(manifest);
   await fx.runInProject(['sync']);
-  await fs.access(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
+  await fx.runInProject(['sync', '--check']);
+  assert.equal((await fs.lstat(linkPath)).isSymbolicLink(), true);
 
-  manifest.tools.codex = false;
+  // Dropping claude-code removes the link, and never prunes through it.
+  manifest.tools['claude-code'] = false;
   await fx.writeManifest(manifest);
   await assert.rejects(fx.runInProject(['sync', '--check']), /not a sync target/);
-  const { stdout } = await fx.runInProject(['sync']);
-  assert.match(stdout, /pruned .agents\/skills\/demo-skill/);
-  assert.equal(await fs.access(path.join(fx.projectRoot, '.agents')).then(() => true, () => false), false);
+  await fx.runInProject(['sync']);
+  assert.equal(await fs.lstat(linkPath).then(() => true, () => false), false, 'the link is removed');
+  await fs.access(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
   await fx.runInProject(['sync', '--check']);
 
   // A profile with no tools enabled is an error, not a silent no-op.
-  manifest.tools['claude-code'] = false;
+  manifest.tools.codex = false;
   await fx.writeManifest(manifest);
   await assert.rejects(fx.runInProject(['sync']), /No tools enabled/);
+});
+
+test('sync migrates an existing real tool directory to a symlink, but not over foreign files', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init', '--tools', 'claude-code']);
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  await fx.runInProject(['sync']);
+
+  const linkPath = path.join(fx.projectRoot, '.claude', 'skills');
+
+  // Recreate the old copy layout, then let sync migrate it.
+  await fs.rm(linkPath, { force: true });
+  await fs.mkdir(path.join(linkPath, 'demo-skill'), { recursive: true });
+  await fs.writeFile(path.join(linkPath, 'demo-skill', 'SKILL.md'), 'stale copy\n');
+  await assert.rejects(fx.runInProject(['sync', '--check']), /should be a symlink/);
+  await fx.runInProject(['sync']);
+  assert.equal((await fs.lstat(linkPath)).isSymbolicLink(), true);
+
+  // A hand-placed directory is never swallowed by the migration.
+  await fs.rm(linkPath, { force: true });
+  await fs.mkdir(path.join(linkPath, 'someones-own-skill'), { recursive: true });
+  await fs.writeFile(path.join(linkPath, 'someones-own-skill', 'SKILL.md'), 'mine\n');
+  await assert.rejects(fx.runInProject(['sync']), /does not manage \(someones-own-skill\)/);
+  await fs.access(path.join(linkPath, 'someones-own-skill', 'SKILL.md'));
 });

@@ -219,6 +219,9 @@ Design notes:
   collisions instead of overwriting.
 - `tools` records the supported tool set (part of the configuration
   fingerprint) and controls which project-local discovery paths sync writes.
+  Skills are written once to `.agents/skills/`; a tool-specific dir is a symlink
+  to it, never a second copy, so narrowing the tool set can never prune the
+  store out from under another tool's reader.
   Today only `claude-code` has a tool-specific dir (`.claude/skills/`); the
   other entries are inert metadata until a tool grows native project-skill
   support. `init` defaults all tools to enabled — narrow with `--tools` or by

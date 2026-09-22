@@ -280,7 +280,7 @@
     {
       "type": "skill",
       "name": "skill-forge-project",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-project",
       "installable": true,

@@ -305,13 +305,13 @@
     },
     "inventory/skills/skill-forge-project": {
       "name": "skill-forge-project",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-VJKkHFcImdJnujxuWVqxIQAVuG14fTS63f+q/Li7HhU=",
+      "integrity": "sha256-eA9ImtZhVqTwbH7IuJuuALzzhNRVugU6SByELpySm04=",
       "files": {
-        "SKILL.md": "sha256-YLldK0WujNFoHRtzcnR5LFLEhlnQ8saT2qWqxmJHQWY="
+        "SKILL.md": "sha256-09F3migUTJWJMoSblM44zYZYY0VswpeKE1qi5McU8Go="
       }
     },
     "inventory/skills/testing-strategy": {

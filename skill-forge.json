@@ -8,7 +8,10 @@
       "podman-utilization": "^0.1.0",
       "security-baseline": "^0.1.0",
       "skill-forge-authoring": "^0.4.0",
-      "testing-strategy": "^0.1.1"
+      "testing-strategy": "^0.1.1",
+      "skill-forge-project": "^0.4.0",
+      "api-contracts": "^0.1.0",
+      "migration-deprecation": "^0.1.0"
     },
     "shims": [
       "claude-code"

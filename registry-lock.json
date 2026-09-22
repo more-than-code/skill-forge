@@ -354,9 +354,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-IJp3JzNwS/nbXPZHVLvhXT1jcZisls7U4ChwrcSa2Kg=",
+      "integrity": "sha256-ZguoW0DFDVGeokse286spW/qkpeEFLGlArgCYrdMPAY=",
       "files": {
-        "core.md": "sha256-XGTCKp5+gpUVpBUOibcxwlU8er6LNAnquLUv0F82YVo="
+        "core.md": "sha256-m8v6cQxYEj1LP6DBvmnrM33wIvLa5gD8wVIy424Ezm4="
       },
       "sourceOnly": true
     },

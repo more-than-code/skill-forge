@@ -33,6 +33,7 @@ Domain expertise is packaged as Agent Skills in project and home-profile skill d
 8. **Full load:** Read complete `SKILL.md` only after activation. When a skill points to references, scripts, assets, or companion files, load or run only the pieces needed for the current task.
 9. **Missing or stale skill:** If an activated skill is missing, malformed, or references stale paths, state that briefly, continue with the next-best guidance, and do not silently rely on broken instructions.
 10. **Project skill selection:** If the repo contains `skill-forge.json`, or the user asks which skills a project should use, activate `skill-forge-project` and manage project skills via the `skf` CLI (`project add`/`sync`) — never by hand-copying skill directories.
+11. **Profile staleness check:** In a repo containing `skill-forge.json`, run `skf sync --check` before relying on its skills. It is read-only. Nothing outside the repo will ever run it — registry-side commands only know the registry checkout and `$HOME`, so a consumer they have not been run in is invisible and can lag indefinitely. On a non-zero exit, state which skills are affected and at what severity before doing the work, not after; `skill-forge-project` carries the triage and the `$HOME` shadowing comparison that `--check` cannot make.
 
 ### Skill Location Policy
 - Skill placement is managed by Skill Forge profiles: the repo's `skill-forge.json` + `skf sync` for project skills, and the `$HOME` profile (`skf home init|add|sync`) for machine-wide skills.

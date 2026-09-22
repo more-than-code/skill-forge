@@ -3,8 +3,8 @@ name: umbrella-workspace
 description: >
   Cooperation rules for multi-repo (umbrella) workspaces: where docs and tasks live,
   self-contained task entries, pointer stubs in child repos, handoff checklists,
-  plan-vs-status split, where the skill profile belongs (umbrella or child, decided by
-  whether the agent tool descends into subdirectories),
+  plan-vs-status split, where skill profiles belong (every session root declares its
+  own; a session reads only its own root),
   and parallel agent sessions via git worktrees (SESSION.md
   markers, AGENTS load hooks, thin feature umbrellas, worktree vs copy, retire
   on primary). Use when working in a multi-repo container directory, starting or

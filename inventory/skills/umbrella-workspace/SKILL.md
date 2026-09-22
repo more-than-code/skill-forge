@@ -42,51 +42,58 @@ Two sources: the **`$HOME` profile** for what applies regardless of stack, and *
 
 Not because it double-loads - it doesn't. Observed 2026-09-22, six names present in *both* the project and `$HOME` trees surfaced exactly once each, resolved project-over-home, on two tools independently (`grok inspect` labels the winner `project`; the other listed ten unique names from sixteen directories). The real costs are two: you store, commit and update a second copy, and **the project copy shadows the home one unconditionally**. While the two match, the duplication is invisible. The moment the project's pin lags a `$HOME` bump, the stale project copy is what loads - `sync --check` passes at both levels, because each is internally consistent, and nothing reports the shadowing. A skill that applies regardless of stack belongs at `$HOME` only.
 
-**Where the project profile goes depends on whether your agent tool descends into subdirectories, and you must verify that rather than assume it.**
+**Every level that is a session root declares its own profile.** The umbrella declares what umbrella-rooted sessions need; each child declares what its own sessions and worktrees need. Both are ordinary consumers - `skf project init`, `add`, `sync`, `sync --check` - and neither is a view onto the other.
 
-Some tools read skills only from the directory the session was started in. Others resolve a directory-scoped copy against the files being edited. The difference decides the layout, and guessing wrong fails *silently*: the profile is declared, `skf sync` vendors it, the lockfile is written, `sync --check` passes - and the skills never load. Nothing reports this. Check the tool's own behavior, then confirm by starting a session and looking at what actually loaded.
+This follows from how skills are read. **Observed 2026-09-22 on Claude Code: a session reads only its own root.** A control skill placed in the session root's store loaded; two probes placed in a child directory's `.claude/skills` and `.agents/skills`, present on disk in the same scan, did not. So an umbrella-rooted session cannot see a child's skills, and a child-rooted session - including every `git worktree` of that child - cannot see the umbrella's. Neither level can serve the other, which is why both declare.
+
+**Verify this for any other tool before relying on it.** Some resolve a directory-scoped copy against the files being edited. Guessing wrong fails *silently*: the profile is declared, `skf sync` vendors it, the lockfile is written, `sync --check` passes - and the skills never load. Probe it: a real skill at the session root as a control, another in a child directory, start a session, ask which it lists.
 
 **A symlinked skill directory needs its own probe.** `readdirSync(dir, { withFileTypes: true })` reports a symlink as `isSymbolicLink()` and **not** `isDirectory()`, so a scan filtering on `isDirectory()` skips it while a `*/SKILL.md` glob resolves through it. Which idiom a tool uses is not inferable from the outside, and the failure is the silent kind again. Probe it: a real skill and a symlinked one side by side in a scratch directory, start a session there, ask which it lists - the real one is the control that proves the directory was read at all.
 
-**Tool reads only the session root (verify first - this is the common case).** The umbrella carries the whole project profile; children carry none. Every skill any child needs is declared once at the top, because that is the only place a session rooted at the umbrella will look.
+**The umbrella** declares every skill its own cross-repo sessions need - which in practice is the union of what the children's work touches, because that is the work being done from there.
 
-- Cost: a session started *inside* a child gets no project skills at all. Accept it deliberately and write it down, or work from the umbrella.
-- Cost: a stack skill is loaded while working in siblings it does not fit. Usually cheaper than the alternative failing silently.
-
-**Tool resolves directory-scoped skills.** Each child declares only what its own signals justify, so a frontend skill stays quiet during backend work in the same session. Better isolation - available only if the tool really does this.
+**Each child** declares what its own signals justify, and *commits* it. A worktree materializes the child's tracked content, so committed skills reach every worker checkout for free; an umbrella-held profile never does, sitting one level above and untracked besides.
 
 ```bash
-cd <the directory sessions actually start in>
+# at the umbrella, and again in each child
 skf project init
-skf project add <name>...   # everything the children between them need
+skf project add <name>...
 skf sync
-skf sync --check            # must exit 0
+skf sync --check            # must exit 0 - run it at every level
 ```
 
-**Child-owned, linked up (verify links load first).** Each child declares and *commits* its own profile; the umbrella carries **no `skill-forge.json`** at all - its skill directories hold only symlinks into the children. Reach for this when workers run in `git worktree` checkouts of a child, because it is the only layout that reaches them.
+### Fallback: umbrella links into children
 
-Two mechanisms carry it, and both are structural rather than disciplinary:
+Reach for this **only when the umbrella cannot hold a profile of its own** - a container directory nobody wants to add a manifest to. The umbrella carries no `skill-forge.json`; its skill directories hold symlinks into the children instead.
 
-- A worktree materializes the child's **tracked** content, so committed skills arrive in every worker checkout for free. An umbrella-held profile never arrives: it sits one level above the child the worktree belongs to, and is untracked besides.
-- `skf sync` refuses to run where there is no `skill-forge.json`, so nothing at the umbrella prunes or overwrites the links. A profile there fires both destructive paths instead - a declared name is removed and re-copied as a real directory, an undeclared one is pruned by name.
+It is a fallback rather than the shape because of three costs the declared umbrella does not pay:
 
-The cost is the familiar one, moved: the links are hand-maintained, and unversioned at a container-only umbrella. A child that gains a skill leaves the umbrella link simply absent, `sync --check` passes in that child, and nothing reports the gap. Re-link after any child profile change:
+- **Collisions have no answer.** Two children pinning the same skill at different ranges leave one link slot and two candidates. Whichever you pick is silently wrong for the other child.
+- **Nothing validates it.** `skf sync` refuses to run where there is no `skill-forge.json`, so there is no `sync --check` at the umbrella. A child that gains a skill leaves the link simply absent, the child's own check still passes, and nothing reports the gap.
+- **The links are hand-maintained and, at a container-only umbrella, unversioned.** A lost container takes them with it.
+
+That `sync` refusal cuts both ways, and it is why this layout is safe as far as it goes: nothing at the umbrella prunes or overwrites the links. Putting a profile there *and* keeping links fires both destructive paths - a declared name is removed and re-copied as a real directory, an undeclared one is pruned by name. Choose one or the other, never both.
+
+Re-link after any child profile change:
 
 ```bash
 cd <umbrella>
+# Only the real store is linked per skill. `.claude/skills` is itself a shim
+# symlink to `.agents/skills`, so linking into it would write inside the store.
+mkdir -p .agents/skills
+[ -e .claude/skills ] || ln -s ../.agents/skills .claude/skills
 for c in <child>...; do
-  for sd in .agents/skills .claude/skills; do
-    [ -d "$c/$sd" ] || continue
-    mkdir -p "$sd"
-    for d in "$c/$sd"/*/; do
-      n=$(basename "$d")
-      ln -sfn "../../$c/$sd/$n" "$sd/$n"
-    done
+  for d in "$c"/.agents/skills/*/; do
+    [ -d "$d" ] || continue
+    n=$(basename "$d")
+    ln -sfn "../../$c/.agents/skills/$n" ".agents/skills/$n"
   done
 done
 ```
 
-**Do not split the same concern across both levels.** One project profile, in one place. A skill declared at the umbrella *and* in a child is the duplicate problem again, one level down. Linking up is not a split: the umbrella declares nothing and owns nothing, it only points at the child that does.
+**Declaring the same skill at both levels is correct, not duplication.** The umbrella and a child are different session roots, so their stores are never read by the same session - there is no second copy to surface and no precedence to resolve. (Dedupe *within* one root is measured, above; that two roots never interact in one session follows from the root-only reading and has not been separately measured.)
+
+The hazard is not duplication but **drift between the two pins**. The umbrella at `^0.3.0` and a child at `^0.5.0` means the same skill behaves differently depending on which directory the session started in, and each level's `sync --check` passes because each is internally consistent. Keep the pins aligned deliberately, and treat a level you have not synced in a while as serving stale skills until proven otherwise.
 
 **A child whose signals `$HOME` already covers needs nothing.** A stub with no code yet is not a consumer - revisit when it becomes one.
 
@@ -95,15 +102,16 @@ done
 **A child's own local skill reaches the umbrella by symlink, not by copy.** A repo-local overlay (`skills.local`) has its source inside the child that owns it, and that child is the only place it can be edited and committed. An umbrella-rooted session still needs to see it, so link down rather than duplicating:
 
 ```bash
-# from the umbrella, pointing into the child that owns the source
-# a relative target resolves from the link's own directory, not the umbrella root
+# from the umbrella, pointing into the child that owns the source.
+# One link, into the real store: `.claude/skills` is a shim to `.agents/skills`,
+# so it resolves the same name without a second link.
+# A relative target resolves from the link's own directory, not the umbrella root.
 ln -s ../../<child>/.agents/skills/<name> .agents/skills/<name>
-ln -s ../../.agents/skills/<name>         .claude/skills/<name>
 ```
 
 `skf sync` leaves these alone - it vendors registry skills and prunes by registry name, so a link named after a local skill is neither created nor removed for you. Where the umbrella holds the profile, declare the child's real path in its `skills.local` so `integrity` tracks the source; under the child-owned layout the umbrella declares nothing and the child's own lock already tracks it.
 
-**Put the local skill's source in a tool skill directory the child already vendors to**, `<child>/.claude/skills/<name>`, and declare that path. `skills.local` maps a name to exactly one path, so the other tool directories need a link inside the child - `ln -sfn ../../.claude/skills/<name> .agents/skills/<name>` - which `sync` also leaves alone. The payoff is that one relink loop at the umbrella picks up registry and local skills together, through the two-hop chain, with nothing to special-case. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.
+**Put the local skill's source in the child's real store**, `<child>/.agents/skills/<name>`, and declare that path in `skills.local`. Every tool directory is a shim onto that store, so no second link is needed inside the child, and one relink loop at the umbrella picks up registry and local skills together with nothing to special-case. A copy instead of a link is the worse failure: nothing refreshes it, and the two drift silently while `sync --check` passes.
 
 Umbrella-level links are unversioned when the umbrella is not a git repo - the child commits the source and its own links, the umbrella commits nothing. Note them in the umbrella `AGENTS.md` beside the skill table, or a lost container takes them with it.
 
@@ -226,12 +234,11 @@ umbrella/                 # usually not a git repo
   child-a/                # each child its own git repo when ready
     AGENTS.md
     tasks/todo.md         # pointer stub when participating — committed, status-free
-    skill-forge.json      # this child's own skills. Absent for either reason: $HOME
-                          #   already covers it, OR the umbrella holds the whole
-                          #   project profile - see the layout table above
+    skill-forge.json      # this child's own skills; committed, so worktrees get them.
+                          #   Absent only when $HOME already covers everything it needs
     skill-forge.lock.json
-    .agents/skills/       # vendored by `skf sync`; never hand-copied
-    .claude/skills/
+    .agents/skills/       # the one real store, vendored by `skf sync`; never hand-copied
+    .claude/skills        # symlink -> ../.agents/skills, written by `skf sync`
   child-b/
     ...
 ```
@@ -242,6 +249,9 @@ umbrella/                 # usually not a git repo
 - Declaring a stack-specific skill at `$HOME` so "every repo has it", when one project profile would do
 - Adding a child repo without deciding which skills it needs, leaving it silently on the home baseline
 - Hand-copying a vendored skill directory between children instead of declaring it in that child's profile
+- Leaving a session root without its own profile on the theory that a neighbouring level covers it - a session reads only its own root
+- Letting an umbrella pin and a child pin of the same skill drift apart; each level's `sync --check` passes while they disagree
+- Linking a skill into `.claude/skills` by name - it is a shim onto `.agents/skills`, so the link lands inside the store
 - Copying a child's local overlay up to the umbrella instead of symlinking it - the copy never refreshes and `sync --check` still passes
 - Splitting a profile's `skill-forge.json`, lockfile and vendored skill directories across separate commits, where they are committed at all
 - Duplicating live status in both umbrella and child `todo.md`

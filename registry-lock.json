@@ -338,14 +338,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-CXBWXCpPxRI4OQzpgHfYZWVFoCviflTeBUFl8+M4NHM=",
+      "integrity": "sha256-GNVU16krdkQrXIPH5I7Zv+FIGRFMNKWGNyTRJq4JCLQ=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-xPPpBYstcln4yIeMaKlF8YpmBDvBCY/otv0Gq5KsW2E="
+        "SKILL.md": "sha256-8apOOl38zCCD88FWXVA3VI3e5VklbNRSDmMfxp3SLnA="
       }
     },
     "inventory/agents": {

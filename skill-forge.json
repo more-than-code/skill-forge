@@ -7,11 +7,13 @@
       "coding-discipline": "^0.3.1",
       "podman-utilization": "^0.1.0",
       "security-baseline": "^0.1.0",
-      "skill-forge-authoring": "^0.3.0",
+      "skill-forge-authoring": "^0.4.0",
       "testing-strategy": "^0.1.1"
     }
   },
   "tools": {
-    "claude-code": true
+    "claude-code": true,
+    "codex": true,
+    "grok": true
   }
 }

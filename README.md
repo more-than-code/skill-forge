@@ -48,7 +48,8 @@ registry.json              # human-maintained registry manifest
 registry-lock.json         # generated integrity lockfile
 skill-forge.json           # this repo's own skill profile (it is also a consumer)
 skill-forge.lock.json      # generated profile lockfile
-.claude/skills/            # vendored profile skills (committed)
+.agents/skills/            # vendored profile skills (committed) - the one real copy
+.claude/skills/            # symlink -> ../.agents/skills (the path claude-code reads)
 ```
 
 ## Install Dependencies

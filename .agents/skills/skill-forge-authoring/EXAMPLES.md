@@ -95,10 +95,9 @@ skf validate
 ## Install to a tool runtime (non-interactive)
 
 ```bash
+# Escape hatch only - normal propagation is `project add` / `home add` + `sync`.
 # --yes alone is not enough: without --path the CLI prompts for Target path and hangs.
-skf install demo-skill --type skill --target codex --path ~/.codex/skills --yes
-skf install demo-skill --type skill --target claude-code --path ~/.claude/skills --yes
-skf install demo-skill --type skill --target grok --path ~/.grok/skills --yes
+skf install demo-skill --type skill --path /tmp/skill-export/demo-skill --yes
 ```
 
 ## Delete

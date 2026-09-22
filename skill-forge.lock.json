@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.3.0",
-    "commit": "8344d493a193ac027d71a0d8639abd1f72d5f845",
-    "lockIntegrity": "sha256-0kROVFM82AC+6jbNSYMNzxxcsOPhJGS3h/gtFo+rhsU="
+    "commit": "b036b5435ccb4c49cbea6163a00ea6e2c85ca0a6",
+    "lockIntegrity": "sha256-ihDhnc/Yzb7Qja5ht4D2ZPh+oK0ua/awoEiucJ6hz+U="
   },
   "skills": {
     "code-quality": {
@@ -28,8 +28,8 @@
       "source": "registry"
     },
     "skill-forge-authoring": {
-      "version": "0.3.1",
-      "integrity": "sha256-dyoDw7FKmX+t4V/JRRMT2/zqILh7ODttHyKQWuHTT4s=",
+      "version": "0.4.0",
+      "integrity": "sha256-gD9K6kh0xEZRuzxokb3t9cQe+PFkwpBguizjhv7eXjE=",
       "source": "registry"
     },
     "testing-strategy": {

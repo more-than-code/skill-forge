@@ -16,8 +16,8 @@ If `grok models` prompts for login, stop — the user must authenticate.
 TARGET=/path/to/work
 mkdir -p "$TARGET" && git -C "$TARGET" init -q
 
-# Scaffold + install yourself — interactive creators crash headless,
-# and package caches live outside the sandbox's writable set.
+# Scaffold + install yourself — interactive creators crash headless, and npm's
+# cache (~/.npm) is outside the sandbox's writable set (pnpm relocates and survives).
 npx -y sv@latest create --template minimal --types ts --no-install --no-add-ons /tmp/scaffold
 cp -R /tmp/scaffold/. "$TARGET"/
 cd "$TARGET" && pnpm add -D <deps> && pnpm build     # prove it builds BEFORE delegating
@@ -29,14 +29,23 @@ npx playwright install chromium
 Then write `BRIEF.md` into `$TARGET` (see SKILL.md § The brief) and commit it, so
 Grok starts from a clean, known baseline.
 
-## 3. Spawn — driver loop
+## 3. Spawn — one shot first
+
+On 1.0.x a single `-p` runs the brief to completion; the loop in 3a is for turn
+exhaustion, not the default.
+
+```bash
+cd /path/to/work || exit 1
+grok --prompt-file BRIEF.md --no-subagents \
+  --sandbox workspace --permission-mode auto --max-turns 400 \
+  --output-format streaming-json | tee run.jsonl
+```
+
+## 3a. Driver loop — only when a run hits `--max-turns`
 
 ```bash
 #!/bin/zsh
 cd /path/to/work || exit 1
-export npm_config_cache=/tmp/grok-npm-cache
-export XDG_CACHE_HOME=/tmp/grok-cache
-export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 PROMPT='Continue executing BRIEF.md end to end, resuming exactly where you left off.
 Do not stop early: every deliverable must exist and be verified. Run the build and
@@ -44,13 +53,18 @@ the media checks before you consider yourself done, and write NOTES.md.'
 
 for i in $(seq 1 30); do
   echo "########## ITERATION $i $(date +%H:%M:%S) ##########"
-  grok -c -p "$PROMPT" --sandbox workspace --permission-mode auto --max-turns 400 2>&1
-  rc=$?
-  [ $rc -ne 0 ] && { echo "grok exited $rc; stopping"; break; }
+  grok -c -p "$PROMPT" --sandbox workspace --permission-mode auto --max-turns 400 \
+    --output-format streaming-json | tee -a run.jsonl
   # Completion markers = artifacts on disk, not the model's word
   if [ -f NOTES.md ] && ls static/video/*.mp4 >/dev/null 2>&1; then
     echo "=== COMPLETE after iteration $i ==="; break
   fi
+  # A turn-cap stop exits non-zero too, so branch on stopReason, not on rc.
+  last=$(grep '"type":"end"' run.jsonl | tail -1)
+  case "$last" in
+    *'"stopReason":"cancelled"'*) echo "turn cap; resuming" ;;
+    *) echo "stopped for another reason; inspect run.jsonl"; break ;;
+  esac
 done
 ```
 
@@ -87,14 +101,31 @@ print(f'TOTAL \${tot:.4f}')
 "
 ```
 
-`stopReason: EndTurn` on an unfinished brief = the single-turn stop (SKILL.md Gotcha 1).
-`max_turns_reached` = genuinely hit `--max-turns`; raise it or split the work.
+On 1.0.x: `stopReason: end_turn` = ran to completion (check artifacts anyway);
+`stopReason: cancelled` alongside a `max_turns_reached` event = hit `--max-turns`,
+so resume. The value is snake_case — matching `EndTurn` finds nothing.
 
-There are **no tool-call events**, so pair the stream with filesystem watching to see
-what it actually wrote:
+`tool_call` / `tool_call_update` give live write visibility, including diffs:
+
+```bash
+python3 -c "
+import json,sys
+for l in open('run.jsonl'):
+    o=json.loads(l)
+    if o.get('type')=='tool_call': print(o['toolName'], json.dumps(o.get('rawInput'))[:120])
+"
+```
+
+They report what Grok *attempted*, so confirm deliverables on disk:
 
 ```bash
 find work/src work/static -type f -newer work/BRIEF.md | sort
+```
+
+Cost survives the log — keep the `sessionId` from the `end` event:
+
+```bash
+grok usage <sessionId>     # costUsdTicks = USD x 10^10
 ```
 
 ## 4. First run of a fresh session
@@ -143,17 +174,23 @@ rasters (`ffmpeg -encoders | grep webp`), and fall back to PNG/JPEG or `sips`.
 
 | Symptom | Cause | Action |
 |---------|-------|--------|
-| Exit 0, truncated narration, few files | single-turn `-p` | driver loop with `-c` |
+| Non-zero exit, `stopReason: cancelled`, `max_turns_reached` | turn cap | resume with `-c` |
+| Exit 0, `end_turn`, deliverables missing | model stopped early | read the narration; tighten the brief |
+| Exit 0, truncated narration, few files, **0.2.x** | single-turn `-p` | upgrade; else driver loop with `-c` |
 | Crash in a create/scaffold CLI | cache write outside sandbox | pre-scaffold outside |
-| `EACCES`/`EPERM` on a `$HOME` path | sandbox write boundary | redirect to `/tmp` |
+| `EPERM` on `~/.npm`, npm blames root-owned files | sandbox write boundary | ignore npm's `sudo chown` advice; install outside, or grant `read_write` |
+| Refuses to start, "protections missing" | sandbox profile unappliable | probe the profile; check `/var/run/docker.sock` is not a symlink |
 | Chromium SIGSEGV | sandbox + keychain/crashpad | native renderer fallback |
 | Build segfault only under agent | inherited env | `env -i HOME=… PATH=… <build>` |
 | HTTP 429 during generation | parallel Imagine calls | retry sequentially |
 
 ## 8. Minimal ACP client (`grok agent stdio`)
 
-Verified against grok 0.2.102. Completes initialize → session/new → session/prompt and
-prints every `tool_call` as it happens — the visibility `-p` cannot provide.
+Verified against grok 0.2.102 (re-probe the notification kinds on newer builds).
+Completes initialize → session/new → session/prompt and
+prints every `tool_call` as it happens. Since 1.0 headless `streaming-json` carries
+the same events, so reach for this client when you need the permission back-channel or
+mid-run steering, not merely tool visibility.
 
 ```python
 import json, subprocess, threading, time, collections

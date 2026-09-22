@@ -2,13 +2,14 @@
 name: grok-build-harness
 description: >
   Harness for delegating a build to the locally installed Grok Build CLI (`grok`):
-  capturing its output with streaming-json, the single-turn `-p` trap and driver
-  loop, sandbox write boundaries that crash scaffolders and package installs,
-  Imagine image/video tool usage, and self-contained brief structure. Activate when
-  handing work to Grok, spawning `grok` headlessly, streaming or parsing grok
-  output, tracking its cost, debugging a grok run that exits 0 having done nothing,
-  generating images/video with image_gen / image_edit / image_to_video, or
-  driving grok over ACP (`grok agent stdio` / `serve`).
+  capturing its output with the four headless formats, reading the `end` event to
+  tell completion from turn exhaustion, sandbox write boundaries and custom sandbox
+  profiles, per-session cost via `grok usage`, Imagine image/video tool usage, and
+  self-contained brief structure. Activate when handing work to Grok, spawning
+  `grok` headlessly, streaming or parsing grok output, tracking its cost, debugging
+  a grok run that exits 0 having done nothing, generating images/video with
+  image_gen / image_edit / image_to_video, or driving grok over ACP
+  (`grok agent stdio` / `serve`).
 ---
 
 # Grok Build Harness
@@ -17,8 +18,14 @@ Delegating a substantial build to the local **Grok Build** CLI (`grok`). Grok is
 capable agentic coder with image and video generation the host agent may lack — but
 headless runs fail in specific, repeatable ways. This skill is that harness.
 
-**Hard rule:** a `grok` run that exits **0 having written nothing is the normal
-failure mode**, not a success. Verify artifacts, never the exit code.
+**Hard rule:** verify artifacts, never the model's claim of doneness. A run can
+exit 0 having produced less than it narrates.
+
+**Second hard rule: probe the version, don't read about it.** Grok moves fast and
+its own shipped `~/.grok/README.md` lags the binary — as of 1.0.40 that README still
+documents `"stopReason":"EndTurn"` and a sandbox that fails *open*, and the wire
+disagrees with both. Every observation below is dated and stamped with the version
+it was taken on. Re-probe anything load-bearing.
 
 This skill is the **transport** layer: how to spawn, observe, and resume `grok`. For the
 surrounding method — when to hand a task to an external worker at all, how to brief it per
@@ -27,83 +34,113 @@ phase, and how to accept what comes back — activate `external-worker-delegatio
 ## Preflight (always)
 
 ```bash
-grok --version            # observations here span 0.2.102 and 1.0.13
+grok --version            # observations below verified on 1.0.40 (2026-09-22)
 grok models               # confirms login + available models
-grok inspect              # skills, agents, permissions for THIS directory
+grok inspect              # skills, agents, hooks, permissions, sandbox for THIS directory
 ```
 
 `grok models` failing or printing a login prompt means the delegation cannot run —
 the user must `grok login` themselves.
 
-**Record the version alongside any observation you make about the wire format.** The
-event schema has changed across majors — the streaming-json tool-visibility note below
-is one instance — so a claim about what `grok` emits means nothing without the version
-that emitted it.
+`grok inspect` is the one to actually read before writing a brief: it prints which
+instruction files, skills, agents and hooks Grok will load *in that directory*, which
+of them are disabled, and its harness-compatibility switches. A worker inheriting a
+skill you did not expect, or missing one you did, is visible here and nowhere else.
 
-## Observing the run — always use `--output-format streaming-json`
+**Record the version alongside any observation about the wire format.** The event
+schema, the `stopReason` vocabulary and the turn semantics have all changed across
+majors; a claim about what `grok` emits means nothing without the version that
+emitted it.
+
+## Observing the run — always use a streaming format
 
 Plain `-p` prints only the model's prose, **at exit**. It is not a progress signal and
-it hides why the run stopped. Headless supports three formats; use the streaming one:
+it hides why the run stopped. Headless supports four formats (1.0.40):
 
 | Format | Emits | Use |
 |--------|-------|-----|
 | `plain` (default) | prose at exit | never, for delegation |
-| `json` | one object at exit | scripted single-shot calls |
-| `streaming-json` | newline-delimited events, live | **delegation** |
+| `json` | one object at exit | scripted single-shot calls; pairs with `--json-schema` |
+| `streaming-json` | NDJSON, one **ACP session update** per line — Grok's native format | **delegation** |
+| `streaming-messages-json` | NDJSON in the Anthropic Messages API wire format | reusing an Anthropic-shaped parser you already own |
 
 ```bash
 grok -p "…" --output-format streaming-json | tee run.jsonl
 ```
 
-Event `type` values: `text` (response chunks), `thought` (reasoning), `end` (final),
-`error`. Also `max_turns_reached` and `auto_compact_*`, and on 1.0.13 `tool_call` /
-`tool_call_update`. The list is **not exhaustive** and it grows between majors, so
+`--include-partial-messages` adds incremental text/thinking deltas, and affects
+`streaming-messages-json` only.
+
+**`streaming-json` *is* the ACP event stream.** The two transports have converged:
+what the help calls "the agent's native format" is the same session-update vocabulary
+`grok agent stdio` pushes. Tool visibility is therefore in headless mode, and the
+guidance that it was ACP-only is obsolete.
+
+Directly observed on 1.0.40: `text`, `thought`, `tool_call`, `tool_call_update`,
+`usage`, `available_commands`, `end`, and `max_turns_reached` (under `--max-turns`).
+Carried over from earlier versions but not seen in these probes: `error`,
+`auto_compact_*`. The list is **not exhaustive** and it grows between versions, so
 switch on `type` and ignore unknowns.
 
-The `end` event is the run's post-mortem, verified shape:
-
-```json
-{"type":"end","stopReason":"EndTurn","sessionId":"…","requestId":"…",
- "usage":{…},"num_turns":1,"total_cost_usd":0.039954,"modelUsage":{…}}
-```
-
-Read three fields every time:
-
-- **`stopReason`** — why it stopped. This is the diagnosis (see Gotcha 1).
-- **`num_turns`** — how much it actually did. `1` on a large brief means it barely started.
-- **`total_cost_usd`** — accumulate across iterations; a driver loop spends real money.
-
-**Caveat — tool visibility is version-dependent.** On **0.2.102** streaming-json
-emitted no tool-call events at all: narration and reasoning, nothing about file writes.
-On **1.0.13** both `tool_call` and `tool_call_update` appear in ordinary `-p` runs.
-Check your own version before assuming either.
-
-Where they are absent, and as a cross-check where they are not — the events report what
-Grok *attempted*, not what landed — watch the filesystem:
+`tool_call` carries `toolCallId`, `toolName`, `kind`, `title`, `status` and `rawInput`;
+`tool_call_update` carries the result, and for a write it includes a real diff
+(`{type:"diff", path, oldText, newText}`) plus `locations`. That is genuine write
+visibility — but it reports what Grok *attempted*, so for deliverables still check
+the filesystem:
 
 ```bash
 find work/src work/static -type f -newer work/BRIEF.md | sort
 ```
 
-The ACP transport below emits the full tool stream regardless, and remains the option to
-choose when live tool visibility is a requirement rather than a convenience.
+`available_commands` enumerates the live tool and slash-command inventory for the
+session. Read it instead of assuming which tools exist in the version you are driving.
 
-## Gotcha 1 — `-p` is single-turn (the big one)
+The `end` event is the run's post-mortem, verified shape on 1.0.40:
 
-`grok -p "<prompt>"` runs **one** assistant turn. The model does a batch of tool
-calls, ends its response intending to continue, and the process **exits 0 mid-plan**.
-`--max-turns` does *not* change this — it bounds turns *within* a run.
+```json
+{"type":"end","stopReason":"end_turn","sessionId":"…","requestId":"…",
+ "usage":{…},"num_turns":11,"total_cost_usd":0.089947,
+ "total_cost_usd_ticks":899470000,"modelUsage":{…}}
+```
 
-**Failure mode:** run after run ends after a few minutes with a truncated narration
-("Scaffolding next…", "Building the design system next…") and little or nothing on disk.
-**Root cause:** single-turn semantics, misread as a crash or a permissions problem.
+Read four fields every time:
 
-**The tell:** the `end` event reads `"stopReason":"EndTurn"` with a low `num_turns`
-while the brief is plainly unfinished. That is a *clean, deliberate* stop — not a
-crash, not a permission block, not a turn-limit hit (`max_turns_reached`). Check this
-before debugging anything else; it collapses hours of misdiagnosis into one line.
+- **`stopReason`** — why it stopped, and now **snake_case** (`end_turn`, `cancelled`).
+  A driver loop grepping for the old `EndTurn` matches nothing and loops forever.
+- **`num_turns`** — how much it actually did.
+- **`total_cost_usd`** — accumulate across iterations. `total_cost_usd_ticks` is the
+  same figure as an integer, USD x 10^10.
+- **`sessionId`** — keep it. It is the key to `grok usage` (see Cost below) and to
+  `grok -r <id>`.
 
-**Fix — drive it with `--continue` until the deliverables exist:**
+## Gotcha 1 — turn exhaustion, not single-turn (changed in 1.0)
+
+**On 1.0.x, `-p` runs the task to completion.** Verified on 1.0.40 (2026-09-22): a
+six-deliverable brief with read-then-write dependencies between steps, given one
+`grok -p "Execute BRIEF.md completely"`, finished every item in **11 turns** and exited
+0 with `stopReason: "end_turn"` and correct file contents.
+
+The old trap is gone. On **0.2.x**, `-p` ran exactly one assistant turn: the model did
+a batch of tool calls, ended its response intending to continue, and the process exited
+0 mid-plan with a truncated narration ("Scaffolding next…"). That failure mode cost
+hours of misdiagnosis and is what the driver loop below existed to work around. If you
+are on a 0.2.x build, it still applies — and the fix is to upgrade, not to loop.
+
+**What still stops a run early is the turn cap**, and it is cheap to identify because
+the signals are unambiguous (verified on 1.0.40 with `--max-turns 2`):
+
+| Exit | `stopReason` | Extra event | Meaning |
+|------|--------------|-------------|---------|
+| 0 | `end_turn` | — | Ran to completion. Check artifacts anyway. |
+| 1 | `cancelled` | `max_turns_reached` | Hit `--max-turns`. Resume it. |
+| non-zero | absent / `error` | `error` | Genuine failure. Read it; do not resume blindly. |
+
+So: a **non-zero exit plus `max_turns_reached`** is the resume signal, and `end_turn`
+with deliverables missing is a real model stop worth reading the narration for. Do not
+raise `--max-turns` reflexively; an unfinished brief at a high cap usually means the
+brief was too big for one session, not that the cap was too low.
+
+**Driver loop — only for turn exhaustion, and still artifact-gated:**
 
 ```bash
 for i in $(seq 1 30); do
@@ -111,33 +148,79 @@ for i in $(seq 1 30); do
 Do not stop early; every deliverable must exist and be verified." \
     --sandbox workspace --permission-mode auto --max-turns 400 \
     --output-format streaming-json | tee -a run.jsonl
-  [ ${pipestatus[1]:-${PIPESTATUS[0]}} -ne 0 ] && break
   [ -f NOTES.md ] && ls dist/*.out >/dev/null 2>&1 && break   # real completion markers
 done
 ```
 
 Rules for the loop:
-- Break on **non-zero exit** so a broken run cannot spin.
 - Test **artifacts on disk**, never the model's claim of doneness.
-- `grok -c` resumes the most recent session *for that cwd*, so context carries over.
+- `grok -c` resumes the most recent session *for that cwd*, so context carries over;
+  `grok -r <sessionId>` resumes a specific one, and `--fork-session` branches instead
+  of reusing the id.
+- Break on a genuine error. Note that a `max_turns_reached` run also exits non-zero,
+  so a loop that breaks on *any* non-zero exit will not resume — distinguish the two
+  by `stopReason` rather than by exit code alone.
 - One resumed iteration commonly runs 15–25 min and does enormous work. Budget for it.
 
-## Gotcha 2 — the sandbox write boundary breaks package tooling
+## Gotcha 2 — the sandbox write boundary, and how to widen it
 
-| Profile | FS read | FS write | Use |
-|---------|---------|----------|-----|
-| `workspace` | everywhere | CWD + `~/.grok` + `/tmp` + `/var/tmp` | default; recommended |
-| `read-only` | everywhere | `~/.grok` + temp | exploration/review |
-| `devbox` | everywhere | everywhere except `/data`, virtual fs | disposable VMs only |
+Five built-in profiles on 1.0.40 (probed by name; the shipped README omits `devbox`):
 
-`workspace` is kernel-enforced and makes auto-approval safe. But common toolchain
-paths sit **outside** the writable set:
+| Profile | FS read | FS write | Child network | Use |
+|---------|---------|----------|---------------|-----|
+| `off` (default) | everywhere | everywhere | allowed | no sandbox |
+| `workspace` | everywhere | CWD + `/tmp` + `~/.grok` | allowed | default; recommended |
+| `read-only` | everywhere | `~/.grok` only | blocked | exploration/review |
+| `strict` | CWD + system paths | CWD + `/tmp` + `~/.grok` | blocked | untrusted code |
+| `devbox` | broad | broad | allowed | disposable VMs only |
 
-| Tool | Writes to | Result inside sandbox |
-|------|-----------|-----------------------|
-| npm / `npx` | `~/.npm` | cache write fails → scaffolder crashes |
-| pnpm | `~/Library/pnpm` (macOS) | install fails — and often segfaults outright (Gotcha 3) |
-| Playwright | `~/Library/Caches/ms-playwright` | browser download fails |
+`~/.ssh`, `~/.aws`, `~/.gnupg` and Grok's own credentials are write-protected under
+every profile. The sandbox is applied to the whole process at startup and is
+**irreversible** — the model cannot talk its way out of it at runtime.
+
+**It fails closed, not open.** An unknown profile name, or one whose rules cannot be
+resolved, prints a warning and *refuses to start*: "Refusing to start with its
+protections missing." (The README's "logs a warning and continues without
+enforcement" is stale.) One live instance of this: `read-only` and `strict` both
+carry a deny rule for the container runtime socket, and on a host where
+`/var/run/docker.sock` is a **symlink** — Docker Desktop, Colima, some Podman setups —
+resolution fails and neither profile will start at all. Probe the profile you intend
+to use before writing a brief around it.
+
+**Custom profiles are the real fix for cache paths.** Define them in `~/.grok/sandbox.toml`
+(global) or `.grok/sandbox.toml` (per project) and pass the name to `--sandbox`:
+
+```toml
+[profiles.build]
+extends = "workspace"
+read_write = ["/tmp/scratch"]   # literal directories, no globs
+read_only  = ["/data"]
+deny       = ["/data/secrets"]
+restrict_network = true
+```
+
+A `read_write` grant for the toolchain's cache directory turns Gotcha 3's class of
+failure from a workaround into a configuration line. Prefer it over `devbox`.
+
+### What actually breaks in `workspace` (probed 2026-09-22)
+
+| Tool | Behaviour inside `workspace` | Verdict |
+|------|------------------------------|---------|
+| `pnpm install` | **Works.** Cannot write `~/Library/pnpm/store`, so pnpm 12.x silently relocates the store into the project (`node_modules/.pnpm-store`) and installs. Exit 0. | fine, but cold store per project |
+| `npm install` | **Fails** `EPERM` on `~/.npm` | blocked |
+| direct write to `~/.npm` | `Operation not permitted`, exit 1 | as designed |
+
+**npm's error message is actively misleading.** On the cache EPERM it reports "Your
+cache folder contains root-owned files, due to a bug in previous versions of npm" and
+tells you to run `sudo chown -R … ~/.npm`. Nothing is root-owned and that command
+fixes nothing — it is npm guessing at the only permission problem it knows about.
+The real cause is the sandbox boundary. Do not run the `sudo` it suggests, and warn
+the brief's reader off it too.
+
+The older claim that **pnpm segfaults** here (`SecItemCopyMatching -50`, exit 139) was
+real on the 0.2.x/1.0.13-era combination but **does not reproduce on 1.0.40 with pnpm
+12.5.1**. Treat a signal death from a package manager as a version-specific symptom to
+re-probe, not a standing fact.
 
 **Fix — do the environment work yourself, outside the sandbox, before spawning:**
 
@@ -145,29 +228,23 @@ paths sit **outside** the writable set:
    which hang or crash headless).
 2. Pre-install any browser/binary the run needs. Reads work everywhere, so Grok can
    execute what you installed.
-3. Redirect caches on the spawn: `npm_config_cache=/tmp/... XDG_CACHE_HOME=/tmp/...`.
+3. Or grant the cache path with a custom profile's `read_write`, which is better than
+   redirecting caches per-spawn and better than dropping the sandbox.
 4. Tell Grok in the brief that this is done and it must not re-scaffold.
 
-## Gotcha 3 — keychain denial segfaults binaries, and not only Chromium
+## Gotcha 3 — headless Chromium under the sandbox
 
-Inside the sandbox, macOS keychain access fails (`SecItemCopyMatching` returning `-50`)
-and processes that expect it die on a signal rather than erroring cleanly.
-Playwright/Chromium is the familiar case (crashpad, headless capture) — but **`pnpm`
-itself segfaults the same way**, exiting **139** on a plain install. The package manager
-is the more likely casualty of the two: every run that installs anything touches it,
-while only some runs render.
+Playwright/Chromium has crashed under the sandbox (keychain `SecItemCopyMatching` /
+crashpad), and its browser cache (`~/Library/Caches/ms-playwright` on macOS) is
+outside the `workspace` writable set, so the download fails before the browser ever
+runs. **Not re-probed on 1.0.40** — the package-manager half of this failure family
+was fixed (Gotcha 2), so verify rather than assume before designing around it.
 
-**The tell:** exit 139 (or 133/134) and no error message, from a tool that has no
-business crashing. Not a permission error, not an ENOENT — a signal.
-
-Two consequences:
-
-- Gotcha 2's fix — do environment work outside the sandbox — covers the **package
-  manager**, not just cache paths. A pre-installed `node_modules` is read-safe inside;
-  an in-sandbox `pnpm install` is not, and redirecting caches does not save it.
-- Anything depending on headless capture — screenshots, HTML→PNG, frame rendering for
-  video — needs a fallback. Native rendering (e.g. Swift/AppKit on macOS) works. State
-  the fallback in the brief so Grok doesn't silently drop the deliverable.
+If it does crash, anything depending on headless capture — screenshots, HTML→PNG,
+frame rendering for video — needs a fallback. Native rendering (e.g. Swift/AppKit on
+macOS) works. State the fallback in the brief so Grok doesn't silently drop the
+deliverable. The cheaper first move is a custom profile granting the browser cache
+`read_write`, plus pre-installing the browser outside the sandbox.
 
 ## Gotcha 4 — native-toolchain builds may need a clean env
 
@@ -180,11 +257,33 @@ env -i HOME="$HOME" PATH="/opt/homebrew/bin:/usr/bin:/bin" pnpm build
 
 Verify the build yourself afterwards in a normal shell — it usually passes there.
 
+## Cost — `grok usage` outlives the run log
+
+The `end` event carries `total_cost_usd` per run, but Grok also **persists usage per
+session**, so the run log is not the only copy:
+
+```bash
+grok usage <sessionId>          # session totals + every recorded turn
+grok usage <sessionId> <turn>   # one turn
+```
+
+It returns JSON: `inputTokens`, `outputTokens`, `cachedReadTokens`,
+`reasoningTokens`, `modelCalls`, `turnCount`, `primaryModelId`, and `costUsdTicks`
+(USD x 10^10 — `899470000` is $0.0899). Verified on 1.0.40 against the same session's
+`end` event; the figures agree.
+
+This matters for teardown: a worktree deleted with its `run.jsonl` inside has not
+destroyed the cost record, provided you kept the `sessionId`. Keep it anyway — it is
+also how you resume (`grok -r`) and export (`grok export`) that session.
+
 ## Imagine — image and video generation
 
-Grok exposes `image_gen`, `image_edit`, and (verify — the bundled `imagine` skill
-warns it may be absent) `image_to_video` / `reference_to_video`. Instruct Grok to
-**load the bundled `imagine` skill before its first generation**.
+All four tools are present on 1.0.40 — `image_gen`, `image_edit`, `image_to_video`
+and `reference_to_video` — confirmed in the session's own `available_commands` event
+rather than from docs. Check that event for the version you are driving instead of
+hedging. Instruct Grok to **load the bundled `imagine` skill before its first
+generation**; note it is listed as `bundled:imagine` where a user skill has taken the
+bare `/imagine` name.
 
 **The split that decides output quality:**
 
@@ -236,7 +335,8 @@ hand the work off — backwards. If the server exists to do delegated work, mark
 One server splitting both roles across its sessions has no per-session signal to carry this; use
 separate servers, or `stdio`.
 
-**Verified handshake** (probed against 0.2.102, not merely read from docs):
+**Verified handshake** (probed against 0.2.102; the method still holds on 1.0.40,
+but re-probe the notification vocabulary before depending on a specific kind):
 
 1. `initialize` -> `{"protocolVersion":1}`
 2. `session/new` `{cwd, mcpServers:[], _meta:{yoloMode:true}}` -> `sessionId`
@@ -248,7 +348,7 @@ A trivial one-tool prompt produced **104** `session/update` notifications. Obser
 
 | Kind | Why it matters |
 |------|----------------|
-| `tool_call`, `tool_call_update`, `tool_call_delta_chunk` | **what `-p` cannot give you** — live tool name, status, result |
+| `tool_call`, `tool_call_update`, `tool_call_delta_chunk` | live tool name, status, result — since 1.0 also available from headless `streaming-json` |
 | `agent_thought_chunk`, `agent_message_chunk` | reasoning + response text |
 | `pending_interaction`, `interaction_resolved` | the **permission back-channel** |
 | `turn_completed`, `response_completed`, `session_summary_generated` | turn lifecycle |
@@ -258,19 +358,25 @@ Side-channel notifications arrive as `_x.ai/*` methods (`_x.ai/session_notificat
 `_x.ai/queue/changed`, `_x.ai/models/update`, ...). **Note:** the docs spell these
 `x.ai/*`; the wire uses a leading underscore. Discover from `initialize`, don't hardcode.
 
-### Why this can beat the driver loop
+### What ACP still buys you
 
-Continuation is **another `session/prompt` on the same session** — no new process, no
-`-c`, no context reload. The single-turn stop (Gotcha 1) stops being a process-lifecycle
-problem and becomes an ordinary "send the next prompt" decision, made by *your* code
-with full visibility into what the last turn actually did.
+Tool visibility is no longer the reason — `streaming-json` has the same events since
+1.0, and the old single-turn stop that made process lifecycle painful is gone
+(Gotcha 1). What remains ACP-only:
+
+- **The permission back-channel.** `pending_interaction` / `interaction_resolved` let
+  your code answer a prompt mid-run instead of pre-approving everything with
+  `--always-approve` or `--permission-mode auto`.
+- **Mid-run steering.** Continuation is another `session/prompt` on the same session —
+  no new process, no `-c`, no context reload — and you decide what to send based on
+  what the last turn actually did.
 
 **Choose:**
 
 | Want | Use |
 |------|-----|
-| One batch job, minimal client code | `-p` + driver loop + `streaming-json` |
-| Live tool visibility, permission prompts, mid-run steering | `agent stdio` (ACP) |
+| One batch job, minimal client code | `-p` (+ `--prompt-file`) with `streaming-json` |
+| Granular permissions, mid-run steering | `agent stdio` (ACP) |
 | Remote / multi-client | `agent serve` (WebSocket + `--secret`) |
 
 Official ACP SDKs exist for TypeScript, Rust, Python, Go and Kotlin, and Zed / Neovim /
@@ -281,7 +387,27 @@ Emacs are working clients — prefer one over hand-rolling. `EXAMPLES.md` carrie
 ## The brief
 
 Grok starts **cold** — it cannot see the delegating conversation. Write a
-self-contained `BRIEF.md` in the working directory and point the prompt at it.
+self-contained `BRIEF.md` in the working directory and point Grok at it. Since 1.0
+there is a flag for exactly this, so the brief need not be squeezed into an argument:
+
+```bash
+grok --prompt-file BRIEF.md --no-subagents \
+  --sandbox workspace --permission-mode auto --output-format streaming-json
+```
+
+Two flags worth setting on a delegated spawn:
+
+- **`--no-subagents`** enforces the no-recursion rule mechanically — the worker cannot
+  fan the brief out to children the orchestrator never sees. Verified accepted on 1.0.40.
+- **`--rules "<text>"`** appends to the system prompt. Useful for the role line, but it
+  does **not** replace the brief's `Role` section: rules are tooling-injected and the
+  brief is the authoritative channel (`external-worker-delegation` covers the precedence).
+
+**Do not pass `--worktree` when the orchestrator already created one.** Grok has its
+own worktree subsystem (`--worktree`, `--worktree-ref`, `grok worktree list|rm|gc`),
+and pointing it at a dispatcher-managed checkout nests one isolation mechanism inside
+another — two branches, two teardowns, and a merge target that is not the one the
+orchestrator is reviewing. Pick whose worktree it is and say so in the brief.
 
 Required sections:
 
@@ -321,15 +447,20 @@ paper over it with flag variations.
 
 | Wrong | Right |
 |-------|-------|
-| Treat `grok -p` exit 0 as success | Check artifacts; read `stopReason` |
-| Trust a wire-format claim written against an older major | `grok --version` first; record it with the observation |
-| Read exit 139 from `pnpm` as a broken lockfile | Keychain denial under the sandbox; install outside it |
-| Run with default `plain` output and guess at progress | `--output-format streaming-json` + watch the filesystem |
-| Raise `--max-turns` to stop early exits | Driver loop with `grok -c` |
-| Assume batch (`-p`) is the only mode | `grok agent stdio` (ACP) for tool visibility + steering |
-| Let Grok scaffold and `pnpm install` in-sandbox | Pre-build the environment outside it |
-| `--sandbox devbox` / no sandbox to dodge write errors | `workspace` + redirect caches to `/tmp` |
+| Treat exit 0 as success | Check artifacts; read `stopReason` and `num_turns` |
+| Match `stopReason` against `EndTurn` | `end_turn` / `cancelled` — snake_case since 1.0 |
+| Break the driver loop on any non-zero exit | `max_turns_reached` also exits non-zero; branch on `stopReason` |
+| Raise `--max-turns` until it finishes | An unfinished brief at a high cap means the brief was too big |
+| Reach for ACP to see tool calls | `streaming-json` has them since 1.0; use ACP for permissions and steering |
+| Trust a wire-format claim from an older version — or from Grok's own README | `grok --version`, then probe; record both |
+| Run npm's suggested `sudo chown -R ~/.npm` | It is npm misreading the sandbox boundary; nothing is root-owned |
+| Assume a package manager still segfaults in-sandbox | Re-probe; pnpm 12.x relocates its store and installs fine |
+| `--sandbox devbox` / no sandbox to dodge write errors | A custom profile with `read_write` for the cache path |
+| Assume an unappliable sandbox degrades to unsandboxed | It refuses to start; probe the profile first |
+| Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
+| Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
+| Scrape cost only from `run.jsonl` | `grok usage <sessionId>` persists it |
 | `image_gen` a UI mockup or anything with real copy | Build it in code |
 | Re-`image_gen` a recurring character | `image_edit` from one base image |
 | Re-encode when joining shots | `-c copy` with matched res/fps |
-| A prompt that references "the plan above" | Self-contained `BRIEF.md` |
+| A prompt that references "the plan above" | Self-contained `BRIEF.md` via `--prompt-file` |

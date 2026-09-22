@@ -127,8 +127,10 @@ use, via the repo's `info/exclude` — local, never committed, and it cannot aff
 already tracks. The patterns are globs (`NOTES*.md`, `run*.jsonl`, `driver*.log`) so a suffixed
 round cannot slip past them; the cost of that reach is that a worker deliverable must not be
 named `NOTES*.md`. Excluding them from the merge is not discarding them: `NOTES.md` is the
-handoff record and `run.jsonl` holds the only copy of the worker's cost, so lift both before
-teardown. **Cost goes to the orchestrator's ledger in the main checkout (`tasks/`), not into the
+handoff record, and `run.jsonl` may hold the only copy of the worker's cost, so lift both before
+teardown. **Check whether the transport persists cost independently** — some do, keyed by session
+id (Grok: `grok usage <sessionId>`), which makes the log a convenience rather than the system of
+record. Keep the session id regardless: it is also how you resume and export that session. **Cost goes to the orchestrator's ledger in the main checkout (`tasks/`), not into the
 commit message** — it is operational bookkeeping about a run, not a fact about the code, and the
 task block is where the paired primary-token figure already lives. `--remove` prints the
 accumulated cost one last time as it tears the worktree down.
@@ -229,7 +231,9 @@ Universal sections:
    orchestrator is, including the section describing this pattern, and nothing in them reveals
    which end of the delegation it is on. Only the brief can — so say which channel wins: the brief
    is read once, while tooling can inject every turn, and over a long run the repeated channel
-   drowns out the authoritative one unless the brief settles the precedence.
+   drowns out the authoritative one unless the brief settles the precedence. Where the worker CLI
+   can enforce it, set that too — a flag that disables child agents (Grok: `--no-subagents`) makes
+   the rule structural instead of persuasive. The brief still states it, for the CLIs that cannot.
 2. **Facts** — what the system actually is.
 3. **Decisions already made** — a table, marked do-not-relitigate.
 4. **Environment** — what is pre-installed, what it must not run or re-scaffold.

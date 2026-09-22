@@ -4,8 +4,10 @@ description: >
   Drive skill selection for a Skill Forge consumer repository: detect the
   stack, propose a fitting set of registry skills with rationale, wait for
   user confirmation, then apply it via the `skf project`/`skf sync` CLI.
-  Activate when the repo contains `skill-forge.json`, or the user asks which
-  skills a project should use, add, or drop.
+  Also covers the consumer's own staleness duty: checking the repo's profile
+  against the registry and against `$HOME` before relying on it, and saying so
+  when it has drifted. Activate when the repo contains `skill-forge.json`, or
+  the user asks which skills a project should use, add, or drop.
 ---
 
 # Skill Forge Project Skill Selection
@@ -75,6 +77,71 @@ agents/subagents/hooks (`skf agent|subagent|hook install`).
    - Verify with `skf sync --check` (must exit 0) and `skf project status --json`
      to confirm the resolved `skills` list matches what was proposed.
 6. **Report back** the final skill set and sync state.
+
+## Staleness is the consumer's job — check it, and say so
+
+Nothing central knows which repositories are consumers. Observed 2026-09-22:
+`skf`'s pin rewriting walks exactly two roots — the registry checkout and
+`$HOME` — so a repo it has never been run in is invisible to every registry-side
+command, and its skills can lag indefinitely with nothing reporting it. The repo
+you are working in is the only place the check can happen, which makes it yours
+to run.
+
+**Two checks, at the start of work in a consumer repo. Both are read-only.**
+
+1. **Drift against the registry** — one command:
+
+```bash
+skf sync --check          # exit 0 = current; non-zero prints what is wrong
+```
+
+   It catches both failure modes: a lockfile that predates a registry change,
+   and a pin the registry can no longer satisfy (that one errors outright,
+   e.g. `Skill "x"@0.1.1 does not satisfy range "^9.0.0"`). The fix is `skf
+   sync`, except for an unsatisfiable pin, which needs `skf project add <name>`
+   to widen the range first.
+
+2. **Shadowing against `$HOME`** — which no `sync --check` can see, because each
+   profile is internally consistent with its own declaration and both report
+   "in sync" while disagreeing with each other. Compare the two manifests for
+   names they share:
+
+```bash
+skf project status --json     # this repo's resolved versions
+cat ~/skill-forge.json        # the machine-wide ranges
+```
+
+   A name in both loads the **project** copy, always. So a project pinned
+   `^0.8.0` against a `$HOME` at `^0.9.0` silently serves the older skill to
+   every session rooted here, and nothing in either profile is wrong on its own
+   terms.
+
+**Triage before you shout — "stale" has three severities, and only two matter.**
+A consumer's lockfile records the *registry's* commit, so **any** registry change
+marks **every** consumer stale, even one whose own skills did not move. Observed
+2026-09-22: a Flutter consumer reported stale after an unrelated skill was bumped;
+none of its four declared skills had changed, and re-syncing rewrote only the
+pointer.
+
+| What `--check` found | Severity | What to say |
+|---|---|---|
+| Pin the registry cannot satisfy | **High** — blocks | Name the skill and range; it needs `project add` to widen before anything syncs |
+| A declared skill resolved to a new version | **Medium** | Name the skills and the version change; the guidance you are about to follow just moved |
+| Registry moved, none of your skills did | **Low** | One line: pointer was behind, re-synced, content unchanged |
+
+To tell the last two apart, sync and look at what actually changed on disk:
+
+```bash
+skf sync
+git status --porcelain .agents/skills    # empty = it was only the registry pointer
+```
+
+**Then say it out loud, at the severity it deserves.** A stale profile is not a detail to note and move past:
+it means the guidance you are about to follow is not the guidance the registry
+currently holds. State which skills are affected, which version is actually
+loading, and the one command that fixes it — before doing the work, not after.
+Silently proceeding on skills you know are stale is the failure this section
+exists to prevent.
 
 ## Rules
 
@@ -184,6 +251,8 @@ skf sync --check                       # read-only staleness check (exit non-zer
 | Delete a colliding hand-authored `.agents/skills/<name>` dir to unblock `sync` | Ask the user; use `skills.local` or move it aside |
 | Propose every tag-matching skill in the registry | Propose the minimal set that maps to a detected signal |
 | Leave a needed skill out because `$HOME` happens to provide it | Declare what the repo needs; it should resolve the same with an empty `$HOME` |
+| Start work in a consumer repo without checking whether its skills are current | `skf sync --check` first; nothing else will ever run it for this repo |
+| Notice drift and carry on quietly | Say which skills are stale, which version loads, and the fix — before doing the work |
 | Assume an overlapping name double-loads | It dedupes, project-over-home; the hazard is a stale project pin shadowing a newer `$HOME` one |
 | Declare `skills.local` and expect `sync` to place the directory for you | Put the source at `.agents/skills/<name>` first, then declare that path |
 | Copy a local skill's source into a second repo or level so both see it | One source dir; if both levels need it, promote it to the registry |

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "extends": [],
   "skills": {
     "dependencies": {
@@ -9,11 +9,9 @@
       "security-baseline": "^0.1.0",
       "skill-forge-authoring": "^0.4.0",
       "testing-strategy": "^0.1.1"
-    }
-  },
-  "tools": {
-    "claude-code": true,
-    "codex": true,
-    "grok": true
+    },
+    "shims": [
+      "claude-code"
+    ]
   }
 }

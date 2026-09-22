@@ -853,7 +853,7 @@ test('skill set-version and bump update registry versions without touching SKILL
 
 test('skill bump reports and optionally rewrites local profile pins that the new version breaks', async () => {
   const fx = await projectFixture();
-  await fx.run(['project', 'init', '--tools', 'claude-code']);
+  await fx.run(['project', 'init', '--shims', 'claude-code']);
   await fx.run(['project', 'add', 'demo-skill']);
 
   const fakeHome = await tempDir('skf-pin-home-');
@@ -863,8 +863,7 @@ test('skill bump reports and optionally rewrites local profile pins that the new
     `${JSON.stringify({
       schemaVersion: 1,
       extends: [],
-      skills: { dependencies: { 'demo-skill': '^0.1.0' } },
-      tools: { 'claude-code': true }
+      skills: { dependencies: { 'demo-skill': '^0.1.0' }, shims: ['claude-code'] }
     }, null, 2)}\n`
   );
 
@@ -970,8 +969,9 @@ test('project init + add + sync vendors skills and writes a reproducible lockfil
 
   await fx.runInProject(['project', 'init']);
   const manifest = await fx.readManifest();
-  assert.equal(manifest.schemaVersion, 1);
-  assert.deepEqual(manifest.tools, { codex: true, 'claude-code': true, 'copilot-cli': true, grok: true });
+  assert.equal(manifest.schemaVersion, 2);
+  assert.deepEqual(manifest.skills.shims, ['claude-code']);
+  assert.equal(manifest.tools, undefined, 'the tools map is gone in schemaVersion 2');
 
   const { stdout: addOut } = await fx.runInProject(['project', 'add', 'demo-skill']);
   assert.match(addOut, /\+ demo-skill \^0\.1\.0/);
@@ -1002,7 +1002,7 @@ test('project init + add + sync vendors skills and writes a reproducible lockfil
 
   const { stdout: statusJsonOut } = await fx.runInProject(['project', 'status', '--json']);
   const statusJson = JSON.parse(statusJsonOut);
-  assert.deepEqual(statusJson.tools, ['codex', 'claude-code', 'copilot-cli', 'grok']);
+  assert.deepEqual(statusJson.shims, ['claude-code']);
   assert.deepEqual(statusJson.targets, ['.agents/skills', '.claude/skills']);
   assert.deepEqual(statusJson.extends, []);
   assert.deepEqual(statusJson.skills, [{ name: 'demo-skill', version: '0.1.0', source: 'registry', state: 'clean' }]);
@@ -1042,7 +1042,10 @@ test('sync --check flags vendored drift, manifest drift, and registry bumps; syn
 
 test('sync refuses undeclared collisions, prunes removed deps, and records local skills', async () => {
   const fx = await projectFixture();
-  await fx.runInProject(['project', 'init', '--tools', 'codex']);
+  await fx.runInProject(['project', 'init']);
+  const noShims = await fx.readManifest();
+  noShims.skills.shims = [];
+  await fx.writeManifest(noShims);
 
   // Undeclared pre-existing dir at the vendor path is a hard error.
   await fx.runInProject(['project', 'add', 'demo-skill']);
@@ -1199,7 +1202,7 @@ test('home namespace seeds skill-forge-project and syncs the $HOME profile from 
 
 test('skills are stored once in .agents/skills; tool dirs are symlinks to it', async () => {
   const fx = await projectFixture();
-  await fx.runInProject(['project', 'init', '--tools', 'claude-code']);
+  await fx.runInProject(['project', 'init', '--shims', 'claude-code']);
   await fx.runInProject(['project', 'add', 'demo-skill']);
   await fx.runInProject(['sync']);
 
@@ -1217,32 +1220,43 @@ test('skills are stored once in .agents/skills; tool dirs are symlinks to it', a
   const viaLink = await fs.stat(path.join(linkPath, 'demo-skill', 'SKILL.md'));
   assert.equal(viaReal.ino, viaLink.ino, 'both paths must resolve to the same file');
 
-  // Widening the tool set changes nothing about storage.
+  // Dropping the shim removes the link and never prunes through it. An empty
+  // shim list is a valid end state, not an error: the store still exists.
   const manifest = await fx.readManifest();
-  manifest.tools.codex = true;
+  manifest.skills.shims = [];
   await fx.writeManifest(manifest);
-  await fx.runInProject(['sync']);
-  await fx.runInProject(['sync', '--check']);
-  assert.equal((await fs.lstat(linkPath)).isSymbolicLink(), true);
-
-  // Dropping claude-code removes the link, and never prunes through it.
-  manifest.tools['claude-code'] = false;
-  await fx.writeManifest(manifest);
-  await assert.rejects(fx.runInProject(['sync', '--check']), /not a sync target/);
+  await assert.rejects(fx.runInProject(['sync', '--check']), /not a declared shim/);
   await fx.runInProject(['sync']);
   assert.equal(await fs.lstat(linkPath).then(() => true, () => false), false, 'the link is removed');
   await fs.access(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill', 'SKILL.md'));
   await fx.runInProject(['sync', '--check']);
+});
 
-  // A profile with no tools enabled is an error, not a silent no-op.
-  manifest.tools.codex = false;
-  await fx.writeManifest(manifest);
-  await assert.rejects(fx.runInProject(['sync']), /No tools enabled/);
+test('a schemaVersion 1 manifest migrates: tools become shims, no-op tools are dropped', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init']);
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+
+  // Hand-write the old shape, including tools that never had a shim.
+  await fx.writeManifest({
+    schemaVersion: 1,
+    extends: [],
+    skills: { dependencies: { 'demo-skill': '^0.1.0' } },
+    tools: { codex: true, 'claude-code': true, grok: true }
+  });
+  await fx.runInProject(['sync']);
+
+  const migrated = await fx.readManifest();
+  assert.equal(migrated.schemaVersion, 2);
+  assert.deepEqual(migrated.skills.shims, ['claude-code'], 'only tools with a shim survive');
+  assert.equal(migrated.tools, undefined);
+  assert.equal((await fs.lstat(path.join(fx.projectRoot, '.claude', 'skills'))).isSymbolicLink(), true);
+  await fx.runInProject(['sync', '--check']);
 });
 
 test('sync migrates an existing real tool directory to a symlink, but not over foreign files', async () => {
   const fx = await projectFixture();
-  await fx.runInProject(['project', 'init', '--tools', 'claude-code']);
+  await fx.runInProject(['project', 'init', '--shims', 'claude-code']);
   await fx.runInProject(['project', 'add', 'demo-skill']);
   await fx.runInProject(['sync']);
 

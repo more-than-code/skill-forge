@@ -61,9 +61,13 @@ const CLI_NAME = ['skill-forge', 'skf'].includes(path.basename(process.argv[1] |
   : 'skf';
 const PROJECT_MANIFEST_NAME = 'skill-forge.json';
 const PROJECT_LOCK_NAME = 'skill-forge.lock.json';
-const PROJECT_TOOLS = ['codex', 'claude-code', 'copilot-cli', 'grok'];
+// Tools no longer choose where skills land: every profile materializes them once
+// into the neutral directory. A *shim* is the one leftover accommodation — a
+// symlink at the path a tool insists on reading. A tool with no shim needs no
+// entry at all, and a shim disappears the day its tool reads the neutral path.
 const PROJECT_NEUTRAL_SKILL_DIR = path.join('.agents', 'skills');
-const TOOL_PROJECT_SKILL_DIRS = { 'claude-code': path.join('.claude', 'skills') };
+const SKILL_COMPAT_SHIMS = { 'claude-code': path.join('.claude', 'skills') };
+const KNOWN_SHIMS = Object.keys(SKILL_COMPAT_SHIMS);
 
 const program = new Command();
 
@@ -932,15 +936,33 @@ function projectLockPath(projectRoot) {
   return path.join(projectRoot, PROJECT_LOCK_NAME);
 }
 
+/**
+ * schemaVersion 1 carried a `tools` map that decided where skills were copied.
+ * Materialization is unified now, so only the shim question survives: of the old
+ * tools, exactly those with a shim directory still mean anything. The rest were
+ * already no-ops by the time this ran, so dropping them loses nothing.
+ */
+function migrateManifest(raw) {
+  if (raw.schemaVersion !== 1) return raw;
+  const shims = KNOWN_SHIMS.filter((shim) => raw.tools?.[shim]);
+  const { tools, ...rest } = raw;
+  return { ...rest, schemaVersion: 2, skills: { ...(raw.skills || {}), shims } };
+}
+
+function manifestNeedsMigration(raw) {
+  return raw.schemaVersion === 1;
+}
+
 async function readProjectManifest(projectRoot) {
   const manifestPath = projectManifestPath(projectRoot);
   if (!await fs.pathExists(manifestPath)) {
     throw new Error(`No ${PROJECT_MANIFEST_NAME} in ${projectRoot}. Run "${CLI_NAME} project init" first.`);
   }
-  const manifest = await fs.readJson(manifestPath);
-  if (manifest.schemaVersion !== 1) {
-    throw new Error(`Unsupported ${PROJECT_MANIFEST_NAME} schemaVersion ${manifest.schemaVersion}; expected 1.`);
+  const raw = await fs.readJson(manifestPath);
+  if (![1, 2].includes(raw.schemaVersion)) {
+    throw new Error(`Unsupported ${PROJECT_MANIFEST_NAME} schemaVersion ${raw.schemaVersion}; expected 1 or 2.`);
   }
+  const manifest = migrateManifest(raw);
   if (manifest.extends !== undefined && !Array.isArray(manifest.extends)) {
     throw new Error(`${PROJECT_MANIFEST_NAME} "extends" must be an array of profile names.`);
   }
@@ -950,9 +972,13 @@ async function readProjectManifest(projectRoot) {
       throw new Error(`${PROJECT_MANIFEST_NAME} "skills.${section}" must be an object.`);
     }
   }
-  for (const tool of Object.keys(manifest.tools || {})) {
-    if (!PROJECT_TOOLS.includes(tool)) {
-      throw new Error(`${PROJECT_MANIFEST_NAME} "tools" has unknown tool "${tool}". Use: ${PROJECT_TOOLS.join(', ')}.`);
+  const shims = manifest.skills?.shims;
+  if (shims !== undefined && !Array.isArray(shims)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "skills.shims" must be an array of shim names.`);
+  }
+  for (const shim of shims || []) {
+    if (!KNOWN_SHIMS.includes(shim)) {
+      throw new Error(`${PROJECT_MANIFEST_NAME} "skills.shims" has unknown shim "${shim}". Known: ${KNOWN_SHIMS.join(', ') || 'none'}.`);
     }
   }
   return manifest;
@@ -1011,11 +1037,10 @@ function resolveProjectProfile(registry, manifest) {
  * skills aren't committed twice for a single reader.
  */
 function projectSkillLayout(manifest) {
-  const enabled = PROJECT_TOOLS.filter((tool) => manifest.tools?.[tool]);
-  if (enabled.length === 0) {
-    throw new Error(`No tools enabled in ${PROJECT_MANIFEST_NAME}; enable at least one under "tools".`);
-  }
-  const linkDirs = enabled.map((tool) => TOOL_PROJECT_SKILL_DIRS[tool]).filter(Boolean);
+  // No "nothing enabled" error any more: a profile needing no shim is the normal
+  // end state, not a misconfiguration. Skills still land in the neutral directory.
+  const shims = manifest.skills?.shims || [];
+  const linkDirs = shims.map((shim) => SKILL_COMPAT_SHIMS[shim]).filter(Boolean);
   return { realDir: PROJECT_NEUTRAL_SKILL_DIR, linkDirs };
 }
 
@@ -1068,7 +1093,7 @@ async function ensureToolDirLink(projectRoot, linkDir, realDir, managedNames) {
 }
 
 function allCandidateSkillDirs() {
-  return [PROJECT_NEUTRAL_SKILL_DIR, ...Object.values(TOOL_PROJECT_SKILL_DIRS)];
+  return [PROJECT_NEUTRAL_SKILL_DIR, ...Object.values(SKILL_COMPAT_SHIMS)];
 }
 
 async function getRegistryCommit() {
@@ -1185,7 +1210,7 @@ async function computeProjectState(projectRoot) {
     const stat = await fs.lstat(path.join(projectRoot, dir)).catch(() => null);
     if (stat?.isSymbolicLink()) {
       inactiveLinks.push(dir);
-      issues.push(`${dir} is not a sync target for the enabled tools; run "${CLI_NAME} sync" to remove the link.`);
+      issues.push(`${dir} is not a declared shim; run "${CLI_NAME} sync" to remove the link.`);
     }
   }
   const localPaths = new Set(resolution.locals.map(({ relPath }) => path.normalize(relPath)));
@@ -1202,7 +1227,7 @@ async function computeProjectState(projectRoot) {
       if (localPaths.has(path.normalize(relPath))) continue;
       if (await fs.pathExists(path.join(projectRoot, relPath))) {
         orphaned.push(relPath);
-        issues.push(`${relPath} is not a sync target for the enabled tools; run "${CLI_NAME} sync" to prune it.`);
+        issues.push(`${relPath} is not a declared shim; run "${CLI_NAME} sync" to prune it.`);
       }
     }
   }
@@ -1211,6 +1236,14 @@ async function computeProjectState(projectRoot) {
 }
 
 async function syncProject(projectRoot) {
+  // Persist a schemaVersion 1 manifest's migration, so the old shape is rewritten
+  // once rather than re-derived on every read.
+  const rawManifest = await fs.readJson(projectManifestPath(projectRoot)).catch(() => null);
+  if (rawManifest && manifestNeedsMigration(rawManifest)) {
+    await writeProjectManifest(projectRoot, migrateManifest(rawManifest));
+    console.log(chalk.yellow(`  migrated ${PROJECT_MANIFEST_NAME} to schemaVersion 2 ("tools" -> "skills.shims")`));
+  }
+
   const state = await computeProjectState(projectRoot);
   const { resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock } = state;
 
@@ -1241,13 +1274,13 @@ async function syncProject(projectRoot) {
   ]);
   for (const dir of linkDirs) {
     if (await ensureToolDirLink(projectRoot, dir, realDir, managedNames)) {
-      console.log(chalk.green(`  ${dir} -> ${toolDirLinkTarget(projectRoot, dir, realDir)}`));
+      console.log(chalk.green(`  ${dir} -> ${toolDirLinkTarget(projectRoot, dir, realDir)} (compat shim)`));
     }
   }
 
   for (const dir of state.inactiveLinks) {
     await fs.remove(path.join(projectRoot, dir));
-    console.log(chalk.yellow(`  removed ${dir} (not a target for the enabled tools)`));
+    console.log(chalk.yellow(`  removed ${dir} (no longer a declared shim)`));
   }
 
   for (const name of state.staleNames) {
@@ -1260,7 +1293,7 @@ async function syncProject(projectRoot) {
 
   for (const relPath of state.orphaned) {
     await fs.remove(path.join(projectRoot, relPath));
-    console.log(chalk.yellow(`  pruned ${relPath} (not a target for the enabled tools)`));
+    console.log(chalk.yellow(`  pruned ${relPath} (not a declared shim)`));
   }
 
   // A narrowed tool set shouldn't leave husk directories behind: drop inactive
@@ -1845,13 +1878,21 @@ async function runProjectInit(projectRoot, options, { namespace, seedSkills = []
     throw new Error(`${PROJECT_MANIFEST_NAME} already exists in ${projectRoot}.`);
   }
 
-  let enabledTools;
-  if (options.tools) {
-    enabledTools = splitTags(options.tools);
-    const unknown = enabledTools.filter((tool) => !PROJECT_TOOLS.includes(tool));
-    if (unknown.length > 0) throw new Error(`Unknown tool(s): ${unknown.join(', ')}. Use: ${PROJECT_TOOLS.join(', ')}.`);
+  let enabledShims;
+  if (options.shims || options.tools) {
+    // --tools named the old copy targets; of those only the shims ever mattered,
+    // so an old invocation keeps working by filtering to the ones that do.
+    const requested = splitTags(options.shims || options.tools);
+    if (options.tools && !options.shims) {
+      console.log(chalk.yellow(`Warning: "--tools" is deprecated; use "--shims". Keeping: ${requested.filter((name) => KNOWN_SHIMS.includes(name)).join(', ') || 'none'}.`));
+      enabledShims = requested.filter((name) => KNOWN_SHIMS.includes(name));
+    } else {
+      const unknown = requested.filter((name) => !KNOWN_SHIMS.includes(name));
+      if (unknown.length > 0) throw new Error(`Unknown shim(s): ${unknown.join(', ')}. Known: ${KNOWN_SHIMS.join(', ') || 'none'}.`);
+      enabledShims = requested;
+    }
   } else {
-    enabledTools = [...PROJECT_TOOLS];
+    enabledShims = [...KNOWN_SHIMS];
   }
 
   const dependencies = {};
@@ -1867,10 +1908,9 @@ async function runProjectInit(projectRoot, options, { namespace, seedSkills = []
   }
 
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     extends: [],
-    skills: { dependencies },
-    tools: Object.fromEntries(PROJECT_TOOLS.map((tool) => [tool, enabledTools.includes(tool)]))
+    skills: { dependencies, shims: enabledShims }
   };
   await writeProjectManifest(projectRoot, manifest);
   console.log(chalk.green(`Wrote ${path.join(projectRoot, PROJECT_MANIFEST_NAME)}.`));
@@ -1887,8 +1927,9 @@ async function runProjectInit(projectRoot, options, { namespace, seedSkills = []
 
 projectCommand
   .command('init')
-  .description(`Create ${PROJECT_MANIFEST_NAME} in the current directory (all tools enabled unless narrowed with --tools)`)
-  .option('--tools <list>', `Comma-separated tools to enable: ${PROJECT_TOOLS.join(', ')} (default: all)`)
+  .description(`Create ${PROJECT_MANIFEST_NAME} in the current directory (all compat shims unless narrowed with --shims)`)
+  .option('--shims <list>', `Comma-separated compat shims to create: ${KNOWN_SHIMS.join(', ')} (default: all)`)
+  .option('--tools <list>', 'Deprecated alias for --shims')
   .action(async (options) => {
     try {
       await runProjectInit(process.cwd(), options, { namespace: 'project' });
@@ -1901,7 +1942,8 @@ projectCommand
 homeCommand
   .command('init')
   .description(`Create the $HOME profile, seeded with ${HOME_SEED_SKILLS.join(', ')} only; baseline/process skills belong in each repo's own profile`)
-  .option('--tools <list>', `Comma-separated tools to enable: ${PROJECT_TOOLS.join(', ')} (default: all)`)
+  .option('--shims <list>', `Comma-separated compat shims to create: ${KNOWN_SHIMS.join(', ')} (default: all)`)
+  .option('--tools <list>', 'Deprecated alias for --shims')
   .action(async (options) => {
     try {
       await runProjectInit(os.homedir(), options, { namespace: 'home', seedSkills: HOME_SEED_SKILLS });
@@ -2044,7 +2086,6 @@ homeCommand
   });
 
 function buildProjectStatusJson(state) {
-  const enabledTools = PROJECT_TOOLS.filter((tool) => state.manifest.tools?.[tool]);
   const skills = [];
   for (const { name, skill } of state.resolution.resolved) {
     const states = state.vendored.filter((entry) => entry.name === name);
@@ -2055,7 +2096,7 @@ function buildProjectStatusJson(state) {
     skills.push({ name, path: relPath, source: 'local', state: 'clean' });
   }
   return {
-    tools: enabledTools,
+    shims: state.manifest.skills?.shims || [],
     targets: state.targetDirs,
     extends: state.manifest.extends || [],
     skills,
@@ -2066,7 +2107,6 @@ function buildProjectStatusJson(state) {
 
 async function runProjectStatus(projectRoot, options) {
   const state = await computeProjectState(projectRoot);
-  const enabledTools = PROJECT_TOOLS.filter((tool) => state.manifest.tools?.[tool]);
 
   if (options.json) {
     console.log(JSON.stringify(buildProjectStatusJson(state), null, 2));
@@ -2074,7 +2114,7 @@ async function runProjectStatus(projectRoot, options) {
   }
 
   console.log(chalk.blue.bold('\nProject profile'));
-  console.log(chalk.gray(`tools: ${enabledTools.join(', ') || '—'} | targets: ${state.targetDirs.join(', ')} | registry: ${state.registry.name} v${state.registry.version}`));
+  console.log(chalk.gray(`shims: ${(state.manifest.skills?.shims || []).join(', ') || '—'} | targets: ${state.targetDirs.join(', ')} | registry: ${state.registry.name} v${state.registry.version}`));
   if ((state.manifest.extends || []).length > 0) console.log(chalk.gray(`extends: ${state.manifest.extends.join(', ')}`));
 
   for (const { name, skill } of state.resolution.resolved) {

@@ -157,10 +157,19 @@ skf sync [--check]               # vendor + lock; --check is the CI drift gate
 skf project status [--json]
 ```
 
-Skills are stored **once**, in `.agents/skills/`, whatever the `tools` map says.
-Each enabled tool that reads its own directory gets a symlink to that copy —
-today only `claude-code`, as `.claude/skills/ -> ../.agents/skills`. So the
-`tools` map decides which links exist, never how many copies are on disk.
+Skills are stored **once**, in `.agents/skills/`. There is no per-tool
+materialization any more, and so no `tools` map: a tool that reads the neutral
+path needs no configuration at all.
+
+What remains is `skills.shims` — the list of tools that insist on their own
+directory and therefore need a symlink to the store. Today that is only
+`claude-code`, as `.claude/skills/ -> ../.agents/skills`. An empty shim list is
+a valid, and preferable, end state. A shim is deleted when its tool learns to
+read the neutral path; it is never moved or copied.
+
+`schemaVersion` 2 replaces the old `tools` map. A version 1 manifest is migrated
+in place on the next `sync`, keeping only those tools that actually had a shim —
+the rest were already no-ops.
 
 `sync` migrates an existing real tool directory to a link, and refuses if that
 directory holds anything Skill Forge does not manage. If a symlink cannot be

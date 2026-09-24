@@ -204,6 +204,17 @@
         "SKILL.md": "sha256-PoJ6VpZOl/SBxHm9czA6kE+wWU1Nx5U59ZYoMX7ZGFI="
       }
     },
+    "inventory/skills/ica-llm-gateway": {
+      "name": "ica-llm-gateway",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-gYTIiGLMYPrsExfy0qvriUN7C4y/ct/NaDGOmpULDCg=",
+      "files": {
+        "SKILL.md": "sha256-BWMR93rSDdZXtIzmRL/SqYBJ3Lk15Wl7ux58Pw3ZIuk="
+      }
+    },
     "inventory/skills/llm-integration": {
       "name": "llm-integration",
       "version": "0.1.0",

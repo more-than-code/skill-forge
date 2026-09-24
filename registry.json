@@ -388,6 +388,19 @@
         "ios",
         "containers"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "ica-llm-gateway",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/ica-llm-gateway",
+      "installable": true,
+      "tags": [
+        "llm",
+        "gateway",
+        "ica"
+      ]
     }
   ],
   "managedAgents": [

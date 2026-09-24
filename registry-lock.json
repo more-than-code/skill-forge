@@ -194,14 +194,14 @@
     },
     "inventory/skills/grok-build-harness": {
       "name": "grok-build-harness",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-WTAOAUU1zTLvcBEGc/Y4rC3e0ZPuIIZdE2+xEHp1rSg=",
+      "integrity": "sha256-O6dShAs5oOl8OupegD+iZhM6NDw6lBF2SOzjh3dxFwQ=",
       "files": {
-        "EXAMPLES.md": "sha256-fQDUrRUNwEiWpyKVRMSWV7QQDT0PdZFuRI7IyPPihMw=",
-        "SKILL.md": "sha256-PoJ6VpZOl/SBxHm9czA6kE+wWU1Nx5U59ZYoMX7ZGFI="
+        "EXAMPLES.md": "sha256-uSPByFkzn+b1ArOS9dlOG48tbBIMElNhdjJ+4y99JrA=",
+        "SKILL.md": "sha256-k6tK8EK8i3M4ZK/YYJttALn8QdBUK9AVmkQRDjb+I3o="
       }
     },
     "inventory/skills/ica-llm-gateway": {

@@ -73,7 +73,9 @@ skf
 
 Until the package is published to npm, install it globally straight from git
 (registry and inventory travel inside the package), or link a checkout for
-development:
+development. The repository is private, so the machine needs GitHub access
+first: run `gh auth setup-git` for HTTPS, or use
+`git+ssh://git@github.com/more-than-code/skill-forge.git` with an SSH key.
 
 ```bash
 npm install -g git+https://github.com/more-than-code/skill-forge.git   # consumers

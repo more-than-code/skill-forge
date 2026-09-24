@@ -901,6 +901,22 @@ test('skill bump reports and optionally rewrites local profile pins that the new
   }
   assert.equal((await readRootManifest()).skills.dependencies['demo-skill'], '^0.3.0');
   assert.equal((await readHomeManifest()).skills.dependencies['demo-skill'], '^0.3.0');
+
+  // A bump that skipped --update-pins must stay repairable: re-running
+  // set-version at the current version still reports and rewrites stale pins.
+  await bump(['--major', '--json']);
+  const setVersion = (args) => run('node', [CLI, 'skill', 'set-version', 'demo-skill', '1.0.0', ...args], { cwd: fx.root, env });
+  const reported = JSON.parse((await setVersion(['--json'])).stdout);
+  assert.equal(reported.action, 'unchanged');
+  assert.equal(reported.stalePins.length, 2);
+  assert.ok(reported.warnings.some((warning) => /does not satisfy/.test(warning)));
+
+  const repaired = JSON.parse((await setVersion(['--update-pins', '--json'])).stdout);
+  assert.equal(repaired.action, 'unchanged');
+  assert.deepEqual(repaired.stalePins, []);
+  assert.equal(repaired.updatedPins.length, 2);
+  assert.equal((await readRootManifest()).skills.dependencies['demo-skill'], '^1.0.0');
+  assert.equal((await readHomeManifest()).skills.dependencies['demo-skill'], '^1.0.0');
 });
 
 test('site command generates a catalog with all sections and stats aggregation', async () => {

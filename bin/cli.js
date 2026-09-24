@@ -1753,19 +1753,24 @@ async function applySkillVersion(name, nextVersion, options, { action, previousV
 
   const from = previousVersion ?? skill.version;
   if (from === nextVersion) {
+    // The registry needs nothing, but pins may still lag: a bump run without
+    // --update-pins is repaired by re-running set-version at the same version.
+    const pinResult = await maybeUpdateStalePins(name, nextVersion, options);
     if (options.json) {
       console.log(JSON.stringify({
         action: 'unchanged',
         skill: toSkillSummary(skill),
         previousVersion: from,
         version: nextVersion,
-        warnings: [],
-        stalePins: [],
-        updatedPins: []
+        warnings: pinResult.pinWarning ? [pinResult.pinWarning] : [],
+        stalePins: pinResult.stalePins,
+        updatedPins: pinResult.updatedPins
       }, null, 2));
       return;
     }
-    console.log(chalk.gray(`${skillKey(skill)} already at v${nextVersion}; nothing to do.`));
+    const pinsInSync = pinResult.stalePins.length === 0 && pinResult.updatedPins.length === 0;
+    console.log(chalk.gray(`${skillKey(skill)} already at v${nextVersion}${pinsInSync ? '; nothing to do.' : '.'}`));
+    printPinResult(nextVersion, pinResult);
     return;
   }
 

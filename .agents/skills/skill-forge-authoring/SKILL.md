@@ -172,10 +172,14 @@ nothing durable was committed.
 3. If `partial === true` after **set-version** / **bump**: the version change **did** land (and lock was rewritten). Do **not** re-issue write unless content is wrong. Fix the validation errors (often an unrelated broken skill), then `skf validate`. Use `previousVersion` / `version` in the payload to know what was applied.
 4. If `partial === true` after **delete**: the skill dir/registry row were already removed. Fix remaining validation errors and `skf validate`; do not re-delete.
 5. Treat `warnings` as non-fatal (e.g. `--remove-file` missing path).
-6. `set-version` to the current version returns `action: "unchanged"`.
-7. After bump/set-version, if `stalePins` is non-empty, re-run with
-   `--update-pins` (or `project add` / `home add` in each consumer) before
-   the next `sync` — a 0.x `--minor` does not satisfy `^0.x.y`.
+6. `set-version` to the current version returns `action: "unchanged"` and
+   leaves the registry alone, but still reports `stalePins` (and rewrites them
+   with `--update-pins`).
+7. After bump/set-version, if `stalePins` is non-empty, repair them with
+   `skf skill set-version <name> <version-just-applied> --update-pins` (or
+   `project add` / `home add` in each consumer) before the next `sync` — a 0.x
+   `--minor` does not satisfy `^0.x.y`. Do **not** re-run `bump`: it would
+   bump again.
 
 ## Safety constraints (CLI-enforced)
 

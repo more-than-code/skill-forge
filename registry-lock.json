@@ -315,14 +315,14 @@
     },
     "inventory/skills/skill-forge-authoring": {
       "name": "skill-forge-authoring",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-gD9K6kh0xEZRuzxokb3t9cQe+PFkwpBguizjhv7eXjE=",
+      "integrity": "sha256-iq36oZPSH6bYQLPIOLP5RYO5r9gj5stMmdxVpBb3m0I=",
       "files": {
         "EXAMPLES.md": "sha256-3z2V7oYWi5lSa7dOZ3PYH1RQGifoEVkbQvx/somkhXY=",
-        "SKILL.md": "sha256-Q+qovT1i3vXyVFow6y5JZPyG2ZB/u2C2M6AdW+LHcuI="
+        "SKILL.md": "sha256-IXXGzvCAhpiv0E0M2eCOM9FNpALeXw9ZNf7+/ZljsB8="
       }
     },
     "inventory/skills/skill-forge-project": {

@@ -373,6 +373,21 @@
         "agent-facing",
         "inventory"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "disk-cleanup",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/disk-cleanup",
+      "installable": true,
+      "tags": [
+        "macos",
+        "disk",
+        "android",
+        "ios",
+        "containers"
+      ]
     }
   ],
   "managedAgents": [

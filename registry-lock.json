@@ -133,6 +133,17 @@
         "SKILL.md": "sha256-hUmWwKa37UTP0L8k4lffmHl8qOB2ElXoKGzuiwX1BIo="
       }
     },
+    "inventory/skills/disk-cleanup": {
+      "name": "disk-cleanup",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-LrfieMVBXatfrP22d1vPrJAIp7izPAnIv3K3wWVEbNo=",
+      "files": {
+        "SKILL.md": "sha256-EwRBfeud8DDEb8hJ8ebOoVOI36R5o8NQB+L7CpZNU54="
+      }
+    },
     "inventory/skills/external-worker-delegation": {
       "name": "external-worker-delegation",
       "version": "0.8.2",

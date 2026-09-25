@@ -401,6 +401,22 @@
         "gateway",
         "ica"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "defect-drainer-test-plans",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/defect-drainer-test-plans",
+      "installable": true,
+      "tags": [
+        "testing",
+        "test-plans",
+        "qa",
+        "simulator",
+        "human-in-the-loop",
+        "harness"
+      ]
     }
   ],
   "managedAgents": [

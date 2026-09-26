@@ -41,6 +41,17 @@
         "SKILL.md": "sha256-E/Bc8VSovxeVcj4t1GqU4ben2KnKIyHcUzfPNKuldw4="
       }
     },
+    "inventory/skills/aws-toolkit-skills": {
+      "name": "aws-toolkit-skills",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-yeT4tPSfq8rRI75srnPHYNerSxTgdnYwPQpZUkRQRa0=",
+      "files": {
+        "SKILL.md": "sha256-1Gtuhm5xLMfpfNJtvRtzQTvNmPmS7RuZAKgVk7mF56g="
+      }
+    },
     "inventory/skills/code-quality": {
       "name": "code-quality",
       "version": "0.1.1",

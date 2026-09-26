@@ -417,6 +417,19 @@
         "human-in-the-loop",
         "harness"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "aws-toolkit-skills",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/aws-toolkit-skills",
+      "installable": true,
+      "tags": [
+        "aws",
+        "skills",
+        "skill-forge"
+      ]
     }
   ],
   "managedAgents": [

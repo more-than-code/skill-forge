@@ -110,13 +110,13 @@
     },
     "inventory/skills/defect-drainer-test-plans": {
       "name": "defect-drainer-test-plans",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-4O6qiXy9Do8kcW2/Peb9uTbZ7tasbHUSOFEcOLFv2j0=",
+      "integrity": "sha256-nLwOr1MXljrT7ZGQoFZCwBROP4w8d42BqW0DF8hpXss=",
       "files": {
-        "SKILL.md": "sha256-o/VAgSnXYlx9UEiRcPl7XsO/lVz4N6Dv+onaN9TKdiQ="
+        "SKILL.md": "sha256-JTOxAG25sbF75yX3Eea3rpOnTlCbneRQrwT01+SLr9Y="
       }
     },
     "inventory/skills/deployment-strategy": {

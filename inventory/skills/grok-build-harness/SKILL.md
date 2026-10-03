@@ -5,8 +5,8 @@ description: >
   capturing its output with the four headless formats, reading the `end` event to
   tell completion from turn exhaustion, sandbox write boundaries and custom sandbox
   profiles, the model-judged `--permission-mode auto` gate, per-session cost via
-  `grok usage`, Imagine image/video tool usage, and self-contained brief structure. Activate when handing work to Grok, spawning
-  `grok` headlessly, streaming or parsing grok output, tracking its cost, debugging
+  `grok usage`, the default context window, Imagine image/video tool usage, and self-contained brief structure. Activate when handing work to Grok, spawning
+  `grok` headlessly, streaming or parsing grok output, tracking its cost or reading its context window, debugging
   a grok run that exits 0 having done nothing, generating images/video with
   image_gen / image_edit / image_to_video, or driving grok over ACP
   (`grok agent stdio` / `serve`).
@@ -36,7 +36,7 @@ phase, and how to accept what comes back — activate `external-worker-delegatio
 ## Preflight (always)
 
 ```bash
-grok --version            # observations below verified on 1.0.41 (2026-09-24)
+grok --version            # observations below are stamped 1.0.40-1.0.46; latest re-probe 1.0.46 (2026-10-03)
 grok models               # confirms login + available models
 grok inspect              # skills, agents, hooks, permissions, sandbox for THIS directory
 ```
@@ -78,7 +78,7 @@ what the help calls "the agent's native format" is the same session-update vocab
 `grok agent stdio` pushes. Tool visibility is therefore in headless mode, and the
 guidance that it was ACP-only is obsolete.
 
-Directly observed on 1.0.40 and 1.0.41: `text`, `thought`, `tool_call`, `tool_call_update`,
+Directly observed on 1.0.40, 1.0.41 and 1.0.46: `text`, `thought`, `tool_call`, `tool_call_update`,
 `usage`, `available_commands`, `end`, and `max_turns_reached` (under `--max-turns`).
 Carried over from earlier versions but not seen in these probes: `error`,
 `auto_compact_*`. The list is **not exhaustive** and it grows between versions, so
@@ -97,7 +97,7 @@ find work/src work/static -type f -newer work/BRIEF.md | sort
 `available_commands` enumerates the live tool and slash-command inventory for the
 session. Read it instead of assuming which tools exist in the version you are driving.
 
-The `end` event is the run's post-mortem, verified shape on 1.0.40 and unchanged on 1.0.41:
+The `end` event is the run's post-mortem, verified shape on 1.0.40 and unchanged on 1.0.41 and 1.0.46:
 
 ```json
 {"type":"end","stopReason":"end_turn","sessionId":"…","requestId":"…",
@@ -115,6 +115,12 @@ Read four fields every time:
 - **`sessionId`** — keep it. It is the key to `grok usage` (see Cost below) and to
   `grok -r <id>`.
 
+**`modelUsage` is keyed by the id the server reports, not the one you asked for.** On
+1.0.46 (2026-10-03) every run's row was `grok-4.7-build`, even with `-m grok-4.7`, and that
+id is in neither `grok models` nor the model cache. The documented per-model `contextWindow`
+appears only on a row that matches a known model, so it was absent. Do not read the context
+window from the `end` event (see Context window).
+
 ## Gotcha 1 — turn exhaustion, not single-turn (changed in 1.0)
 
 **On 1.0.x, `-p` runs the task to completion.** Verified on 1.0.40 (2026-09-22) and
@@ -129,16 +135,20 @@ hours of misdiagnosis and is what the driver loop below existed to work around. 
 are on a 0.2.x build, it still applies — and the fix is to upgrade, not to loop.
 
 **What still stops a run early is the turn cap**, and it is cheap to identify because
-the signals are unambiguous (verified on 1.0.40 and 1.0.41 with `--max-turns 2`):
+the signals are unambiguous (verified on 1.0.40, 1.0.41 and 1.0.46 with `--max-turns 2`;
+on 1.0.46 a three-file task stopped after two files, with the third never created):
 
 | Exit | `stopReason` | Extra event | Meaning |
 |------|--------------|-------------|---------|
 | 0 | `end_turn` | — | Ran to completion. Check artifacts anyway. |
 | 1 | `cancelled` | `max_turns_reached` | Hit `--max-turns`. Resume it. |
+| 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`. |
 | non-zero | absent / `error` | `error` | Genuine failure. Read it; do not resume blindly. |
 
 So: a **non-zero exit plus `max_turns_reached`** is the resume signal, and `end_turn`
-with deliverables missing is a real model stop worth reading the narration for. Do not
+with deliverables missing is a real model stop worth reading the narration for. The
+exit-0 `cancelled` row is the dangerous one: it looks like success, did no work, and
+resuming it just repeats the cancellation. Do not
 raise `--max-turns` reflexively; an unfinished brief at a high cap usually means the
 brief was too big for one session, not that the cap was too low.
 
@@ -166,7 +176,7 @@ Rules for the loop:
 
 ## Gotcha 2 — the sandbox write boundary, and how to widen it
 
-Five built-in profiles on 1.0.40 and 1.0.41 (probed by name). Take write sets from the
+Five built-in profiles on 1.0.40, 1.0.41 and 1.0.46 (probed by name). Take write sets from the
 bundled `~/.grok/docs/user-guide/18-sandbox.md`, not the shipped `~/.grok/README.md`:
 on 1.0.41 the README omits `devbox`, lists older write sets, and says `~/.ssh`,
 `~/.aws`, `~/.gnupg` are "always write-protected regardless of profile", which probing
@@ -183,9 +193,24 @@ disproves (below).
 "Temp" is `/tmp`, `/var/tmp` and the macOS temp dirs. Child-network blocking is
 seccomp, so on macOS `read-only` and `strict` do not restrict it.
 
+Re-probed on 1.0.46 (2026-10-03) on macOS, from a scratch CWD under `$HOME` (not `$HOME`
+itself), by asking each profile to create and remove a file in each place. Every row of
+the table held:
+
+| Profile | `~/.ssh` `~/.aws` | `~/.grok` | other `$HOME` file | CWD | temp | outbound HTTPS |
+|---------|-------------------|-----------|--------------------|-----|------|----------------|
+| `off` | writable | writable | writable | writable | writable | ok |
+| `workspace` | blocked | writable | blocked | writable | writable | ok |
+| `read-only` | blocked | writable | blocked | blocked | writable | ok |
+| `strict` | blocked | blocked | blocked | writable | writable | ok |
+| `devbox` | writable | writable | writable | writable | writable | ok |
+
+`~/.gnupg` did not exist on the probe host, so it was not tested.
+
 **No profile protects credential paths by name.** `~/.ssh`, `~/.aws` and `~/.gnupg`
 are unwritable only when they fall outside the profile's write set. Probed on 1.0.41
-(2026-09-26) with a create-then-remove file: all three were writable under `off` and
+(2026-09-26), and re-confirmed on 1.0.46 for everything but the `$HOME`-as-CWD case,
+with a create-then-remove file: all three were writable under `off` and
 `devbox`. Under `workspace` and `strict` they were blocked from a scratch CWD, but
 writable when CWD was `$HOME`. Under `read-only`, which grants no CWD write, they were
 blocked. A `read_write` grant that covers them would open them under any profile.
@@ -215,7 +240,10 @@ fix: both profiles then started and enforced as documented. So the trigger is th
 itself, whatever created it. Tools that install a Docker-compatible socket as a symlink
 (for example `podman-mac-helper`) would plausibly trip it on a working setup too;
 that case is unverified. Check with `ls -l /var/run/docker.sock`, and probe the
-profile you intend to use before writing a brief around it.
+profile you intend to use before writing a brief around it. On 1.0.46 (2026-10-03) the
+probe host had no `/var/run/docker.sock` at all and all five profiles started and
+enforced, which fits the link being the trigger; the symlink case itself was not re-run
+on 1.0.46.
 
 **Custom profiles are the real fix for cache paths.** Define them in `~/.grok/sandbox.toml`
 (global) or `.grok/sandbox.toml` (per project) and pass the name to `--sandbox`:
@@ -238,7 +266,7 @@ failure from a workaround into a configuration line. Prefer it over `devbox`.
 |------|------------------------------|---------|
 | `pnpm install` | **Works.** Cannot write `~/Library/pnpm/store`, so pnpm 12.x silently relocates the store to a writable path and installs. Exit 0. Where it lands varies: `node_modules/.pnpm-store` in one probe, `/private/tmp/.pnpm-store` for a project under `/private/tmp` in another. | fine, but a cold store |
 | `npm install` | **Fails** `EPERM` on `~/.npm` | blocked |
-| direct write to `~/.npm` | `Operation not permitted`, exit 1 — under `--always-approve`. Under `--permission-mode auto` the command never runs (next section) | as designed |
+| direct write to `~/.npm` | `Operation not permitted`, exit 1 — under `--always-approve`, and on 1.0.46 also under `--permission-mode auto`. On 1.0.41 `auto` stopped the command before it ran (next section) | as designed |
 
 **npm's error message is actively misleading.** On the cache EPERM it reports "Your
 cache folder contains root-owned files, due to a bug in previous versions of npm" and
@@ -298,6 +326,12 @@ jq -r 'select(.type=="tool_call_update" and .status=="failed")
 Not probed on 1.0.40, so this is not claimed to be new in 1.0.41. Only that it is
 present there.
 
+**Not reproduced on 1.0.46 (2026-10-03, one sample).** The same kind of brief
+(`--prompt-file`, one `touch ~/.npm/<name>`, `--permission-mode auto --sandbox workspace
+--always-approve`) ran the command, which then hit the sandbox: `Operation not permitted`,
+`end_turn`, exit 0, no `Auto mode blocked` failure. The classifier is model-judged, so one
+clean pass does not clear it. Keep the scan above, and keep the sandbox as the boundary.
+
 ## Gotcha 3 — headless Chromium under the sandbox
 
 Playwright/Chromium has crashed under the sandbox (keychain `SecItemCopyMatching` /
@@ -336,7 +370,7 @@ grok usage <sessionId> <turn>   # one turn
 It returns JSON: `inputTokens`, `outputTokens`, `cachedReadTokens`,
 `reasoningTokens`, `modelCalls`, `turnCount`, `primaryModelId`, and `costUsdTicks`
 (USD x 10^10 — `899470000` is $0.0899), nested under `session` for the totals and
-`turns[]` per turn. Verified on 1.0.40 and 1.0.41 against the same session's `end`
+`turns[]` per turn. Verified on 1.0.40, 1.0.41 and 1.0.46 against the same session's `end`
 event; the cost figures agree to the tick.
 
 **The two commands count different "turns".** `grok usage`'s `turnCount` and its
@@ -349,9 +383,42 @@ This matters for teardown: a worktree deleted with its `run.jsonl` inside has no
 destroyed the cost record, provided you kept the `sessionId`. Keep it anyway — it is
 also how you resume (`grok -r`) and export (`grok export`) that session.
 
+## Context window — 256K by default, 500K on request
+
+Probed on 1.0.46 (2026-10-03). The CLI keeps a model catalog, fetched from its own model
+endpoint, in `~/.grok/models_cache.json`. For each of the four models listed there it records
+`context_window: 256000`, `context_windows: [256000, 500000]` and
+`auto_compact_threshold_percent: 80`. So a spawned `grok` defaults to **256,000 tokens**, and
+500,000 is an option rather than the default. The bundled docs give the compaction default
+as 85%; the catalog's 80% is what this install fetched, so treat it as the value in effect.
+The window is not all usable: a one-word prompt already cost 22-28K input tokens (system
+prompt plus tool definitions).
+
+Read it, and change it, like this:
+
+```bash
+jq -r '.models | to_entries[] | "\(.key) \(.value.info.context_window) \(.value.info.context_windows)"' ~/.grok/models_cache.json
+```
+
+- **Per session, interactive:** `/context-window 500k`, or `/model <id> 500k`.
+- **Persistently:** `[model."<id>"] context_window = 500000` in `~/.grok/config.toml`, which
+  the docs list as a user setting and which inherits everything else from the built-in
+  model. With it set, a fresh ACP `session/new` reported `totalContextTokens: 500000` for each
+  model (`availableModels[]._meta`), and `256000` again once it was removed. It applies to every
+  spawn that reads that config, so a custom profile or `HOME` that skips the file does not
+  see it. The ACP metadata was the only place it showed: the headless `end` event carries no
+  window (see Observing the run), so a `-p` run cannot confirm it.
+
+**Why 256K is the default is not stated by the vendor.** Its model page (checked 2026-10-03)
+gives the model's window as 500K, and its pricing page bills a request whose prompt reaches
+200K tokens at twice the rate for every token in that request, input, cached and output alike.
+A default that compacts near 200K stays under that tier; that is an inference, not a vendor
+statement, and vendor pricing changes, so re-check before relying on it. For delegated
+builds, keep the default and raise the window per session for a task that needs it.
+
 ## Imagine — image and video generation
 
-All four tools are present on 1.0.40 and 1.0.41 — `image_gen`, `image_edit`, `image_to_video`
+All four tools are present on 1.0.40, 1.0.41 and 1.0.46 — `image_gen`, `image_edit`, `image_to_video`
 and `reference_to_video` — confirmed in the session's own `available_commands` event
 rather than from docs. Check that event for the version you are driving instead of
 hedging. Instruct Grok to **load the bundled `imagine` skill before its first
@@ -408,8 +475,9 @@ hand the work off — backwards. If the server exists to do delegated work, mark
 One server splitting both roles across its sessions has no per-session signal to carry this; use
 separate servers, or `stdio`.
 
-**Verified handshake** (probed against 0.2.102; the method still holds on 1.0.40,
-but re-probe the notification vocabulary before depending on a specific kind):
+**Verified handshake** (probed against 0.2.102; the method still holds on 1.0.40, and on
+1.0.46 `initialize` then `session/new` returned the session and its model list, though no
+prompt was sent there. Re-probe the notification vocabulary before depending on a specific kind):
 
 1. `initialize` -> `{"protocolVersion":1}`
 2. `session/new` `{cwd, mcpServers:[], _meta:{yoloMode:true}}` -> `sessionId`
@@ -464,17 +532,26 @@ self-contained `BRIEF.md` in the working directory and point Grok at it. Since 1
 there is a flag for exactly this, so the brief need not be squeezed into an argument:
 
 ```bash
-grok --prompt-file BRIEF.md --no-subagents \
+GROK_SUBAGENTS=0 grok --prompt-file BRIEF.md --no-subagents \
   --sandbox workspace --always-approve --output-format streaming-json
 ```
 
-Two flags worth setting on a delegated spawn:
+Two settings worth applying to a delegated spawn:
 
-- **`--no-subagents`** enforces the no-recursion rule mechanically — the worker cannot
-  fan the brief out to children the orchestrator never sees. Verified accepted on 1.0.40
-  and 1.0.41. Pass it explicitly rather than relying on config: 1.0.41 changed which
-  config tables disable subagents (one that only sets limits or models no longer does),
-  so a setup that was quietly subagent-free may not be any more.
+- **Subagents off: use `GROK_SUBAGENTS=0`, and probe that it worked.** The point is the
+  no-recursion rule: the worker must not fan the brief out to children the orchestrator
+  never sees. On 1.0.46 (2026-10-03) **`--no-subagents` was accepted but did not stop
+  spawning in headless `-p`.** Asked to use `spawn_subagent`, a run with the flag, whether
+  before or after the prompt, spawned a subagent that ran and returned its output, exactly
+  as the run without it did. With `GROK_SUBAGENTS=0` in the environment the model searched
+  for the tool, found none, and reported it unavailable. The flag's help text and the
+  bundled docs both say it disables spawning, and "accepted" (verified on 1.0.40 and 1.0.41)
+  was never evidence of "enforced". Keep the flag if you like, but do not rely on it, state
+  the rule in the brief, and on any new version ask a worker to spawn a trivial subagent to
+  see whether the control still holds. The `[subagents] enabled = false` config switch was
+  not tested on 1.0.46; 1.0.41 changed which config tables disable subagents (one that only
+  sets limits or models no longer does), so a setup that was quietly subagent-free may not
+  be any more.
 - **`--rules "<text>"`** appends to the system prompt. Useful for the role line, but it
   does **not** replace the brief's `Role` section: rules are tooling-injected and the
   brief is the authoritative channel (`external-worker-delegation` covers the precedence).
@@ -536,6 +613,9 @@ paper over it with flag variations.
 | `--permission-mode auto` on a headless brief | `--always-approve` with the sandbox as the boundary; if you keep `auto`, scan for `Auto mode blocked` |
 | Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
+| Rely on `--no-subagents` for the no-recursion rule | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 |
+| Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46 and exited 0 having done nothing |
+| Read the context window from the `end` event | `~/.grok/models_cache.json`, or ACP `session/new` metadata; the headless `end` event omits it |
 | Scrape cost only from `run.jsonl` | `grok usage <sessionId>` persists it |
 | `image_gen` a UI mockup or anything with real copy | Build it in code |
 | Re-`image_gen` a recurring character | `image_edit` from one base image |

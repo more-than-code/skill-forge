@@ -232,8 +232,10 @@ Universal sections:
    which end of the delegation it is on. Only the brief can — so say which channel wins: the brief
    is read once, while tooling can inject every turn, and over a long run the repeated channel
    drowns out the authoritative one unless the brief settles the precedence. Where the worker CLI
-   can enforce it, set that too — a flag that disables child agents (Grok: `--no-subagents`) makes
-   the rule structural instead of persuasive. The brief still states it, for the CLIs that cannot.
+   can enforce it, set that too — a switch that disables child agents makes the rule structural
+   instead of persuasive. Probe that it holds: Grok's `--no-subagents` flag was accepted but did not
+   stop spawning on 1.0.46, while its `GROK_SUBAGENTS=0` environment variable did. The brief still
+   states it, for the CLIs that cannot.
 2. **Facts** — what the system actually is.
 3. **Decisions already made** — a table, marked do-not-relitigate.
 4. **Environment** — what is pre-installed, what it must not run or re-scaffold.

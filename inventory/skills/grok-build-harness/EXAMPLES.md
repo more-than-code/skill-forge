@@ -36,7 +36,7 @@ exhaustion, not the default.
 
 ```bash
 cd /path/to/work || exit 1
-grok --prompt-file BRIEF.md --no-subagents \
+GROK_SUBAGENTS=0 grok --prompt-file BRIEF.md --no-subagents \
   --sandbox workspace --always-approve --max-turns 400 \
   --output-format streaming-json | tee run.jsonl
 ```

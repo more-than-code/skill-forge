@@ -532,26 +532,35 @@ self-contained `BRIEF.md` in the working directory and point Grok at it. Since 1
 there is a flag for exactly this, so the brief need not be squeezed into an argument:
 
 ```bash
-GROK_SUBAGENTS=0 grok --prompt-file BRIEF.md --no-subagents \
+grok --prompt-file BRIEF.md \
   --sandbox workspace --always-approve --output-format streaming-json
 ```
 
 Two settings worth applying to a delegated spawn:
 
-- **Subagents off: use `GROK_SUBAGENTS=0`, and probe that it worked.** The point is the
-  no-recursion rule: the worker must not fan the brief out to children the orchestrator
-  never sees. On 1.0.46 (2026-10-03) **`--no-subagents` was accepted but did not stop
-  spawning in headless `-p`.** Asked to use `spawn_subagent`, a run with the flag, whether
-  before or after the prompt, spawned a subagent that ran and returned its output, exactly
-  as the run without it did. With `GROK_SUBAGENTS=0` in the environment the model searched
-  for the tool, found none, and reported it unavailable. The flag's help text and the
-  bundled docs both say it disables spawning, and "accepted" (verified on 1.0.40 and 1.0.41)
-  was never evidence of "enforced". Keep the flag if you like, but do not rely on it, state
-  the rule in the brief, and on any new version ask a worker to spawn a trivial subagent to
-  see whether the control still holds. The `[subagents] enabled = false` config switch was
-  not tested on 1.0.46; 1.0.41 changed which config tables disable subagents (one that only
-  sets limits or models no longer does), so a setup that was quietly subagent-free may not
-  be any more.
+- **Subagents are on by default, and that is fine.** Grok's own parallelism is not the
+  "delegate onward" the delegation rules forbid, which means handing the brief to another
+  external worker. Probed on 1.0.46 (2026-10-03): asked for two subagents in the same step, Grok
+  spawned both, they ran concurrently (identical `duration_ms`), and the parent's `end`
+  `total_cost_usd` and `grok usage` for the parent session (4 model calls, the parent's two
+  plus one per child) carried the children's spend, with each child's own cost readable via
+  `grok usage <subagent_id>`. So the budget and review concerns that suggest switching them
+  off did not show up: spend is visible and the artifacts are still checked on disk. The real
+  cost is a fixed one: each subagent starts a fresh context, about 21K input tokens on that
+  probe (roughly $0.014 on the default model, double on fast mode) before it does any work.
+  Let the brief say what is allowed: one level deep, and no two subagents writing the same
+  file. Whether two subagents writing the same file collide was not tested.
+- **Subagents off, when a task should run on one agent: use `GROK_SUBAGENTS=0`, and probe
+  that it worked.** On 1.0.46 **`--no-subagents` was accepted but did not stop spawning in
+  headless `-p`.** Asked to use `spawn_subagent`, a run with the flag, whether before or after
+  the prompt, spawned a subagent that ran and returned its output, exactly as the run without
+  it did. With `GROK_SUBAGENTS=0` in the environment the model searched for the tool, found
+  none, and reported it unavailable. The flag's help text and the bundled docs both say it
+  disables spawning, and "accepted" (verified on 1.0.40 and 1.0.41) was never evidence of
+  "enforced", so on any new version ask a worker to spawn a trivial subagent to see whether
+  the control still holds. The `[subagents] enabled = false` config switch was not tested on
+  1.0.46; 1.0.41 changed which config tables disable subagents (one that only sets limits or
+  models no longer does), so a setup that was quietly subagent-free may not be any more.
 - **`--rules "<text>"`** appends to the system prompt. Useful for the role line, but it
   does **not** replace the brief's `Role` section: rules are tooling-injected and the
   brief is the authoritative channel (`external-worker-delegation` covers the precedence).
@@ -627,7 +636,8 @@ paper over it with flag variations.
 | `--permission-mode auto` on a headless brief | `--always-approve` with the sandbox as the boundary; if you keep `auto`, scan for `Auto mode blocked` |
 | Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
-| Rely on `--no-subagents` for the no-recursion rule | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 |
+| Rely on `--no-subagents` to switch subagents off | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 |
+| Switch subagents off by default "for safety" | Leave them on and say in the brief what is allowed; their spend is in the run's total |
 | Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46 and exited 0 having done nothing |
 | Look for a `--fast` flag | There is none on 1.0.46; fast mode is the `grok-4.7-build-fast` model, `-m grok-4.7-build-fast`, at about twice the price |
 | Read the context window from the `end` event | `~/.grok/models_cache.json`, or ACP `session/new` metadata; the headless `end` event omits it |

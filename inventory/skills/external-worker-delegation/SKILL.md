@@ -231,11 +231,15 @@ Universal sections:
    orchestrator is, including the section describing this pattern, and nothing in them reveals
    which end of the delegation it is on. Only the brief can — so say which channel wins: the brief
    is read once, while tooling can inject every turn, and over a long run the repeated channel
-   drowns out the authoritative one unless the brief settles the precedence. Where the worker CLI
-   can enforce it, set that too — a switch that disables child agents makes the rule structural
-   instead of persuasive. Probe that it holds: Grok's `--no-subagents` flag was accepted but did not
-   stop spawning on 1.0.46, while its `GROK_SUBAGENTS=0` environment variable did. The brief still
-   states it, for the CLIs that cannot.
+   drowns out the authoritative one unless the brief settles the precedence. "Delegate onward" means
+   engaging another external worker or handing the brief back up. It does not forbid the worker's
+   own CLI from parallelising: a worker's in-harness helpers (Grok's subagents, for one) bill to the
+   worker's budget, not the primary's, and the brief can allow them with limits (one level deep, no
+   two writing the same file). Probed on 1.0.46: Grok ran two subagents in parallel and their spend
+   rolled into the run's total and `grok usage`. Where a task should run on one agent and the worker
+   CLI can enforce that, set it too, and probe that it holds: Grok's `--no-subagents` flag was
+   accepted but did not stop spawning on 1.0.46, while `GROK_SUBAGENTS=0` did. The brief still states
+   the role, for the CLIs that cannot enforce anything.
 2. **Facts** — what the system actually is.
 3. **Decisions already made** — a table, marked do-not-relitigate.
 4. **Environment** — what is pre-installed, what it must not run or re-scaffold.

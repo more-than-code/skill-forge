@@ -168,14 +168,14 @@
     },
     "inventory/skills/external-worker-delegation": {
       "name": "external-worker-delegation",
-      "version": "0.8.3",
+      "version": "0.8.4",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-eSCoO9fmJ/Ynwa8D0P1GL+SWzMQCGo7QBAXv7T56rEc=",
+      "integrity": "sha256-0RbejzlLzdKpt9uVfev7M3JRjippsup/nLY3Q+Feqsc=",
       "files": {
         "dispatch.sh": "sha256-0QdjfGdxt+blSIkNKpX6Doxc3wkiuHUnUMcH+LCsPSI=",
-        "SKILL.md": "sha256-4AHf9rQn76EnW3DJGUBiGqCjNUdK6S0xTZrGdhLU3xI="
+        "SKILL.md": "sha256-Pxfx97LH0tGBsjwVP2uQKV4MwEqAsJEESp+r5sEl3D0="
       }
     },
     "inventory/skills/failure-analysis": {
@@ -216,14 +216,14 @@
     },
     "inventory/skills/grok-build-harness": {
       "name": "grok-build-harness",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-UxNGdMEFvZkLcBobepiyIUWO5LFyIo0yO1y7cfyOd5I=",
+      "integrity": "sha256-Qx84BnR4XhAdt96uFFMQ5GbOQ17tSyslIfwz/oQ1PVE=",
       "files": {
-        "EXAMPLES.md": "sha256-4mQZjnGbLcCWcHAPfTH+l/05A7L1EAaVASEIrDAHGko=",
-        "SKILL.md": "sha256-foH9UZmuPgG5htPb5Lp7YD8IKq6hMBdZMscQOIeJX6M="
+        "EXAMPLES.md": "sha256-/TMLKw4XrzmRbSOv70I7yIG+CqFV4wDOJRZ5dZ9g8Uo=",
+        "SKILL.md": "sha256-/BLCdfuosT723MbZtkGsDqHZqjGWJNCvsc2MWBMRHJA="
       }
     },
     "inventory/skills/ica-llm-gateway": {

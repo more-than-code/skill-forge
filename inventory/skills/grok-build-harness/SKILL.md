@@ -5,7 +5,7 @@ description: >
   capturing its output with the four headless formats, reading the `end` event to
   tell completion from turn exhaustion, sandbox write boundaries and custom sandbox
   profiles, the model-judged `--permission-mode auto` gate, per-session cost via
-  `grok usage`, the default context window, Imagine image/video tool usage, and self-contained brief structure. Activate when handing work to Grok, spawning
+  `grok usage`, the default context window, fast mode, Imagine image/video tool usage, and self-contained brief structure. Activate when handing work to Grok, spawning
   `grok` headlessly, streaming or parsing grok output, tracking its cost or reading its context window, debugging
   a grok run that exits 0 having done nothing, generating images/video with
   image_gen / image_edit / image_to_video, or driving grok over ACP
@@ -556,6 +556,20 @@ Two settings worth applying to a delegated spawn:
   does **not** replace the brief's `Role` section: rules are tooling-injected and the
   brief is the authoritative channel (`external-worker-delegation` covers the precedence).
 
+**Fast mode is a separate model, not a flag.** `grok models` lists a fast variant
+(`grok-4.7-build-fast`, "Grok 4.7 Fast"), and `grok --help` has no `--fast`. Select it per
+spawn with `-m grok-4.7-build-fast`. Setting `[models] default` in `~/.grok/config.toml` would
+make it the default for every spawn, but that was not tested. Probed on 1.0.46 (2026-10-03): a
+one-word headless prompt ran `end_turn`, exit 0, and the `end` event's usage row was keyed
+`grok-4.7-build-fast`, where the default model's row is keyed with the server-reported
+`grok-4.7-build`. Cost per input token was about 1.9x the default's on that call, in line with
+the catalog's own "2x the price" description; the vendor documents 2x, or 1.5x for long-context
+requests, and prices change, so re-check. A 32-token reply showed no wall-clock gain (5.3 s
+against 5.2 s, one sample), so the speed-up itself is unmeasured: time a representative task
+before paying double. It has the same 256K default window. Not tested: fast mode under
+`--max-turns`, on a real build, or as a config default. Use it when wall-clock time matters
+more than cost, not as the default for long delegated builds.
+
 **Do not pass `--worktree` when the orchestrator already created one.** Grok has its
 own worktree subsystem (`--worktree`, `--worktree-ref`, `grok worktree list|rm|gc`),
 and pointing it at a dispatcher-managed checkout nests one isolation mechanism inside
@@ -615,6 +629,7 @@ paper over it with flag variations.
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
 | Rely on `--no-subagents` for the no-recursion rule | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 |
 | Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46 and exited 0 having done nothing |
+| Look for a `--fast` flag | There is none on 1.0.46; fast mode is the `grok-4.7-build-fast` model, `-m grok-4.7-build-fast`, at about twice the price |
 | Read the context window from the `end` event | `~/.grok/models_cache.json`, or ACP `session/new` metadata; the headless `end` event omits it |
 | Scrape cost only from `run.jsonl` | `grok usage <sessionId>` persists it |
 | `image_gen` a UI mockup or anything with real copy | Build it in code |

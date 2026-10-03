@@ -548,8 +548,24 @@ Two settings worth applying to a delegated spawn:
   off did not show up: spend is visible and the artifacts are still checked on disk. The real
   cost is a fixed one: each subagent starts a fresh context, about 21K input tokens on that
   probe (roughly $0.014 on the default model, double on fast mode) before it does any work.
-  Let the brief say what is allowed: one level deep, and no two subagents writing the same
-  file. Whether two subagents writing the same file collide was not tested.
+  Let the brief say what is allowed: one level deep, and what each subagent may write.
+
+  **Same-file collisions, probed on 1.0.46 (2026-10-03).** Parallel subagents share the
+  parent's working directory (`worktree_path` is null), and what happens when they touch one
+  file depends on how:
+  - *Targeted edits to different lines* (the `search_replace` tool, about ten edits per
+    subagent): no loss in 3 of 3 trials; all 20 edits landed.
+  - *Targeted edits to the same line:* the second edit failed visibly ("string to replace was
+    not found") and the parent reported it; the first edit stood (2 trials).
+  - *Whole-file `write` to the same path:* **a silent lost update.** The file ended as one
+    subagent's content only, the other's work vanished, and nothing failed (2 trials, the
+    later-spawned subagent won both times, which is not a guarantee).
+  - *Shell `>>` appends from both:* no loss or corruption at 50 short lines each (1 trial).
+
+  So the hazard is two subagents rewriting one file whole, not sharing a file. In the brief,
+  give each subagent its own files, or have them edit or append rather than rewrite a shared
+  one. These are small, timing-dependent samples: clean runs show no failure here, not that
+  one cannot happen.
 - **Subagents off, when a task should run on one agent: use `GROK_SUBAGENTS=0`, and probe
   that it worked.** On 1.0.46 **`--no-subagents` was accepted but did not stop spawning in
   headless `-p`.** Asked to use `spawn_subagent`, a run with the flag, whether before or after
@@ -637,6 +653,7 @@ paper over it with flag variations.
 | Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
 | Rely on `--no-subagents` to switch subagents off | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 |
+| Let two subagents `write` the same file whole | Give each its own files, or have them make targeted edits or appends; a whole-file write silently loses the other's work |
 | Switch subagents off by default "for safety" | Leave them on and say in the brief what is allowed; their spend is in the run's total |
 | Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46 and exited 0 having done nothing |
 | Look for a `--fast` flag | There is none on 1.0.46; fast mode is the `grok-4.7-build-fast` model, `-m grok-4.7-build-fast`, at about twice the price |

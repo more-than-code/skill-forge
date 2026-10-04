@@ -430,6 +430,32 @@
         "skills",
         "skill-forge"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "vercel-deploy",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/vercel-deploy",
+      "installable": true,
+      "tags": [
+        "vercel",
+        "deploy",
+        "node"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "supabase-postgres",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/supabase-postgres",
+      "installable": true,
+      "tags": [
+        "supabase",
+        "postgres",
+        "database"
+      ]
     }
   ],
   "managedAgents": [

@@ -359,6 +359,17 @@
         "SKILL.md": "sha256-JHGdwgUyd+8TTzFim4LnPFKBTgbTmXxvv+PDzxHHxZM="
       }
     },
+    "inventory/skills/supabase-postgres": {
+      "name": "supabase-postgres",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-FIcq4PFAj+ImVeh0juwdCbptUB5GAY6wkyjB8Kx/szI=",
+      "files": {
+        "SKILL.md": "sha256-wsmBmPQnQueUwtvB8SbRvu8iGeoPUfMYo87irIL9xSc="
+      }
+    },
     "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
       "version": "0.1.1",
@@ -391,6 +402,17 @@
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
         "SKILL.md": "sha256-FH22nhzKalZTol8HAcvQdB3u4n/vbbLpZGQs/dgZcpc="
+      }
+    },
+    "inventory/skills/vercel-deploy": {
+      "name": "vercel-deploy",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-lKlLYWznjq3CxaQgR5Wv03BkNo4+7wm0NZXv8YfQXDs=",
+      "files": {
+        "SKILL.md": "sha256-FFvjJU2ICOSlu9wiaRsmfRDj5x3ssjOHjBsJp9GVFGU="
       }
     },
     "inventory/agents": {

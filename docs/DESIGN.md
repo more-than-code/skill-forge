@@ -138,7 +138,10 @@ hooks remain global per-tool installs:
   wholesale, and subagent role sets are always relevant.
 - Tools already offer native project-level overrides (repo
   `CLAUDE.md`/`AGENTS.md`, project agents directories) if a repository ever
-  needs a delta; Skill Forge does not need to manage that today.
+  needs a delta; Skill Forge does not generate or edit those files. It does
+  check two of them: `skf project instructions` reports, read-only, whether a
+  session root has `AGENTS.md` and, with the `claude-code` shim, a `CLAUDE.md`
+  that imports it.
 
 Project-scoped subagent or hook profiles can be proposed later if evaluation
 shows per-project role variation matters.
@@ -323,6 +326,14 @@ Behavior:
   absorbs what separate `doctor` or `diff-project` commands would report — two
   commands (`sync --check` for machines, `project status` for humans) instead
   of four overlapping ones.
+- `skf project instructions [--check] [--json]` is the one read-only check that
+  is not about the skill profile. It stays a separate command because its
+  subject is user-owned prose, not vendored skills: folding it into `sync
+  --check` would report permanent false drift on files people edit, and into
+  `project status` would mix instructions into a profile view that exits 0. It
+  runs only where a `skill-forge.json` exists, since that file already marks a
+  session root, so children meant to inherit from their umbrella are never
+  flagged.
 
 This revises the install concept from "write this artifact to this directory" to
 "make this repository match its declared Skill Forge profile."
@@ -577,3 +588,4 @@ any new component.
 | 2026-07-19 | CLI converges on noun-verb subcommands (`skf <type> <verb>`); `skf skill` stays authoring-only | Namespaces hold each type's primary operations — skill deployment is project-scoped (`skf project`/`skf sync`); `--type` flags and hyphenated `diff-*` commands retire behind aliases; bare `skf install` remains the picker and escape hatch |
 | 2026-07-20 | `skf home` namespace; home profile seeds only `skill-forge-project` | "project" at `$HOME` reads wrong; a minimal home keeps baselines per-repo, so repos stay self-contained and no skill is surfaced twice (home + repo) |
 | 2026-07-20 | Sync targets derive from the manifest `tools` map | `.agents/skills/` only when a non-Claude tool is enabled; `.claude/skills/` for Claude Code; narrowing the tool set prunes orphaned copies and husk dirs |
+| 2026-10-04 | `skf project instructions`: a read-only check for `AGENTS.md` and `CLAUDE.md` in a session root | The layout was prose only, and 11 child repos had `AGENTS.md` without the `CLAUDE.md` Claude Code reads. Scoped to roots that declare a profile; `CLAUDE.md` required only with the `claude-code` shim; no scaffold or manifest change yet (Phase 2) |

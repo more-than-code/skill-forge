@@ -239,6 +239,7 @@ skf project status [--json]            # resolved skills, sources, sync state, i
 skf home init|add|status|sync          # same flow for the machine-wide $HOME profile
 skf sync                               # vendor + write lockfile
 skf sync --check                       # read-only staleness check (exit non-zero on drift)
+skf project instructions [--check]     # read-only: AGENTS.md present, CLAUDE.md imports it; not part of sync
 ```
 
 ## Anti-patterns
@@ -252,6 +253,7 @@ skf sync --check                       # read-only staleness check (exit non-zer
 | Propose every tag-matching skill in the registry | Propose the minimal set that maps to a detected signal |
 | Leave a needed skill out because `$HOME` happens to provide it | Declare what the repo needs; it should resolve the same with an empty `$HOME` |
 | Start work in a consumer repo without checking whether its skills are current | `skf sync --check` first; nothing else will ever run it for this repo |
+| Treat a clean `sync --check` as proof the repo's agent instructions are in place | It looks only at skills; run `skf project instructions --check` for `AGENTS.md` / `CLAUDE.md` |
 | Notice drift and carry on quietly | Say which skills are stale, which version loads, and the fix — before doing the work |
 | Assume an overlapping name double-loads | It dedupes, project-over-home; the hazard is a stale project pin shadowing a newer `$HOME` one |
 | Declare `skills.local` and expect `sync` to place the directory for you | Put the source at `.agents/skills/<name>` first, then declare that path |

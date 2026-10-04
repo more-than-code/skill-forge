@@ -2170,6 +2170,140 @@ homeCommand
     }
   });
 
+const CLAUDE_SHIM = 'claude-code';
+const AGENTS_IMPORT_LINE = '@AGENTS.md';
+
+const UNREADABLE_CODES = new Set(['EACCES', 'EPERM']);
+const NOT_A_FILE_CODES = new Set(['ENOENT', 'ELOOP', 'ENOTDIR']);
+
+async function inspectInstructionFile(filePath) {
+  let linkStat;
+  try {
+    linkStat = await fs.lstat(filePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { state: 'missing' };
+    if (UNREADABLE_CODES.has(error.code)) return { state: 'unreadable' };
+    throw error;
+  }
+  const symlink = linkStat.isSymbolicLink();
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) return { state: 'not-a-file', symlink };
+    return { state: 'ok', symlink, text: await fs.readFile(filePath, 'utf8') };
+  } catch (error) {
+    if (NOT_A_FILE_CODES.has(error.code)) return { state: 'not-a-file', symlink };
+    if (UNREADABLE_CODES.has(error.code)) return { state: 'unreadable', symlink };
+    throw error;
+  }
+}
+
+/** Finds the AGENTS.md import in CLAUDE.md lines, ignoring fenced code, which Claude Code does not import from. */
+function findClaudeImport(lines) {
+  let inFence = false;
+  let otherTarget = null;
+  for (const line of lines) {
+    if (/^(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (line === AGENTS_IMPORT_LINE) return { direct: true, otherTarget };
+    const match = line.match(/^@(\S+)$/);
+    if (!otherTarget && match && /[./]/.test(match[1])) otherTarget = match[1];
+  }
+  return { direct: false, otherTarget };
+}
+
+/** Read-only: reports which instruction files a session root is missing or has mis-wired. */
+async function computeInstructionsState(projectRoot) {
+  const homeReal = await fs.realpath(os.homedir()).catch(() => null);
+  if (homeReal && await fs.realpath(projectRoot) === homeReal) {
+    throw new Error(`"${CLI_NAME} project instructions" does not run in $HOME; ~/.claude/CLAUDE.md and the other home instruction files are managed by "${CLI_NAME} agent install" and "${CLI_NAME} agent diff".`);
+  }
+  const manifest = await readProjectManifest(projectRoot);
+  const claudeMdRequired = (manifest.skills?.shims || []).includes(CLAUDE_SHIM);
+  const files = [];
+  const notes = [];
+  const issues = [];
+
+  const agents = await inspectInstructionFile(path.join(projectRoot, 'AGENTS.md'));
+  if (agents.state === 'ok' && agents.text.trim() === '') agents.state = 'empty';
+  files.push({ path: 'AGENTS.md', state: agents.state });
+  if (agents.state === 'missing') issues.push('AGENTS.md is missing.');
+  else if (agents.state === 'empty') issues.push('AGENTS.md is empty.');
+  else if (agents.state === 'not-a-file') issues.push('AGENTS.md is not a regular file.');
+  else if (agents.state === 'unreadable') issues.push('AGENTS.md is not readable.');
+
+  // CLAUDE.md is judged only when the claude-code shim is declared; otherwise its state is reported, never an issue.
+  const claude = await inspectInstructionFile(path.join(projectRoot, 'CLAUDE.md'));
+  const claudeIssues = [];
+  if (claude.state === 'ok') {
+    const lines = claude.text.split(/\r?\n/).map((line) => line.trim());
+    const symlinkedToAgents = claude.symlink && ['ok', 'empty'].includes(agents.state)
+      && await fs.realpath(path.join(projectRoot, 'CLAUDE.md')) === await fs.realpath(path.join(projectRoot, 'AGENTS.md'));
+    const found = findClaudeImport(lines);
+    if (symlinkedToAgents || found.direct) {
+      claude.state = 'ok';
+    } else if (found.otherTarget) {
+      claude.state = 'indirect-import';
+      const shown = found.otherTarget.replace(/[^\x20-\x7e]/g, '?').slice(0, 120);
+      if (claudeMdRequired) notes.push(`CLAUDE.md imports ${shown}; not verified to reach AGENTS.md.`);
+    } else {
+      claude.state = 'no-import';
+      claudeIssues.push(`CLAUDE.md does not import AGENTS.md; add a line "${AGENTS_IMPORT_LINE}".`);
+    }
+  } else if (claude.state === 'not-a-file') {
+    claudeIssues.push('CLAUDE.md is not a regular file.');
+  } else if (claude.state === 'unreadable') {
+    claudeIssues.push('CLAUDE.md is not readable.');
+  } else {
+    claudeIssues.push(`CLAUDE.md is missing (the ${CLAUDE_SHIM} shim is enabled).`);
+  }
+  if (claudeMdRequired) issues.push(...claudeIssues);
+  files.push({ path: 'CLAUDE.md', state: claude.state });
+
+  return { root: projectRoot, claudeMdRequired, files, notes, issues };
+}
+
+async function runProjectInstructions(projectRoot, options) {
+  const state = await computeInstructionsState(projectRoot);
+
+  if (options.json) {
+    console.log(JSON.stringify(state, null, 2));
+    if (options.check && state.issues.length > 0) process.exitCode = 1;
+    return;
+  }
+
+  console.log(chalk.blue.bold('\nAgent instructions'));
+  for (const file of state.files) console.log(`- ${file.path.padEnd(10)} ${file.state}`);
+  for (const note of state.notes) console.log(chalk.gray(`note: ${note}`));
+
+  console.log();
+  if (state.issues.length === 0) {
+    console.log(chalk.green('Agent instructions look complete.'));
+    return;
+  }
+  if (options.check) {
+    for (const issue of state.issues) console.error(chalk.yellow(`! ${issue}`));
+    process.exitCode = 1;
+  } else {
+    for (const issue of state.issues) console.log(chalk.yellow(`! ${issue}`));
+  }
+}
+
+projectCommand
+  .command('instructions')
+  .description('Check that this session root has AGENTS.md and (with the claude-code shim) a CLAUDE.md importing it; read-only')
+  .option('--check', 'Exit non-zero when a file is missing or mis-wired')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      await runProjectInstructions(process.cwd(), options);
+    } catch (error) {
+      printSkillError(options, `Error checking agent instructions: ${error.message}`);
+    }
+  });
+
 async function runSyncCommand(projectRoot, options) {
   if (options.check) {
     const state = await computeProjectState(projectRoot);

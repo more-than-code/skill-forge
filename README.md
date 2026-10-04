@@ -131,6 +131,24 @@ node bin/cli.js sync --check        # this repo's skill profile
 node bin/cli.js home sync --check   # the $HOME profile
 ```
 
+Check that a session root (a directory with a `skill-forge.json`) has the
+agent instruction files its tools read, without writing anything:
+
+```bash
+node bin/cli.js project instructions            # report; exits 0
+node bin/cli.js project instructions --check    # exits 1 on any issue (CI gate)
+node bin/cli.js project instructions --json
+```
+
+It requires `AGENTS.md` to exist and be non-empty. When the manifest's
+`skills.shims` includes `claude-code`, it also requires a `CLAUDE.md` that
+imports it (a line `@AGENTS.md` outside a code fence, or a symlink to
+`AGENTS.md`); other content in `CLAUDE.md` is allowed, and an import of some
+other path is reported as a note, not an issue. Without that shim, `CLAUDE.md`
+is reported but never an issue. Output is states, issues and, in a note, at most
+the imported path (sanitised and truncated), never other file text. It refuses
+to run in `$HOME`, whose files `agent install` and `agent diff` already manage.
+
 Run the test suite:
 
 ```bash
@@ -395,7 +413,8 @@ session ID.
 
 ## Safety Notes
 
-- `<type> diff`, `sync --check`, and `project|home status` are read-only.
+- `<type> diff`, `sync --check`, `project|home status`, and
+  `project instructions` are read-only.
 - `sync` writes only the profile's own targets and never overwrites an
   unmanaged directory (declare hand-authored skills in `skills.local`).
 - `agent|subagent|hook install` write to runtime targets; existing files are

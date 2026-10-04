@@ -1293,3 +1293,248 @@ test('sync migrates an existing real tool directory to a symlink, but not over f
   await assert.rejects(fx.runInProject(['sync']), /does not manage \(someones-own-skill\)/);
   await fs.access(path.join(linkPath, 'someones-own-skill', 'SKILL.md'));
 });
+
+// --- project instructions (AGENTS.md / CLAUDE.md check) ---
+
+let instructionsEnv;
+async function instructionsBaseEnv() {
+  instructionsEnv ??= (await skillForgeFixture()).env;
+  return instructionsEnv;
+}
+
+/** A session root: skill-forge.json declaring `shims`, plus whichever instruction files the test names. */
+async function instructionsRoot(files = {}, { shims = ['claude-code'] } = {}) {
+  const root = await tempDir('skf-instr-');
+  const manifest = { schemaVersion: 2, extends: [], skills: { dependencies: {}, shims } };
+  await fs.writeFile(path.join(root, 'skill-forge.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  for (const [name, content] of Object.entries(files)) await fs.writeFile(path.join(root, name), content);
+  return root;
+}
+
+async function runInstructions(root, args = [], extraEnv = {}) {
+  return run('node', [CLI, 'project', 'instructions', ...args], {
+    cwd: root,
+    env: { ...(await instructionsBaseEnv()), ...extraEnv }
+  });
+}
+
+async function snapshotTree(dir) {
+  const out = {};
+  async function walk(current) {
+    for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      const rel = path.relative(dir, full);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isSymbolicLink()) out[rel] = `link:${await fs.readlink(full)}`;
+      else out[rel] = `${(await fs.stat(full)).mtimeMs}:${(await fs.readFile(full)).toString('base64')}`;
+    }
+  }
+  await walk(dir);
+  return out;
+}
+
+const fileState = (report, name) => report.files.find((file) => file.path === name)?.state;
+
+test('project instructions passes a complete session root in every mode', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const { stdout } = await runInstructions(root);
+  assert.match(stdout, /AGENTS\.md\s+ok/);
+  assert.match(stdout, /CLAUDE\.md\s+ok/);
+  await runInstructions(root, ['--check']);
+  const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+  assert.deepEqual(report.issues, []);
+  assert.equal(report.claudeMdRequired, true);
+  assert.equal(fileState(report, 'AGENTS.md'), 'ok');
+  assert.equal(fileState(report, 'CLAUDE.md'), 'ok');
+});
+
+test('project instructions reports a missing or empty AGENTS.md; --check turns it into exit 1', async () => {
+  const missing = await instructionsRoot({ 'CLAUDE.md': '@AGENTS.md\n' });
+  const { stdout } = await runInstructions(missing);
+  assert.match(stdout, /! AGENTS\.md is missing\./, 'default mode reports and exits 0');
+  await assert.rejects(runInstructions(missing, ['--check']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /! AGENTS\.md is missing\./);
+    return true;
+  });
+  const missingJson = JSON.parse((await runInstructions(missing, ['--json'])).stdout);
+  assert.equal(fileState(missingJson, 'AGENTS.md'), 'missing');
+  assert.equal(missingJson.issues.length, 1);
+
+  const empty = await instructionsRoot({ 'AGENTS.md': ' \n\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const emptyJson = JSON.parse((await runInstructions(empty, ['--json'])).stdout);
+  assert.equal(fileState(emptyJson, 'AGENTS.md'), 'empty');
+  await assert.rejects(runInstructions(empty, ['--check']), /! AGENTS\.md is empty\./);
+});
+
+test('project instructions refuses an AGENTS.md that is not a regular file', async () => {
+  const root = await instructionsRoot({ 'CLAUDE.md': '@AGENTS.md\n' });
+  await fs.mkdir(path.join(root, 'AGENTS.md'));
+  const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+  assert.equal(fileState(report, 'AGENTS.md'), 'not-a-file');
+  await assert.rejects(runInstructions(root, ['--check']), /! AGENTS\.md is not a regular file\./);
+});
+
+test('project instructions requires CLAUDE.md only when the claude-code shim is declared', async () => {
+  const withShim = await instructionsRoot({ 'AGENTS.md': '# Rules\n' });
+  await assert.rejects(runInstructions(withShim, ['--check']), /! CLAUDE\.md is missing \(the claude-code shim is enabled\)\./);
+
+  const withoutShim = await instructionsRoot({ 'AGENTS.md': '# Rules\n' }, { shims: [] });
+  await runInstructions(withoutShim, ['--check']);
+  const report = JSON.parse((await runInstructions(withoutShim, ['--json'])).stdout);
+  assert.equal(report.claudeMdRequired, false);
+  assert.equal(fileState(report, 'CLAUDE.md'), 'missing');
+  assert.deepEqual(report.issues, []);
+});
+
+test('project instructions tolerates CRLF, trailing spaces and extra content around the import', async () => {
+  const root = await instructionsRoot({
+    'AGENTS.md': '# Rules\n',
+    'CLAUDE.md': '# Claude notes\r\n\r\n  @AGENTS.md   \r\n\r\nMore project notes.\r\n'
+  });
+  await runInstructions(root, ['--check']);
+  assert.equal(fileState(JSON.parse((await runInstructions(root, ['--json'])).stdout), 'CLAUDE.md'), 'ok');
+});
+
+test('project instructions flags a CLAUDE.md with no import, and only notes an import of another path', async () => {
+  const bare = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '# Standalone rules\n' });
+  await assert.rejects(runInstructions(bare, ['--check']), /! CLAUDE\.md does not import AGENTS\.md/);
+  assert.equal(fileState(JSON.parse((await runInstructions(bare, ['--json'])).stdout), 'CLAUDE.md'), 'no-import');
+
+  const indirect = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@.claude/CLAUDE.md\n' });
+  await runInstructions(indirect, ['--check']);
+  const report = JSON.parse((await runInstructions(indirect, ['--json'])).stdout);
+  assert.equal(fileState(report, 'CLAUDE.md'), 'indirect-import');
+  assert.deepEqual(report.issues, []);
+  assert.equal(report.notes.length, 1);
+  assert.match(report.notes[0], /\.claude\/CLAUDE\.md/);
+});
+
+test('project instructions accepts a CLAUDE.md symlinked to AGENTS.md', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n' });
+  await fs.symlink('AGENTS.md', path.join(root, 'CLAUDE.md'));
+  await runInstructions(root, ['--check']);
+  assert.equal(fileState(JSON.parse((await runInstructions(root, ['--json'])).stdout), 'CLAUDE.md'), 'ok');
+});
+
+test('project instructions needs a skill-forge.json and refuses to run in $HOME', async () => {
+  const bare = await tempDir('skf-instr-bare-');
+  await assert.rejects(runInstructions(bare), /No skill-forge\.json/);
+
+  const home = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await assert.rejects(runInstructions(home, [], { HOME: home }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /agent install/);
+    return true;
+  });
+});
+
+test('project instructions writes nothing in any mode', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '# Standalone\n' });
+  const before = await snapshotTree(root);
+  await runInstructions(root);
+  await runInstructions(root, ['--json']);
+  await assert.rejects(runInstructions(root, ['--check']));
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test('project instructions only treats a bare path-like token as an import, outside code fences', async () => {
+  const cases = [
+    ['@todo tidy this up\n', 'no-import'],
+    ['@todo\n', 'no-import'],
+    ['@AGENTS.md please\n', 'no-import'],
+    ['```\n@AGENTS.md\n```\n', 'no-import'],
+    ['~~~\n@AGENTS.md\n~~~\n@AGENTS.md\n', 'ok'],
+    ['@AGENTS.md.bak\n', 'indirect-import']
+  ];
+  for (const [content, expected] of cases) {
+    const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': content });
+    const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+    assert.equal(fileState(report, 'CLAUDE.md'), expected, JSON.stringify(content));
+    assert.equal(report.issues.length, expected === 'no-import' ? 1 : 0, JSON.stringify(content));
+  }
+});
+
+test('project instructions never echoes control characters or free text from CLAUDE.md', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': `@docs/\u001b[31mred${'x'.repeat(300)}\n` });
+  const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+  assert.equal(report.notes.length, 1);
+  assert.doesNotMatch(report.notes[0], /\u001b/);
+  assert.ok(report.notes[0].length < 200, 'the echoed target is capped');
+});
+
+test('project instructions judges CLAUDE.md only when the claude-code shim is declared', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '# Standalone rules\n' }, { shims: [] });
+  await runInstructions(root, ['--check']);
+  const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+  assert.equal(fileState(report, 'CLAUDE.md'), 'no-import', 'the state is still reported');
+  assert.deepEqual(report.issues, []);
+
+  const asDirectory = await instructionsRoot({ 'AGENTS.md': '# Rules\n' }, { shims: [] });
+  await fs.mkdir(path.join(asDirectory, 'CLAUDE.md'));
+  await runInstructions(asDirectory, ['--check']);
+  const shimmed = await instructionsRoot({ 'AGENTS.md': '# Rules\n' });
+  await fs.mkdir(path.join(shimmed, 'CLAUDE.md'));
+  await assert.rejects(runInstructions(shimmed, ['--check']), /! CLAUDE\.md is not a regular file\./);
+});
+
+test('project instructions reports a looping symlink or unreadable file as an issue instead of crashing', async () => {
+  const looping = await instructionsRoot({ 'AGENTS.md': '# Rules\n' });
+  await fs.symlink('CLAUDE.md', path.join(looping, 'CLAUDE.md'));
+  const loopReport = JSON.parse((await runInstructions(looping, ['--json'])).stdout);
+  assert.equal(fileState(loopReport, 'CLAUDE.md'), 'not-a-file');
+  await assert.rejects(runInstructions(looping, ['--check']), /! CLAUDE\.md is not a regular file\./);
+
+  if (process.getuid?.() === 0) return;
+  const locked = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await fs.chmod(path.join(locked, 'AGENTS.md'), 0o000);
+  try {
+    const report = JSON.parse((await runInstructions(locked, ['--json'])).stdout);
+    assert.equal(fileState(report, 'AGENTS.md'), 'unreadable');
+    await assert.rejects(runInstructions(locked, ['--check']), /! AGENTS\.md is not readable\./);
+  } finally {
+    await fs.chmod(path.join(locked, 'AGENTS.md'), 0o644);
+  }
+});
+
+test('project instructions keeps its output contract: --check with --json, stdout/stderr split, JSON errors', async () => {
+  const broken = await instructionsRoot({ 'CLAUDE.md': '@AGENTS.md\n' });
+
+  const { stdout, stderr } = await runInstructions(broken);
+  assert.match(stdout, /! AGENTS\.md is missing\./);
+  assert.equal(stderr, '', 'default mode keeps issues off stderr');
+
+  await assert.rejects(runInstructions(broken, ['--check', '--json']), (error) => {
+    assert.equal(error.code, 1);
+    const report = JSON.parse(error.stdout);
+    assert.deepEqual(Object.keys(report).sort(), ['claudeMdRequired', 'files', 'issues', 'notes', 'root']);
+    assert.deepEqual(report.issues, ['AGENTS.md is missing.']);
+    return true;
+  });
+  await assert.rejects(runInstructions(broken, ['--check']), (error) => {
+    assert.equal(error.code, 1);
+    assert.doesNotMatch(error.stdout, /^! /m, '--check keeps issues off stdout');
+    return true;
+  });
+
+  const bare = await tempDir('skf-instr-bare-');
+  await assert.rejects(runInstructions(bare, ['--json']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(JSON.parse(error.stdout).error, /No skill-forge\.json/);
+    return true;
+  });
+  await assert.rejects(runInstructions(bare), (error) => {
+    assert.equal(error.code, 1);
+    return true;
+  });
+  await assert.rejects(runInstructions(broken, ['--json'], { HOME: broken }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(JSON.parse(error.stdout).error, /agent install/);
+    return true;
+  });
+});
+
+test('project instructions still runs when HOME points at a directory that does not exist', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await runInstructions(root, ['--check'], { HOME: path.join(root, 'no-such-home') });
+});

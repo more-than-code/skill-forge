@@ -243,6 +243,13 @@ umbrella/                 # usually not a git repo
     ...
 ```
 
+Verify the instruction files with `skf project instructions --check` in the umbrella and in each
+child that carries a `skill-forge.json`. It requires `AGENTS.md`, and a `CLAUDE.md` that imports it
+whenever the root's `skills.shims` includes `claude-code`. It checks only roots that declare a
+profile, so a child without a `skill-forge.json` is not covered, and it checks that the files
+exist and are wired, not that the child inventory or the `tasks/todo.md` path inside `AGENTS.md`
+is accurate. That stays the author's judgment.
+
 ## Anti-patterns
 
 - Assuming an agent tool loads skills from child directories without confirming it - the failure is silent, and `sync --check` passes either way

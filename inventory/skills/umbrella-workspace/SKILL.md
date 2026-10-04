@@ -243,6 +243,13 @@ umbrella/                 # usually not a git repo
     ...
 ```
 
+Create `AGENTS.md` with `skf project scaffold --role umbrella` in the umbrella (`--role child` in a
+child; `--dry-run` shows the plan first). The root needs a `skill-forge.json`, so run `skf project init`
+first. It writes a placeholder template only where the file is missing, never overwrites, and adds a
+`CLAUDE.md` containing `@AGENTS.md` only when the root's `skills.shims` includes `claude-code`. It
+records the role in `skill-forge.json`. Fill the placeholders in; the scaffold marker line stays flagged
+as a note until you delete it.
+
 Verify the instruction files with `skf project instructions --check` in the umbrella and in each
 child that carries a `skill-forge.json`. It requires `AGENTS.md`, and a `CLAUDE.md` that imports it
 whenever the root's `skills.shims` includes `claude-code`. It checks only roots that declare a

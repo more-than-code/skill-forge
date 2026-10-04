@@ -1538,3 +1538,352 @@ test('project instructions still runs when HOME points at a directory that does 
   const root = await instructionsRoot({ 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
   await runInstructions(root, ['--check'], { HOME: path.join(root, 'no-such-home') });
 });
+
+// --- project scaffold (create AGENTS.md / CLAUDE.md, record the role) ---
+
+async function runScaffold(root, args = [], extraEnv = {}) {
+  return run('node', [CLI, 'project', 'scaffold', ...args], {
+    cwd: root,
+    env: { ...(await instructionsBaseEnv()), ...extraEnv }
+  });
+}
+
+const readIfExists = (file) => fs.readFile(file, 'utf8').catch(() => null);
+const readRoleFrom = async (root) => JSON.parse(await fs.readFile(path.join(root, 'skill-forge.json'), 'utf8')).instructions?.role;
+
+test('project scaffold creates both files for a fresh root, records the role, and passes the check', async () => {
+  const root = await instructionsRoot();
+  const { stdout } = await runScaffold(root);
+  assert.match(stdout, /AGENTS\.md/);
+  assert.equal(await fs.readFile(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
+  const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.ok(agents.trim().length > 0);
+  assert.match(agents, /skf:scaffold/);
+  assert.equal(await readRoleFrom(root), 'repo');
+
+  const report = JSON.parse((await runInstructions(root, ['--json'])).stdout);
+  assert.deepEqual(report.issues, []);
+  assert.equal(report.notes.length, 1, 'the placeholder marker is a note');
+  assert.match(report.notes[0], /scaffold marker/);
+  await runInstructions(root, ['--check']);
+});
+
+test('project scaffold templates: umbrella carries the absolute ledger path, child carries the verbatim SESSION.md hook', async () => {
+  const umbrella = await instructionsRoot();
+  await runScaffold(umbrella, ['--role', 'umbrella']);
+  const umbrellaAgents = await fs.readFile(path.join(umbrella, 'AGENTS.md'), 'utf8');
+  const realRoot = await fs.realpath(umbrella);
+  assert.ok(umbrellaAgents.includes(`${realRoot}/tasks/todo.md`), 'absolute path of this root\'s tasks/todo.md');
+  assert.match(umbrellaAgents, new RegExp(`^# ${path.basename(realRoot)} workspace$`, 'm'));
+  assert.match(umbrellaAgents, /^## Child repos$/m);
+  assert.equal(await readRoleFrom(umbrella), 'umbrella');
+
+  const child = await instructionsRoot();
+  await runScaffold(child, ['--role', 'child']);
+  const childAgents = await fs.readFile(path.join(child, 'AGENTS.md'), 'utf8');
+  const guide = await fs.readFile(path.join(REPO_ROOT, 'inventory', 'skills', 'umbrella-workspace', 'PARALLEL-WORKTREES.md'), 'utf8');
+  const hook = guide.match(/```markdown\n(## Session ownership \(worktree\)[\s\S]*?)\n```/);
+  assert.ok(hook, 'the hook block exists in PARALLEL-WORKTREES.md');
+  assert.ok(childAgents.includes(hook[1].trim()), 'the child template embeds the guide\'s hook verbatim');
+  assert.equal(await readRoleFrom(child), 'child');
+
+  const plain = await instructionsRoot();
+  await runScaffold(plain);
+  assert.doesNotMatch(await fs.readFile(path.join(plain, 'AGENTS.md'), 'utf8'), /Session ownership/);
+});
+
+test('project scaffold never touches an existing file and creates only what is missing', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Mine\n' });
+  const before = (await snapshotTree(root))['AGENTS.md'];
+  const report = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.deepEqual(report.created, ['CLAUDE.md']);
+  assert.deepEqual(report.skipped, [{ path: 'AGENTS.md', reason: 'exists' }]);
+  assert.equal((await snapshotTree(root))['AGENTS.md'], before, 'bytes and mtime unchanged');
+
+  const standalone = await instructionsRoot({ 'AGENTS.md': '# Mine\n', 'CLAUDE.md': '# Standalone\n' });
+  const beforeStandalone = await snapshotTree(standalone);
+  const second = JSON.parse((await runScaffold(standalone, ['--json'])).stdout);
+  assert.deepEqual(second.created, []);
+  assert.equal(second.issues.length, 1);
+  assert.match(second.issues[0], /does not import AGENTS\.md/);
+  const afterStandalone = await snapshotTree(standalone);
+  assert.equal(afterStandalone['AGENTS.md'], beforeStandalone['AGENTS.md']);
+  assert.equal(afterStandalone['CLAUDE.md'], beforeStandalone['CLAUDE.md']);
+});
+
+test('project scaffold skips CLAUDE.md without the shim, and a second run creates nothing', async () => {
+  const root = await instructionsRoot({}, { shims: [] });
+  const first = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.deepEqual(first.created, ['AGENTS.md']);
+  assert.deepEqual(first.skipped, [{ path: 'CLAUDE.md', reason: 'shim-not-declared' }]);
+  assert.equal(await readIfExists(path.join(root, 'CLAUDE.md')), null);
+
+  const again = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.deepEqual(again.created, []);
+  assert.equal(again.roleRecorded, false);
+});
+
+test('project scaffold --dry-run writes nothing, not even the manifest', async () => {
+  const root = await instructionsRoot();
+  const before = await snapshotTree(root);
+  const report = JSON.parse((await runScaffold(root, ['--dry-run', '--json'])).stdout);
+  assert.equal(report.dryRun, true);
+  assert.deepEqual(report.created, ['AGENTS.md', 'CLAUDE.md'], 'created lists what would be created');
+  assert.equal(report.roleRecorded, false);
+  assert.deepEqual(await snapshotTree(root), before);
+  const { stdout } = await runScaffold(root, ['--dry-run']);
+  assert.match(stdout, /would create/i);
+});
+
+test('project scaffold skips symlinks, dangling symlinks and directories without writing through them', async () => {
+  const root = await instructionsRoot();
+  const outside = await tempDir('skf-outside-');
+  await fs.symlink(path.join(outside, 'target.md'), path.join(root, 'AGENTS.md'));
+  await fs.mkdir(path.join(root, 'CLAUDE.md'));
+  const report = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.deepEqual(report.created, []);
+  assert.deepEqual(report.skipped.map((entry) => `${entry.path}:${entry.reason}`).sort(), ['AGENTS.md:not-a-file', 'CLAUDE.md:not-a-file']);
+  assert.equal(await readIfExists(path.join(outside, 'target.md')), null, 'nothing was created through the dangling link');
+
+  const linked = await instructionsRoot({ 'real.md': '# Real\n' });
+  await fs.symlink('real.md', path.join(linked, 'AGENTS.md'));
+  const linkedReport = JSON.parse((await runScaffold(linked, ['--json'])).stdout);
+  assert.ok(linkedReport.skipped.some((entry) => entry.path === 'AGENTS.md' && entry.reason === 'not-a-file'));
+  assert.equal(await fs.readFile(path.join(linked, 'real.md'), 'utf8'), '# Real\n');
+});
+
+test('project scaffold needs a manifest, refuses $HOME, and rejects an unknown role', async () => {
+  const bare = await tempDir('skf-instr-bare-');
+  await assert.rejects(runScaffold(bare), /No skill-forge\.json/);
+
+  const home = await instructionsRoot();
+  await assert.rejects(runScaffold(home, [], { HOME: home }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /agent install/);
+    return true;
+  });
+
+  const root = await instructionsRoot();
+  const before = await snapshotTree(root);
+  await assert.rejects(runScaffold(root, ['--role', 'monorepo']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /repo, umbrella, child/);
+    return true;
+  });
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test('project scaffold records the role without losing other manifest keys, even when nothing is created', async () => {
+  const root = await instructionsRoot({ 'AGENTS.md': '# Mine\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const manifestPath = path.join(root, 'skill-forge.json');
+  const original = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  original.somethingElse = { keep: true };
+  await fs.writeFile(manifestPath, JSON.stringify(original, null, 2));
+
+  const report = JSON.parse((await runScaffold(root, ['--role', 'umbrella', '--json'])).stdout);
+  assert.deepEqual(report.created, []);
+  assert.equal(report.roleRecorded, true);
+  const after = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  assert.deepEqual(after, { ...original, instructions: { role: 'umbrella' } });
+});
+
+test('project scaffold uses the stored role, and a different --role is an error that writes nothing', async () => {
+  const root = await instructionsRoot();
+  await runScaffold(root, ['--role', 'umbrella']);
+  await fs.rm(path.join(root, 'AGENTS.md'));
+  const report = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.equal(report.role, 'umbrella', 'the stored role wins over the default');
+  assert.match(await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8'), /^## Child repos$/m);
+
+  const before = await snapshotTree(root);
+  await assert.rejects(runScaffold(root, ['--role', 'child']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /already records role "umbrella"/);
+    return true;
+  });
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test('the recorded role survives project add and sync, and sync --check stays clean', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init']);
+  await fx.runInProject(['project', 'scaffold', '--role', 'umbrella']);
+  assert.equal((await fx.readManifest()).instructions.role, 'umbrella');
+
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  assert.equal((await fx.readManifest()).instructions.role, 'umbrella', 'project add preserves it');
+  await fx.runInProject(['sync']);
+  assert.equal((await fx.readManifest()).instructions.role, 'umbrella', 'sync preserves it');
+  await fx.runInProject(['sync', '--check']);
+});
+
+test('a bad instructions value breaks instructions and scaffold but not status or sync', async () => {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init']);
+  const manifest = await fx.readManifest();
+  manifest.instructions = { role: 'bogus' };
+  await fx.writeManifest(manifest);
+
+  await fx.runInProject(['project', 'status']);
+  await assert.rejects(fx.runInProject(['project', 'instructions']), /instructions\.role.*repo, umbrella, child/);
+  await assert.rejects(fx.runInProject(['project', 'scaffold']), /instructions\.role.*repo, umbrella, child/);
+
+  manifest.instructions = 'nope';
+  await fx.writeManifest(manifest);
+  await fx.runInProject(['project', 'status']);
+  await assert.rejects(fx.runInProject(['project', 'instructions']), /"instructions" must be an object/);
+});
+
+test('project scaffold reports a write failure as an error with what was created', async () => {
+  if (process.getuid?.() === 0) return;
+  const root = await instructionsRoot();
+  await fs.chmod(root, 0o555);
+  try {
+    await assert.rejects(runScaffold(root, ['--json']), (error) => {
+      assert.equal(error.code, 1);
+      const payload = JSON.parse(error.stdout);
+      assert.match(payload.error, /AGENTS\.md/);
+      assert.deepEqual(payload.created, []);
+      return true;
+    });
+  } finally {
+    await fs.chmod(root, 0o755);
+  }
+});
+
+test('project scaffold records the role before creating files, so a manifest failure creates nothing', async () => {
+  if (process.getuid?.() === 0) return;
+  const root = await instructionsRoot();
+  const manifestPath = path.join(root, 'skill-forge.json');
+  await fs.chmod(manifestPath, 0o444);
+  try {
+    await assert.rejects(runScaffold(root, ['--role', 'umbrella', '--json']), (error) => {
+      assert.equal(error.code, 1);
+      const payload = JSON.parse(error.stdout);
+      assert.match(payload.error, /could not record the role/);
+      assert.deepEqual(payload.created, []);
+      return true;
+    });
+    assert.equal(await readIfExists(path.join(root, 'AGENTS.md')), null);
+    assert.equal(await readIfExists(path.join(root, 'CLAUDE.md')), null);
+  } finally {
+    await fs.chmod(manifestPath, 0o644);
+  }
+});
+
+test('project scaffold refuses to rewrite a schemaVersion 1 manifest, but a dry run still works', async () => {
+  const root = await tempDir('skf-instr-v1-');
+  await fs.writeFile(path.join(root, 'skill-forge.json'), `${JSON.stringify({ schemaVersion: 1, tools: { 'claude-code': true }, skills: { dependencies: {} } }, null, 2)}\n`);
+  const before = await snapshotTree(root);
+  await assert.rejects(runScaffold(root), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /schemaVersion 1; run "skf sync"/);
+    return true;
+  });
+  assert.deepEqual(await snapshotTree(root), before, 'nothing was written');
+  const plan = JSON.parse((await runScaffold(root, ['--dry-run', '--json'])).stdout);
+  assert.deepEqual(plan.created, ['AGENTS.md', 'CLAUDE.md']);
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test('project scaffold validates --role strictly, including an empty value, and handles a role equal to the stored one', async () => {
+  const root = await instructionsRoot();
+  await assert.rejects(runScaffold(root, ['--role', '']), /Unknown role ""/);
+
+  await runScaffold(root, ['--role', 'child']);
+  const same = JSON.parse((await runScaffold(root, ['--role', 'child', '--json'])).stdout);
+  assert.equal(same.roleRecorded, false);
+  assert.equal(same.role, 'child');
+
+  const before = await snapshotTree(root);
+  const dry = JSON.parse((await runScaffold(root, ['--dry-run', '--json'])).stdout);
+  assert.equal(dry.role, 'child', 'a dry run uses the stored role');
+  await assert.rejects(runScaffold(root, ['--dry-run', '--role', 'umbrella']), /already records role "child"/);
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test('project scaffold keeps other keys inside instructions, and a non-object instructions fails without a write', async () => {
+  const root = await instructionsRoot();
+  const manifestPath = path.join(root, 'skill-forge.json');
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  manifest.instructions = { note: 'keep me' };
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await runScaffold(root, ['--role', 'umbrella']);
+  assert.deepEqual(JSON.parse(await fs.readFile(manifestPath, 'utf8')).instructions, { note: 'keep me', role: 'umbrella' });
+
+  const broken = await instructionsRoot();
+  const brokenPath = path.join(broken, 'skill-forge.json');
+  const brokenManifest = JSON.parse(await fs.readFile(brokenPath, 'utf8'));
+  brokenManifest.instructions = 'nope';
+  await fs.writeFile(brokenPath, JSON.stringify(brokenManifest, null, 2));
+  const before = await snapshotTree(broken);
+  await assert.rejects(runScaffold(broken), /"instructions" must be an object/);
+  assert.deepEqual(await snapshotTree(broken), before);
+});
+
+test('project scaffold leaves a CLAUDE.md symlink alone, dangling or not, and never changes its target', async () => {
+  const dangling = await instructionsRoot({ 'AGENTS.md': '# Mine\n' });
+  const outside = await tempDir('skf-outside-');
+  await fs.symlink(path.join(outside, 'gone.md'), path.join(dangling, 'CLAUDE.md'));
+  const danglingReport = JSON.parse((await runScaffold(dangling, ['--json'])).stdout);
+  assert.deepEqual(danglingReport.skipped, [
+    { path: 'AGENTS.md', reason: 'exists' },
+    { path: 'CLAUDE.md', reason: 'not-a-file' }
+  ]);
+  assert.equal(await readIfExists(path.join(outside, 'gone.md')), null);
+
+  const linked = await instructionsRoot({ 'AGENTS.md': '# Mine\n', 'precious.md': 'do not touch\n' });
+  await fs.symlink('precious.md', path.join(linked, 'CLAUDE.md'));
+  await runScaffold(linked);
+  assert.equal(await fs.readFile(path.join(linked, 'precious.md'), 'utf8'), 'do not touch\n');
+});
+
+test('project scaffold neutralises backticks and newlines in the directory name', async () => {
+  const base = await tempDir('skf-instr-odd-');
+  const root = path.join(base, 'odd`name\n## Injected rules');
+  await fs.mkdir(root);
+  await fs.writeFile(path.join(root, 'skill-forge.json'), `${JSON.stringify({ schemaVersion: 2, extends: [], skills: { dependencies: {}, shims: [] } })}\n`);
+  await runScaffold(root, ['--role', 'umbrella']);
+  const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.doesNotMatch(agents, /^## Injected rules$/m, 'a newline in the name cannot start a heading');
+  assert.match(agents, /^# odd\?name\?## Injected rules workspace$/m);
+  assert.doesNotMatch(agents.split('## Paths')[1], /odd`name/, 'no raw backtick from the name inside the code span');
+});
+
+test('the scaffold marker note appears only while the marker line remains, CRLF included', async () => {
+  const root = await instructionsRoot();
+  await runScaffold(root);
+  const notesOf = async () => JSON.parse((await runInstructions(root, ['--json'])).stdout).notes;
+  assert.equal((await notesOf()).length, 1);
+
+  const agentsPath = path.join(root, 'AGENTS.md');
+  const original = await fs.readFile(agentsPath, 'utf8');
+  await fs.writeFile(agentsPath, original.replace(/\n/g, '\r\n'));
+  assert.equal((await notesOf()).length, 1, 'CRLF endings still match');
+
+  await fs.writeFile(agentsPath, original.split('\n').filter((line) => !line.includes('skf:scaffold')).join('\n'));
+  assert.deepEqual(await notesOf(), [], 'deleting the marker clears the note');
+});
+
+test('project scaffold keeps its JSON key set, and a refused $HOME run writes nothing', async () => {
+  const root = await instructionsRoot();
+  const report = JSON.parse((await runScaffold(root, ['--json'])).stdout);
+  assert.deepEqual(Object.keys(report).sort(), ['created', 'dryRun', 'issues', 'role', 'roleRecorded', 'root', 'skipped']);
+  assert.equal(report.roleRecorded, true);
+
+  const home = await instructionsRoot();
+  const before = await snapshotTree(home);
+  await assert.rejects(runScaffold(home, ['--json'], { HOME: home }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(JSON.parse(error.stdout).error, /agent install/);
+    return true;
+  });
+  assert.deepEqual(await snapshotTree(home), before);
+
+  const bare = await tempDir('skf-instr-bare-');
+  await assert.rejects(runScaffold(bare), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /No skill-forge\.json/);
+    return true;
+  });
+});

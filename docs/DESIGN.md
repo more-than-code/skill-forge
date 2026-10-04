@@ -138,10 +138,11 @@ hooks remain global per-tool installs:
   wholesale, and subagent role sets are always relevant.
 - Tools already offer native project-level overrides (repo
   `CLAUDE.md`/`AGENTS.md`, project agents directories) if a repository ever
-  needs a delta; Skill Forge does not generate or edit those files. It does
-  check two of them: `skf project instructions` reports, read-only, whether a
-  session root has `AGENTS.md` and, with the `claude-code` shim, a `CLAUDE.md`
-  that imports it.
+  needs a delta; Skill Forge does not edit those files. It does check two of
+  them: `skf project instructions` reports, read-only, whether a session root
+  has `AGENTS.md` and, with the `claude-code` shim, a `CLAUDE.md` that imports
+  it. `skf project scaffold` only creates a missing one from a placeholder
+  template and never overwrites an existing file; it also records the role.
 
 Project-scoped subagent or hook profiles can be proposed later if evaluation
 shows per-project role variation matters.
@@ -229,6 +230,11 @@ Design notes:
   other entries are inert metadata until a tool grows native project-skill
   support. `init` defaults all tools to enabled — narrow with `--tools` or by
   editing the manifest.
+- `instructions.role` (`repo`, `umbrella` or `child`) is an optional key written
+  by `skf project scaffold` and read only by the `instructions` and `scaffold`
+  commands; `sync` and `status` ignore and preserve it. It is not part of the
+  lock: the project lock hashes the registry and the resolved skills, never the
+  manifest, so recording a role cannot make `sync --check` stale.
 - Negative controls such as `deny` remain rare compatibility escapes (for
   example, suppressing one inherited home-profile skill) — not the activation
   mechanism.
@@ -589,3 +595,4 @@ any new component.
 | 2026-07-20 | `skf home` namespace; home profile seeds only `skill-forge-project` | "project" at `$HOME` reads wrong; a minimal home keeps baselines per-repo, so repos stay self-contained and no skill is surfaced twice (home + repo) |
 | 2026-07-20 | Sync targets derive from the manifest `tools` map | `.agents/skills/` only when a non-Claude tool is enabled; `.claude/skills/` for Claude Code; narrowing the tool set prunes orphaned copies and husk dirs |
 | 2026-10-04 | `skf project instructions`: a read-only check for `AGENTS.md` and `CLAUDE.md` in a session root | The layout was prose only, and 11 child repos had `AGENTS.md` without the `CLAUDE.md` Claude Code reads. Scoped to roots that declare a profile; `CLAUDE.md` required only with the `claude-code` shim; no scaffold or manifest change yet (Phase 2) |
+| 2026-10-04 | `skf project scaffold`, and an optional `instructions.role` in the manifest | The check could report missing files but not fix them. Create-only (exclusive create, so symlinks are never written through), placeholder templates, `CLAUDE.md` only with the `claude-code` shim. The role is stored because role-aware layout checks (a later `project doctor` that composes `sync --check`, `instructions` and those rules) need it; the project lock hashes the registry and resolved skills, never the manifest, so the key cannot make `sync --check` stale, and only the instruction commands validate it, so a bad value cannot break `sync` or `status` |

@@ -23,6 +23,12 @@ import {
   parseSemver,
   satisfiesRange
 } from '../lib/skill-helpers.js';
+import {
+  CLAUDE_MD_CONTENT,
+  INSTRUCTION_ROLES,
+  SCAFFOLD_MARKER,
+  renderAgentsMd
+} from '../lib/instruction-templates.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -2214,20 +2220,44 @@ function findClaudeImport(lines) {
   return { direct: false, otherTarget };
 }
 
-/** Read-only: reports which instruction files a session root is missing or has mis-wired. */
-async function computeInstructionsState(projectRoot) {
+/** The home instruction files belong to `agent install`; the project instruction commands must not touch them. */
+async function assertNotHome(projectRoot, subcommand) {
   const homeReal = await fs.realpath(os.homedir()).catch(() => null);
   if (homeReal && await fs.realpath(projectRoot) === homeReal) {
-    throw new Error(`"${CLI_NAME} project instructions" does not run in $HOME; ~/.claude/CLAUDE.md and the other home instruction files are managed by "${CLI_NAME} agent install" and "${CLI_NAME} agent diff".`);
+    throw new Error(`"${CLI_NAME} project ${subcommand}" does not run in $HOME; ~/.claude/CLAUDE.md and the other home instruction files are managed by "${CLI_NAME} agent install" and "${CLI_NAME} agent diff".`);
   }
+}
+
+/** Soft validation: only the instruction commands read `instructions`, so a bad value cannot break sync or status. */
+function readInstructionsRole(manifest) {
+  const config = manifest.instructions;
+  if (config === undefined) return null;
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "instructions" must be an object.`);
+  }
+  if (config.role !== undefined && !INSTRUCTION_ROLES.includes(config.role)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "instructions.role" must be one of: ${INSTRUCTION_ROLES.join(', ')}.`);
+  }
+  return config.role ?? null;
+}
+
+const hasClaudeShim = (manifest) => (manifest.skills?.shims || []).includes(CLAUDE_SHIM);
+
+/** Read-only: reports which instruction files a session root is missing or has mis-wired. */
+async function computeInstructionsState(projectRoot) {
+  await assertNotHome(projectRoot, 'instructions');
   const manifest = await readProjectManifest(projectRoot);
-  const claudeMdRequired = (manifest.skills?.shims || []).includes(CLAUDE_SHIM);
+  readInstructionsRole(manifest);
+  const claudeMdRequired = hasClaudeShim(manifest);
   const files = [];
   const notes = [];
   const issues = [];
 
   const agents = await inspectInstructionFile(path.join(projectRoot, 'AGENTS.md'));
   if (agents.state === 'ok' && agents.text.trim() === '') agents.state = 'empty';
+  if (agents.state === 'ok' && agents.text.split(/\r?\n/).some((line) => line.trim() === SCAFFOLD_MARKER)) {
+    notes.push('AGENTS.md still has the scaffold marker; fill in the placeholders and delete that line.');
+  }
   files.push({ path: 'AGENTS.md', state: agents.state });
   if (agents.state === 'missing') issues.push('AGENTS.md is missing.');
   else if (agents.state === 'empty') issues.push('AGENTS.md is empty.');
@@ -2301,6 +2331,109 @@ projectCommand
       await runProjectInstructions(process.cwd(), options);
     } catch (error) {
       printSkillError(options, `Error checking agent instructions: ${error.message}`);
+    }
+  });
+
+/** 'missing', 'exists' (a regular file) or 'not-a-file' (a directory or any symlink, even a dangling one). */
+async function classifyForScaffold(filePath) {
+  try {
+    return (await fs.lstat(filePath)).isFile() ? 'exists' : 'not-a-file';
+  } catch (error) {
+    if (error.code === 'ENOENT') return 'missing';
+    throw error;
+  }
+}
+
+/** Creates missing AGENTS.md / CLAUDE.md with exclusive-create, so an existing path (symlinks included) is never written. */
+async function runProjectScaffold(projectRoot, options, created) {
+  await assertNotHome(projectRoot, 'scaffold');
+  const manifest = await readProjectManifest(projectRoot);
+  const storedRole = readInstructionsRole(manifest);
+  if (options.role !== undefined && !INSTRUCTION_ROLES.includes(options.role)) {
+    throw new Error(`Unknown role "${options.role}". Valid roles: ${INSTRUCTION_ROLES.join(', ')}.`);
+  }
+  if (options.role !== undefined && storedRole && options.role !== storedRole) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} already records role "${storedRole}"; edit "instructions.role" there to change it.`);
+  }
+  const role = options.role ?? storedRole ?? 'repo';
+  const claudeMdRequired = hasClaudeShim(manifest);
+  const realRoot = await fs.realpath(projectRoot);
+  const needsRoleWrite = !options.dryRun && storedRole !== role;
+  if (needsRoleWrite && manifestNeedsMigration(await fs.readJson(projectManifestPath(projectRoot)))) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} is schemaVersion 1; run "${CLI_NAME} sync" to migrate it first. Nothing was written.`);
+  }
+
+  const plan = [];
+  const skipped = [];
+  const agentsState = await classifyForScaffold(path.join(projectRoot, 'AGENTS.md'));
+  if (agentsState === 'missing') plan.push({ path: 'AGENTS.md', content: renderAgentsMd(role, realRoot, path.basename(realRoot)) });
+  else skipped.push({ path: 'AGENTS.md', reason: agentsState });
+  const claudeState = await classifyForScaffold(path.join(projectRoot, 'CLAUDE.md'));
+  if (claudeState !== 'missing') skipped.push({ path: 'CLAUDE.md', reason: claudeState });
+  else if (!claudeMdRequired) skipped.push({ path: 'CLAUDE.md', reason: 'shim-not-declared' });
+  else plan.push({ path: 'CLAUDE.md', content: CLAUDE_MD_CONTENT });
+
+  // The role goes in first: a manifest failure then creates nothing, and a later file failure
+  // cannot leave an umbrella AGENTS.md next to a role that a rerun would record as "repo".
+  let roleRecorded = false;
+  if (needsRoleWrite) {
+    try {
+      manifest.instructions = { ...(manifest.instructions || {}), role };
+      await writeProjectManifest(projectRoot, manifest);
+      roleRecorded = true;
+    } catch (error) {
+      throw new Error(`could not record the role in ${PROJECT_MANIFEST_NAME}: ${error.message}. Nothing was created.`);
+    }
+  }
+  if (options.dryRun) {
+    created.push(...plan.map((item) => item.path));
+  } else {
+    for (const item of plan) {
+      try {
+        await fs.writeFile(path.join(projectRoot, item.path), item.content, { flag: 'wx', mode: 0o644 });
+        created.push(item.path);
+      } catch (error) {
+        if (error.code === 'EEXIST') {
+          skipped.push({ path: item.path, reason: 'exists' });
+          continue;
+        }
+        throw new Error(`could not create ${item.path}: ${error.message}${created.length > 0 ? `; created so far: ${created.join(', ')}` : ''}${roleRecorded ? `; role "${role}" was recorded` : ''}`);
+      }
+    }
+  }
+
+  const state = await computeInstructionsState(projectRoot);
+  const report = { root: projectRoot, role, roleRecorded, dryRun: Boolean(options.dryRun), created, skipped, issues: state.issues };
+
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  console.log(chalk.blue.bold(`\nScaffold (role: ${role})${report.dryRun ? ' - dry run' : ''}`));
+  for (const file of created) console.log(chalk.green(`+ ${file} ${report.dryRun ? 'would create' : 'created'}`));
+  for (const entry of skipped) console.log(chalk.gray(`- ${entry.path} left alone (${entry.reason})`));
+  if (created.length === 0) console.log(chalk.gray('Nothing to create.'));
+  if (roleRecorded) console.log(chalk.gray(`Recorded role "${role}" in ${PROJECT_MANIFEST_NAME}.`));
+  if (report.dryRun && storedRole !== role) console.log(chalk.gray(`Would record role "${role}" in ${PROJECT_MANIFEST_NAME}.`));
+  if (report.dryRun && state.issues.length > 0) console.log(chalk.gray('Issues below describe the directory as it is now.'));
+  for (const issue of state.issues) console.log(chalk.yellow(`! ${issue}`));
+  if (created.includes('AGENTS.md') && !report.dryRun) {
+    console.log(chalk.gray(`Next: fill in the placeholders in AGENTS.md, then run "${CLI_NAME} project instructions --check".`));
+  }
+}
+
+projectCommand
+  .command('scaffold')
+  .description('Create a missing AGENTS.md (and CLAUDE.md with the claude-code shim) for this session root; never overwrites')
+  .option('--role <role>', `Template and recorded role: ${INSTRUCTION_ROLES.join(', ')} (default: the stored role, else repo)`)
+  .option('--dry-run', 'Show what would be created without writing anything')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    const created = [];
+    try {
+      await runProjectScaffold(process.cwd(), options, created);
+    } catch (error) {
+      printSkillError(options, `Error scaffolding agent instructions: ${error.message}`, { created });
     }
   });
 

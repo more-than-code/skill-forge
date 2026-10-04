@@ -240,6 +240,7 @@ skf home init|add|status|sync          # same flow for the machine-wide $HOME pr
 skf sync                               # vendor + write lockfile
 skf sync --check                       # read-only staleness check (exit non-zero on drift)
 skf project instructions [--check]     # read-only: AGENTS.md present, CLAUDE.md imports it; not part of sync
+skf project scaffold [--role <r>]      # create a missing AGENTS.md / CLAUDE.md, never overwrite; --dry-run first
 ```
 
 ## Anti-patterns

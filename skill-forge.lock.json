@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.3.0",
-    "commit": "c71341241c94eda282f9c09407f2ec15aecb3b6f",
-    "lockIntegrity": "sha256-grkN/EpFZcvNOpTt2p2x0QZApw0NrvC4NrB4bJDXCTQ="
+    "commit": "2ac32fba62b692b0868ceb646284e1680d2ecf82",
+    "lockIntegrity": "sha256-6f0NiokS8CsZmde5EEWSc8FDkFeCrCmOe89H0Qp38og="
   },
   "skills": {
     "api-contracts": {
@@ -43,8 +43,8 @@
       "source": "registry"
     },
     "skill-forge-project": {
-      "version": "0.5.2",
-      "integrity": "sha256-DgwVjT/dVbqPm13/ytFO2sR6CKeeVw6S1R4T3OhTGaE=",
+      "version": "0.5.3",
+      "integrity": "sha256-P55mABdPBHfm7FvjrZnVST5xXJ3sFSPKp7hy261U0bk=",
       "source": "registry"
     },
     "testing-strategy": {

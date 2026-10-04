@@ -149,6 +149,27 @@ is reported but never an issue. Output is states, issues and, in a note, at most
 the imported path (sanitised and truncated), never other file text. It refuses
 to run in `$HOME`, whose files `agent install` and `agent diff` already manage.
 
+Create the files it expects, without ever overwriting one:
+
+```bash
+node bin/cli.js project scaffold --role umbrella --dry-run   # show the plan
+node bin/cli.js project scaffold --role umbrella             # create what is missing
+```
+
+`scaffold` creates a missing `AGENTS.md` from a placeholder template for the
+role (`repo`, `umbrella` or `child`; default is the stored role, else `repo`)
+and, with the `claude-code` shim, a missing `CLAUDE.md` containing `@AGENTS.md`.
+Files are created exclusively, so an existing file, directory or symlink is left
+untouched and reported, and neither instruction file is ever written through a
+link. The role is recorded in the manifest as `"instructions": {"role":
+"umbrella"}` before any file is created, also on a root whose files already
+exist; a different `--role` later is an error until you edit that key. A
+schemaVersion 1 manifest is not rewritten: run `skf sync` to migrate it first.
+With `--dry-run` nothing is written, and any issues listed describe the
+directory as it is now. `instructions` notes the scaffold marker line until you
+delete it. Like `instructions`, it needs a `skill-forge.json` and refuses to run
+in `$HOME`.
+
 Run the test suite:
 
 ```bash
@@ -186,6 +207,10 @@ directory and therefore need a symlink to the store. Today that is only
 `claude-code`, as `.claude/skills/ -> ../.agents/skills`. An empty shim list is
 a valid, and preferable, end state. A shim is deleted when its tool learns to
 read the neutral path; it is never moved or copied.
+
+The manifest also takes an optional `instructions.role` (`repo`, `umbrella` or
+`child`), written by `skf project scaffold`. Only the `instructions` and
+`scaffold` commands read it; `sync` and `status` ignore it and preserve it.
 
 `schemaVersion` 2 replaces the old `tools` map. A version 1 manifest is migrated
 in place on the next `sync`, keeping only those tools that actually had a shim —
@@ -414,7 +439,9 @@ session ID.
 ## Safety Notes
 
 - `<type> diff`, `sync --check`, `project|home status`, and
-  `project instructions` are read-only.
+  `project instructions` are read-only. `project scaffold` is create-only: it
+  never overwrites a file, and its only edit to existing files is adding
+  `instructions.role` to `skill-forge.json`.
 - `sync` writes only the profile's own targets and never overwrites an
   unmanaged directory (declare hand-authored skills in `skills.local`).
 - `agent|subagent|hook install` write to runtime targets; existing files are

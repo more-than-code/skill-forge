@@ -2221,10 +2221,10 @@ function findClaudeImport(lines) {
 }
 
 /** The home instruction files belong to `agent install`; the project instruction commands must not touch them. */
-async function assertNotHome(projectRoot, subcommand) {
+async function assertNotHome(projectRoot, subcommand, pointer = `~/.claude/CLAUDE.md and the other home instruction files are managed by "${CLI_NAME} agent install" and "${CLI_NAME} agent diff".`) {
   const homeReal = await fs.realpath(os.homedir()).catch(() => null);
   if (homeReal && await fs.realpath(projectRoot) === homeReal) {
-    throw new Error(`"${CLI_NAME} project ${subcommand}" does not run in $HOME; ~/.claude/CLAUDE.md and the other home instruction files are managed by "${CLI_NAME} agent install" and "${CLI_NAME} agent diff".`);
+    throw new Error(`"${CLI_NAME} project ${subcommand}" does not run in $HOME; ${pointer}`);
   }
 }
 
@@ -2434,6 +2434,175 @@ projectCommand
       await runProjectScaffold(process.cwd(), options, created);
     } catch (error) {
       printSkillError(options, `Error scaffolding agent instructions: ${error.message}`, { created });
+    }
+  });
+
+const DOCTOR_GIT_TIMEOUT_MS = 5000;
+
+/** Text for content rules, or null when the path is not a readable regular file (the instructions section reports that). */
+async function readRegularText(filePath) {
+  try {
+    return (await fs.stat(filePath)).isFile() ? await fs.readFile(filePath, 'utf8') : null;
+  } catch {
+    return null;
+  }
+}
+
+/** lstat, so a dangling `.git` symlink still counts as an entry. */
+const hasGitEntry = (dir) => fs.lstat(path.join(dir, '.git')).then(() => true, () => false);
+
+/** Whole-token match, so a child named "a" or "web" is not satisfied by "capital" or "website". */
+function namesToken(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\w.-])${escaped}(?![\\w.-])`).test(text);
+}
+
+const printableOnly = (text) => text.replace(/[^\x20-\x7e]/g, '?');
+
+/** check-ignore must query this directory's repository, not one that a calling git hook or wrapper selected. */
+function gitEnvironment() {
+  const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete env[key];
+  return env;
+}
+
+function describeGitFailure(error) {
+  if (error.code === 'ENOENT') return 'git was not found';
+  if (error.killed) return `git timed out after ${DOCTOR_GIT_TIMEOUT_MS / 1000}s`;
+  return `git exited with ${error.code}`;
+}
+
+/** Read-only layout rules for a declared role; the instructions section already reports a missing or unreadable AGENTS.md. */
+async function computeLayoutState(projectRoot, role) {
+  const layout = { applicable: false, notes: [], issues: [], warnings: [] };
+  if (role === null) {
+    layout.notes.push(`no role recorded; run "${CLI_NAME} project scaffold --role <${INSTRUCTION_ROLES.join('|')}>" (it creates nothing when the files exist) to declare one.`);
+    return layout;
+  }
+  if (role === 'repo') {
+    layout.notes.push('role repo has no layout rules.');
+    return layout;
+  }
+  layout.applicable = true;
+  const agentsText = await readRegularText(path.join(projectRoot, 'AGENTS.md'));
+
+  if (role === 'umbrella') {
+    const ledger = path.join(projectRoot, 'tasks', 'todo.md');
+    if (!(await fs.stat(ledger).catch(() => null))?.isFile()) {
+      layout.issues.push('tasks/todo.md is missing or not a regular file; the umbrella keeps its cross-repo ledger there.');
+    }
+    if (agentsText !== null) {
+      const realLedger = path.join(await fs.realpath(projectRoot), 'tasks', 'todo.md');
+      if (![realLedger, ledger].some((candidate) => agentsText.includes(candidate))) {
+        layout.issues.push(`AGENTS.md does not contain this root's tasks/todo.md path (${realLedger}).`);
+      }
+      const names = [];
+      for (const entry of await fs.readdir(projectRoot, { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const isDirectory = entry.isDirectory()
+          || (entry.isSymbolicLink() && (await fs.stat(path.join(projectRoot, entry.name)).catch(() => null))?.isDirectory());
+        if (isDirectory) names.push(entry.name);
+      }
+      for (const name of names.sort()) {
+        if (await hasGitEntry(path.join(projectRoot, name)) && !namesToken(agentsText, name)) {
+          layout.warnings.push(`child repo "${printableOnly(name)}" is not named in AGENTS.md.`);
+        }
+      }
+    }
+  }
+
+  if (role === 'child') {
+    if (agentsText !== null && !agentsText.includes('SESSION.md')) {
+      layout.issues.push('AGENTS.md does not mention SESSION.md; add the session-ownership hook from the umbrella-workspace skill.');
+    }
+    if (!await hasGitEntry(projectRoot)) {
+      layout.notes.push('not a git repository; the ledger-ignore rule was skipped.');
+    } else {
+      try {
+        await execFileAsync('git', ['check-ignore', '-q', '--', 'tasks/archive.md'], { cwd: projectRoot, timeout: DOCTOR_GIT_TIMEOUT_MS, env: gitEnvironment() });
+      } catch (error) {
+        if (error.code === 1) {
+          layout.issues.push('tasks/ ledger is not ignored by git; ignore it, for example "/tasks/*" with "!/tasks/todo.md" (keeps a pointer stub tracked), or "/tasks/" when the repo has no stub.');
+        } else {
+          layout.warnings.push(`could not run git to check the ledger rule: ${describeGitFailure(error)}`);
+        }
+      }
+    }
+  }
+  return layout;
+}
+
+async function checkedSection(label, produce) {
+  try {
+    return { value: await produce() };
+  } catch (error) {
+    return { failure: `${label} could not be checked: ${error.message}` };
+  }
+}
+
+/** One read-only report composed from the existing checks; a failing section never hides the others. */
+async function runProjectDoctor(projectRoot, options) {
+  await assertNotHome(projectRoot, 'doctor', `use "${CLI_NAME} home sync --check" and "${CLI_NAME} home status" for the $HOME profile, and "${CLI_NAME} agent diff" for its instruction files.`);
+  const manifest = await readProjectManifest(projectRoot);
+  const role = readInstructionsRole(manifest);
+
+  const profileResult = await checkedSection('profile', () => computeProjectState(projectRoot));
+  const profile = { issues: profileResult.failure ? [profileResult.failure] : profileResult.value.issues };
+
+  const instructionsResult = await checkedSection('instructions', () => computeInstructionsState(projectRoot));
+  const instructions = instructionsResult.failure
+    ? { claudeMdRequired: null, files: [], notes: [], issues: [instructionsResult.failure] }
+    : (({ root, ...rest }) => rest)(instructionsResult.value);
+
+  const layoutResult = await checkedSection('layout', () => computeLayoutState(projectRoot, role));
+  const layout = layoutResult.failure
+    ? { applicable: false, notes: [], issues: [layoutResult.failure], warnings: [] }
+    : layoutResult.value;
+
+  const sections = { profile, instructions, layout };
+  const issues = Object.entries(sections).flatMap(([section, value]) => value.issues.map((message) => ({ section, message })));
+  const warnings = layout.warnings.map((message) => ({ section: 'layout', message }));
+  const report = { root: projectRoot, role, ok: issues.length === 0, sections, issues, warnings };
+
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    if (options.check && !report.ok) process.exitCode = 1;
+    return;
+  }
+
+  const count = (list) => chalk.gray(`  ${list.length} issue(s)`);
+  console.log(chalk.blue.bold(`\nProject doctor (role: ${role ?? 'none'})`));
+  console.log(chalk.bold('\nProfile'));
+  console.log(profile.issues.length === 0 ? chalk.green('  in sync') : count(profile.issues));
+  console.log(chalk.bold('\nInstructions'));
+  for (const file of instructions.files) console.log(`  - ${file.path.padEnd(10)} ${file.state}`);
+  for (const note of instructions.notes) console.log(chalk.gray(`  note: ${note}`));
+  if (instructions.issues.length > 0) console.log(count(instructions.issues));
+  console.log(chalk.bold(`\nLayout${layout.applicable ? ` (${role})` : layout.issues.length > 0 ? ' (failed)' : ' (skipped)'}`));
+  for (const note of layout.notes) console.log(chalk.gray(`  note: ${note}`));
+  for (const warning of layout.warnings) console.log(chalk.yellow(`  warning: ${warning}`));
+  if (layout.issues.length > 0) console.log(count(layout.issues));
+
+  console.log();
+  if (issues.length === 0) {
+    console.log(chalk.green('No issues.'));
+    return;
+  }
+  const print = options.check ? console.error : console.log;
+  for (const { section, message } of issues) print(chalk.yellow(`! ${section}: ${message}`));
+  if (options.check) process.exitCode = 1;
+}
+
+projectCommand
+  .command('doctor')
+  .description('One read-only health check for this session root: skill profile, agent instructions, and role-aware layout')
+  .option('--check', 'Exit non-zero when any section has an issue (warnings never fail)')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      await runProjectDoctor(process.cwd(), options);
+    } catch (error) {
+      printSkillError(options, `Error running project doctor: ${error.message}`);
     }
   });
 

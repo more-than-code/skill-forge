@@ -329,9 +329,10 @@ Behavior:
   state, this is a complete check in CI, not just on developer machines.
 - `skf project status` is the human-facing view: which skills are active, which
   came from which profile, which are local overrides, and what is stale. It
-  absorbs what separate `doctor` or `diff-project` commands would report — two
-  commands (`sync --check` for machines, `project status` for humans) instead
-  of four overlapping ones.
+  absorbs what a separate `diff-project` command would report — two commands
+  (`sync --check` for machines, `project status` for humans) instead of
+  overlapping ones. A `doctor` that only repeated those checks would be
+  redundant, so `skf project doctor` exists only as a composition (below).
 - `skf project instructions [--check] [--json]` is the one read-only check that
   is not about the skill profile. It stays a separate command because its
   subject is user-owned prose, not vendored skills: folding it into `sync
@@ -340,6 +341,22 @@ Behavior:
   runs only where a `skill-forge.json` exists, since that file already marks a
   session root, so children meant to inherit from their umbrella are never
   flagged.
+- `skf project doctor [--check] [--json]` composes the read-only checks behind
+  one report and one exit code, so a repository needs a single CI gate: the
+  skill-profile check (the `sync --check` logic), the instructions check, and
+  layout rules keyed on the recorded `instructions.role`. It adds no check of
+  its own to those two and keeps them as separate commands, so each stays
+  usable alone. Layout rules: an umbrella needs its `tasks/todo.md` ledger and
+  that ledger's absolute path in `AGENTS.md` (issues), and names each child
+  repo there (a warning, because the match is a heuristic); a child's
+  `AGENTS.md` mentions `SESSION.md` and git ignores its `tasks/` ledger
+  (issues, the latter asked of `git check-ignore` so `.gitignore`,
+  `.git/info/exclude` and global excludes all count). A root with no recorded
+  role has its layout section skipped with a pointer to `skf project scaffold
+  --role`, which records the role without creating anything when the files
+  already exist. Warnings and notes never fail `--check`; a section that cannot
+  run is reported as an issue and the others still appear. A missing or invalid
+  manifest, a bad role, or `$HOME` abort with exit 1 before any report.
 
 This revises the install concept from "write this artifact to this directory" to
 "make this repository match its declared Skill Forge profile."
@@ -596,3 +613,4 @@ any new component.
 | 2026-07-20 | Sync targets derive from the manifest `tools` map | `.agents/skills/` only when a non-Claude tool is enabled; `.claude/skills/` for Claude Code; narrowing the tool set prunes orphaned copies and husk dirs |
 | 2026-10-04 | `skf project instructions`: a read-only check for `AGENTS.md` and `CLAUDE.md` in a session root | The layout was prose only, and 11 child repos had `AGENTS.md` without the `CLAUDE.md` Claude Code reads. Scoped to roots that declare a profile; `CLAUDE.md` required only with the `claude-code` shim; no scaffold or manifest change yet (Phase 2) |
 | 2026-10-04 | `skf project scaffold`, and an optional `instructions.role` in the manifest | The check could report missing files but not fix them. Create-only (exclusive create, so symlinks are never written through), placeholder templates, `CLAUDE.md` only with the `claude-code` shim. The role is stored because role-aware layout checks (a later `project doctor` that composes `sync --check`, `instructions` and those rules) need it; the project lock hashes the registry and resolved skills, never the manifest, so the key cannot make `sync --check` stale, and only the instruction commands validate it, so a bad value cannot break `sync` or `status` |
+| 2026-10-05 | `skf project doctor`: one read-only gate composing the profile check, `project instructions`, and role-aware layout rules | A repo needed three commands to be sure it was healthy. Composition only, so it reverses the earlier "doctor is redundant" argument without duplicating anything; the two checks stay separate. Severities came from a read-only scan of seven umbrellas (37 children): umbrella ledger 7/7 and absolute path 6/7 pass (issues), unnamed children 4/37 (warning, heuristic match), child SESSION.md hook and git-ignored ledger fail often enough to be real findings (issues, only where a root opts in with a recorded role). The ledger rule asks git itself, so any failure to run git (no binary, a refusal, a timeout) degrades to a warning |

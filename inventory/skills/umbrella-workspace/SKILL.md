@@ -257,6 +257,13 @@ profile, so a child without a `skill-forge.json` is not covered, and it checks t
 exist and are wired, not that the child inventory or the `tasks/todo.md` path inside `AGENTS.md`
 is accurate. That stays the author's judgment.
 
+`skf project doctor --check` runs that check together with the skill-profile check and, once the
+root's role is recorded (`skf project scaffold --role <role>` records it without creating anything
+when the files exist), the layout rules. An umbrella needs `tasks/todo.md` and that file's absolute
+path in `AGENTS.md`; each child repo not named in `AGENTS.md` is only a warning, because the match
+is by name. A child needs `AGENTS.md` to mention `SESSION.md`, and git to ignore its `tasks/` ledger.
+These rules check that things are present, not that they are correct.
+
 ## Anti-patterns
 
 - Assuming an agent tool loads skills from child directories without confirming it - the failure is silent, and `sync --check` passes either way

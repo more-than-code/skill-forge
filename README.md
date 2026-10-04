@@ -170,6 +170,29 @@ directory as it is now. `instructions` notes the scaffold marker line until you
 delete it. Like `instructions`, it needs a `skill-forge.json` and refuses to run
 in `$HOME`.
 
+One read-only gate for a session root, composing the other checks:
+
+```bash
+node bin/cli.js project doctor            # report; exits 0
+node bin/cli.js project doctor --check    # exits 1 on any issue (CI gate)
+node bin/cli.js project doctor --json
+```
+
+`doctor` reports three sections. **Profile** is the `sync --check` result.
+**Instructions** is the `project instructions` result. **Layout** depends on the
+role recorded by `scaffold` (`skf project scaffold --role <role>` records it
+without creating anything when the files already exist; with no role the section
+is skipped and says so). An `umbrella` needs `tasks/todo.md`, and its absolute
+path in `AGENTS.md` (issues), and every child repo it holds named in `AGENTS.md`
+(a warning, since the match is a heuristic). A `child` needs `AGENTS.md` to
+mention `SESSION.md` and git to ignore its `tasks/` ledger (issues; it asks
+`git check-ignore`, so `.gitignore`, `.git/info/exclude` and global excludes all
+count, and any failure to run git is only a warning). `repo` has no layout
+rules. Warnings and notes never fail `--check`, and a section that cannot run is
+reported as an issue while the others still appear. A missing or invalid
+manifest, a bad role, or running in `$HOME` aborts with exit 1 before any report.
+It writes nothing.
+
 Run the test suite:
 
 ```bash
@@ -438,8 +461,8 @@ session ID.
 
 ## Safety Notes
 
-- `<type> diff`, `sync --check`, `project|home status`, and
-  `project instructions` are read-only. `project scaffold` is create-only: it
+- `<type> diff`, `sync --check`, `project|home status`,
+  `project instructions`, and `project doctor` are read-only. `project scaffold` is create-only: it
   never overwrites a file, and its only edit to existing files is adding
   `instructions.role` to `skill-forge.json`.
 - `sync` writes only the profile's own targets and never overwrites an

@@ -241,6 +241,7 @@ skf sync                               # vendor + write lockfile
 skf sync --check                       # read-only staleness check (exit non-zero on drift)
 skf project instructions [--check]     # read-only: AGENTS.md present, CLAUDE.md imports it; not part of sync
 skf project scaffold [--role <r>]      # create a missing AGENTS.md / CLAUDE.md, never overwrite; --dry-run first
+skf project doctor [--check]           # one read-only gate: profile + instructions + role-aware layout
 ```
 
 ## Anti-patterns

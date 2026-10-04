@@ -1324,8 +1324,10 @@ async function snapshotTree(dir) {
     for (const entry of await fs.readdir(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       const rel = path.relative(dir, full);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.isSymbolicLink()) out[rel] = `link:${await fs.readlink(full)}`;
+      if (entry.isDirectory()) {
+        out[`${rel}/`] = 'dir';
+        await walk(full);
+      } else if (entry.isSymbolicLink()) out[rel] = `link:${await fs.readlink(full)}`;
       else out[rel] = `${(await fs.stat(full)).mtimeMs}:${(await fs.readFile(full)).toString('base64')}`;
     }
   }
@@ -1886,4 +1888,315 @@ test('project scaffold keeps its JSON key set, and a refused $HOME run writes no
     assert.match(error.stderr, /No skill-forge\.json/);
     return true;
   });
+});
+
+// --- project doctor (profile + instructions + role-aware layout) ---
+
+// process.execPath rather than 'node', so a test can replace PATH without losing node; git config is
+// pinned so a developer's global excludes cannot change what "not ignored" means.
+async function runDoctor(root, args = [], extraEnv = {}, baseEnv) {
+  return run(process.execPath, [CLI, 'project', 'doctor', ...args], {
+    cwd: root,
+    env: { ...(baseEnv ?? await instructionsBaseEnv()), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', ...extraEnv }
+  });
+}
+
+/** A session root declaring `role` in its manifest; no lockfile, so only the layout and instructions sections are meaningful. */
+async function layoutRoot(role, files = {}, { shims = ['claude-code'] } = {}) {
+  const root = await instructionsRoot(files, { shims });
+  if (role) {
+    const manifestPath = path.join(root, 'skill-forge.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    manifest.instructions = { role };
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  return root;
+}
+
+const gitInit = (dir) => run('git', ['init', '-q'], { cwd: dir, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
+const doctorJson = async (root, args = [], env = {}) => JSON.parse((await runDoctor(root, ['--json', ...args], env)).stdout);
+const messages = (list) => list.map((entry) => entry.message);
+
+/** A fully synced profile (so the Profile section is clean) with the instruction files in place. */
+async function syncedDoctorProject({ role } = {}) {
+  const fx = await projectFixture();
+  await fx.runInProject(['project', 'init']);
+  if (role) {
+    await fx.runInProject(['project', 'scaffold', '--role', role]);
+  } else {
+    await fs.writeFile(path.join(fx.projectRoot, 'AGENTS.md'), '# Rules\n');
+    await fs.writeFile(path.join(fx.projectRoot, 'CLAUDE.md'), '@AGENTS.md\n');
+  }
+  await fx.runInProject(['project', 'add', 'demo-skill']);
+  await fx.runInProject(['sync']);
+  return fx;
+}
+
+test('project doctor passes a healthy root, and its instructions section equals instructions --json', async () => {
+  const fx = await syncedDoctorProject({ role: 'repo' });
+  const { stdout } = await fx.runInProject(['project', 'doctor', '--check']);
+  assert.match(stdout, /Profile/);
+  const report = JSON.parse((await fx.runInProject(['project', 'doctor', '--json'])).stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.role, 'repo');
+  assert.deepEqual(report.issues, []);
+  assert.equal(report.sections.layout.applicable, false);
+  assert.deepEqual(report.sections.profile.issues, []);
+
+  const instructions = JSON.parse((await fx.runInProject(['project', 'instructions', '--json'])).stdout);
+  const { root, ...expected } = instructions;
+  assert.deepEqual(report.sections.instructions, expected);
+});
+
+test('project doctor reports a profile problem with the same messages as sync --check', async () => {
+  const fx = await syncedDoctorProject({ role: 'repo' });
+  await fs.rm(path.join(fx.projectRoot, '.agents', 'skills', 'demo-skill'), { recursive: true });
+
+  const syncIssues = await fx.runInProject(['sync', '--check']).then(
+    () => assert.fail('sync --check should fail'),
+    (error) => error.stderr.split('\n').filter((line) => line.startsWith('! ')).map((line) => line.slice(2))
+  );
+  assert.ok(syncIssues.length > 0);
+  const report = JSON.parse((await fx.runInProject(['project', 'doctor', '--json'])).stdout);
+  assert.deepEqual(report.sections.profile.issues, syncIssues);
+  assert.equal(report.ok, false);
+  await assert.rejects(fx.runInProject(['project', 'doctor', '--check']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /! profile: .*demo-skill/);
+    return true;
+  });
+  await fx.runInProject(['project', 'doctor']);
+});
+
+test('project doctor skips the layout section, without an issue, when no role is recorded', async () => {
+  const fx = await syncedDoctorProject();
+  await fx.runInProject(['project', 'doctor', '--check']);
+  const report = JSON.parse((await fx.runInProject(['project', 'doctor', '--json'])).stdout);
+  assert.equal(report.role, null);
+  assert.equal(report.sections.layout.applicable, false);
+  assert.deepEqual(report.sections.layout.issues, []);
+  assert.match(report.sections.layout.notes.join(' '), /skf project scaffold --role/);
+});
+
+test('project doctor umbrella rules: ledger and path are issues, an unnamed child is only a warning', async () => {
+  const fx = await syncedDoctorProject({ role: 'umbrella' });
+  const root = fx.projectRoot;
+  const layoutOf = async () => JSON.parse((await fx.runInProject(['project', 'doctor', '--json'])).stdout).sections.layout;
+
+  assert.match((await layoutOf()).issues.join(' '), /tasks\/todo\.md is missing or not a regular file/, 'U1: no ledger yet');
+  await fs.mkdir(path.join(root, 'tasks'));
+  await fs.writeFile(path.join(root, 'tasks', 'todo.md'), '# Tasks\n');
+  assert.deepEqual((await layoutOf()).issues, [], 'the scaffolded AGENTS.md carries the absolute path');
+
+  const agentsPath = path.join(root, 'AGENTS.md');
+  const scaffolded = await fs.readFile(agentsPath, 'utf8');
+  await fs.writeFile(agentsPath, '# Rules without the ledger path\n');
+  assert.match((await layoutOf()).issues.join(' '), /does not contain this root's tasks\/todo\.md path/, 'U2');
+  await fs.writeFile(agentsPath, scaffolded);
+
+  await fs.mkdir(path.join(root, 'api', '.git'), { recursive: true });
+  await fs.mkdir(path.join(root, 'web'));
+  await fs.writeFile(path.join(root, 'web', '.git'), 'gitdir: elsewhere\n');
+  await fs.mkdir(path.join(root, 'notes'));
+  await fs.writeFile(agentsPath, `${scaffolded}\nChildren: api\n`);
+  const layout = await layoutOf();
+  assert.deepEqual(layout.issues, []);
+  assert.equal(layout.warnings.length, 1, 'only the unnamed child with a .git file is flagged');
+  assert.match(layout.warnings[0], /"web"/);
+  await fx.runInProject(['project', 'doctor', '--check']);
+});
+
+test('project doctor child rules: SESSION.md hook and a git-ignored ledger', async () => {
+  const root = await layoutRoot('child', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await gitInit(root);
+  const layoutOf = async (env = {}) => (await doctorJson(root, [], env)).sections.layout;
+
+  const first = await layoutOf();
+  assert.match(first.issues.join('\n'), /does not mention SESSION\.md/);
+  assert.match(first.issues.join('\n'), /ledger is not ignored by git/);
+
+  await fs.writeFile(path.join(root, 'AGENTS.md'), '# Rules\n\nIf `SESSION.md` exists, read it first.\n');
+  await fs.writeFile(path.join(root, '.gitignore'), '/tasks/*\n!/tasks/todo.md\n');
+  assert.deepEqual((await layoutOf()).issues, [], 'ignored through .gitignore');
+
+  await fs.rm(path.join(root, '.gitignore'));
+  assert.equal((await layoutOf()).issues.length, 1);
+  await fs.appendFile(path.join(root, '.git', 'info', 'exclude'), '/tasks/\n');
+  assert.deepEqual((await layoutOf()).issues, [], 'ignored through .git/info/exclude');
+
+  const noGit = await layoutRoot('child', { 'AGENTS.md': 'Read `SESSION.md` if present.\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const plain = (await doctorJson(noGit)).sections.layout;
+  assert.deepEqual(plain.issues, []);
+  assert.match(plain.notes.join(' '), /not a git repository/);
+
+  await fs.rm(path.join(root, '.git', 'info', 'exclude'));
+  const unavailable = await layoutOf({ PATH: '/nonexistent-skf-path' });
+  assert.equal(unavailable.issues.length, 0, 'a missing git binary is a warning, not an issue');
+  assert.match(unavailable.warnings.join(' '), /could not run git/);
+});
+
+test('project doctor reports one failing section and still shows the others', async () => {
+  const root = await layoutRoot('umbrella', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const emptyRegistry = await tempDir('skf-empty-registry-');
+  const report = await doctorJson(root, [], { SKILL_FORGE_ROOT: emptyRegistry });
+  assert.match(messages(report.issues).join('\n'), /profile could not be checked: .+/, 'the underlying error text is kept');
+  assert.deepEqual(report.sections.instructions.issues, []);
+  assert.equal(report.sections.layout.applicable, true, 'the layout section still ran');
+  assert.match(report.sections.layout.issues.join(' '), /tasks\/todo\.md is missing or not a regular file/);
+  assert.equal(report.ok, false);
+  await assert.rejects(runDoctor(root, ['--check'], { SKILL_FORGE_ROOT: emptyRegistry }), (error) => {
+    assert.equal(error.code, 1);
+    return true;
+  });
+});
+
+test('project doctor fails on a missing manifest, a bad role, a non-object instructions, and $HOME', async () => {
+  const bare = await tempDir('skf-instr-bare-');
+  await assert.rejects(runDoctor(bare, ['--json']), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(JSON.parse(error.stdout).error, /No skill-forge\.json/);
+    return true;
+  });
+  await assert.rejects(runDoctor(bare), (error) => {
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, '', 'an abort prints no report');
+    return true;
+  });
+
+  const bad = await layoutRoot('bogus');
+  await assert.rejects(runDoctor(bad), (error) => {
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, '');
+    assert.match(error.stderr, /instructions\.role.*repo, umbrella, child/);
+    return true;
+  });
+
+  const nonObject = await instructionsRoot();
+  const manifestPath = path.join(nonObject, 'skill-forge.json');
+  await fs.writeFile(manifestPath, JSON.stringify({ ...JSON.parse(await fs.readFile(manifestPath, 'utf8')), instructions: 'nope' }));
+  await assert.rejects(runDoctor(nonObject), /"instructions" must be an object/);
+
+  const home = await layoutRoot('repo');
+  await assert.rejects(runDoctor(home, [], { HOME: home }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /home sync --check/);
+    return true;
+  });
+  await assert.rejects(runDoctor(home, ['--json'], { HOME: home }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(JSON.parse(error.stdout).error, /home sync --check/);
+    return true;
+  });
+});
+
+test('project doctor writes nothing in any mode, .git and empty directories included', async () => {
+  const child = await layoutRoot('child', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await gitInit(child);
+  const umbrella = await layoutRoot('umbrella', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  await fs.mkdir(path.join(umbrella, 'api', '.git'), { recursive: true });
+
+  for (const root of [child, umbrella]) {
+    const before = await snapshotTree(root);
+    await runDoctor(root);
+    await runDoctor(root, ['--json']);
+    await assert.rejects(runDoctor(root, ['--check']), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /^! layout: /m);
+      return true;
+    });
+    assert.deepEqual(await snapshotTree(root), before);
+  }
+});
+
+test('project doctor keeps its JSON contract and exits 1 under --check --json with JSON on stdout', async () => {
+  const root = await layoutRoot('umbrella', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const report = await doctorJson(root);
+  assert.deepEqual(Object.keys(report).sort(), ['issues', 'ok', 'role', 'root', 'sections', 'warnings']);
+  assert.deepEqual(Object.keys(report.sections).sort(), ['instructions', 'layout', 'profile']);
+  assert.deepEqual(Object.keys(report.sections.profile), ['issues']);
+  assert.deepEqual(Object.keys(report.sections.instructions).sort(), ['claudeMdRequired', 'files', 'issues', 'notes']);
+  assert.deepEqual(Object.keys(report.sections.layout).sort(), ['applicable', 'issues', 'notes', 'warnings']);
+  assert.ok(report.issues.every((entry) => typeof entry.section === 'string' && typeof entry.message === 'string'));
+  assert.ok(report.issues.some((entry) => entry.section === 'layout'));
+
+  await assert.rejects(runDoctor(root, ['--check', '--json']), (error) => {
+    assert.equal(error.code, 1);
+    assert.equal(JSON.parse(error.stdout).ok, false);
+    return true;
+  });
+  const { stderr } = await runDoctor(root, ['--json']);
+  assert.equal(stderr, '', 'report mode keeps stderr empty');
+});
+
+test('project doctor plain output: issues on stdout in report mode, on stderr under --check, "No issues." when healthy', async () => {
+  const fx = await syncedDoctorProject({ role: 'repo' });
+  assert.match((await fx.runInProject(['project', 'doctor'])).stdout, /No issues\./);
+
+  const root = await layoutRoot('umbrella', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
+  const report = await runDoctor(root);
+  assert.match(report.stdout, /^! layout: tasks\/todo\.md is missing/m);
+  assert.equal(report.stderr, '', 'report mode keeps issues off stderr');
+  await assert.rejects(runDoctor(root, ['--check']), (error) => {
+    assert.equal(error.code, 1);
+    assert.doesNotMatch(error.stdout, /^! /m, '--check keeps issue lines off stdout');
+    assert.match(error.stderr, /^! layout: tasks\/todo\.md is missing/m);
+    return true;
+  });
+});
+
+test('project doctor umbrella edge cases: a directory as the ledger, no AGENTS.md, whole-token names, symlinked child, dangling .git', async () => {
+  const asDirectory = await layoutRoot('umbrella');
+  await fs.mkdir(path.join(asDirectory, 'tasks', 'todo.md'), { recursive: true });
+  assert.match((await doctorJson(asDirectory)).sections.layout.issues.join(' '), /tasks\/todo\.md is missing or not a regular file/);
+
+  const noAgents = await layoutRoot('umbrella');
+  await fs.mkdir(path.join(noAgents, 'tasks'));
+  await fs.writeFile(path.join(noAgents, 'tasks', 'todo.md'), '# Tasks\n');
+  await fs.mkdir(path.join(noAgents, 'api', '.git'), { recursive: true });
+  const bare = (await doctorJson(noAgents)).sections.layout;
+  assert.deepEqual(bare.issues, [], 'with no AGENTS.md the path and child rules are skipped, and the instructions section reports it');
+  assert.deepEqual(bare.warnings, []);
+
+  const root = await layoutRoot('umbrella', { 'AGENTS.md': 'Capital website notes.\n' });
+  await fs.mkdir(path.join(root, 'tasks'));
+  await fs.writeFile(path.join(root, 'tasks', 'todo.md'), '# Tasks\n');
+  await fs.mkdir(path.join(root, 'a', '.git'), { recursive: true });
+  await fs.mkdir(path.join(root, 'web', '.git'), { recursive: true });
+  const realChild = await tempDir('skf-real-child-');
+  await fs.mkdir(path.join(realChild, '.git'));
+  await fs.symlink(realChild, path.join(root, 'linked'));
+  await fs.mkdir(path.join(root, 'dangling'));
+  await fs.symlink('nowhere', path.join(root, 'dangling', '.git'));
+  await fs.mkdir(path.join(root, 'x\u001b[31my', '.git'), { recursive: true });
+  await fs.mkdir(path.join(root, 'plain-dir'));
+
+  const report = await doctorJson(root);
+  const expected = ['a', 'dangling', 'linked', 'web', 'x?[31my'].map((name) => `child repo "${name}" is not named in AGENTS.md.`);
+  assert.deepEqual([...report.sections.layout.warnings].sort(), expected, '"a" and "web" appear only inside other words');
+  assert.deepEqual([...messages(report.warnings)].sort(), expected);
+  assert.ok(report.warnings.every((entry) => entry.section === 'layout'));
+  assert.ok(!JSON.stringify(report).includes('\u001b'), 'no raw escape character in the output');
+});
+
+test('project doctor child: no AGENTS.md adds no layout issue, git is queried for this directory, and a git failure only warns', async () => {
+  const noAgents = await layoutRoot('child');
+  await gitInit(noAgents);
+  // In this repository's own exclude file, which a redirected GIT_DIR would not read (a .gitignore in the work tree would still apply).
+  await fs.appendFile(path.join(noAgents, '.git', 'info', 'exclude'), '/tasks/*\n');
+  assert.deepEqual((await doctorJson(noAgents)).sections.layout.issues, []);
+
+  const other = await tempDir('skf-other-repo-');
+  await gitInit(other);
+  const inherited = (await doctorJson(noAgents, [], { GIT_DIR: path.join(other, '.git') })).sections.layout;
+  assert.deepEqual(inherited.issues, [], 'GIT_DIR from the caller does not redirect the check to another repository');
+
+  const fx = await syncedDoctorProject({ role: 'child' });
+  await gitInit(fx.projectRoot);
+  await fs.writeFile(path.join(fx.projectRoot, '.gitignore'), '/tasks/*\n!/tasks/todo.md\n');
+  const bin = await tempDir('skf-fake-git-');
+  await fs.writeFile(path.join(bin, 'git'), '#!/bin/sh\nexit 128\n', { mode: 0o755 });
+  const { stdout } = await runDoctor(fx.projectRoot, ['--check', '--json'], { PATH: `${bin}:${process.env.PATH}` }, fx.env);
+  const report = JSON.parse(stdout);
+  assert.equal(report.ok, true, 'a git failure never fails --check');
+  assert.match(report.sections.layout.warnings.join(' '), /could not run git to check the ledger rule: git exited with 128/);
 });

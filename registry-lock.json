@@ -350,13 +350,13 @@
     },
     "inventory/skills/skill-forge-project": {
       "name": "skill-forge-project",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-P55mABdPBHfm7FvjrZnVST5xXJ3sFSPKp7hy261U0bk=",
+      "integrity": "sha256-iIUGipPF6A/e1fnD6cB1MkaudINr5Z/3iXyHoSPk0gU=",
       "files": {
-        "SKILL.md": "sha256-YYgkTLqwB4y9hDKfdUsKGr11yrdHCRX2Gx4QrQgasG0="
+        "SKILL.md": "sha256-Av7wGWpW7QonCZqIenHxgv098a1nvlW2gtf0xm+Jmb4="
       }
     },
     "inventory/skills/supabase-postgres": {
@@ -394,14 +394,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.9.3",
+      "version": "0.9.4",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-7W5H6OS/8aJh6rwxXK2UH+iFwbJN7D6r//v75qSfL/8=",
+      "integrity": "sha256-7VHRoBLIN8N/PqplpfKbjFneQCzU39GcoN6nHwlKUbM=",
       "files": {
         "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-oo9+9lA8oCe2AWsbKlcyAH4xehR359xPe3KiD631EtU="
+        "SKILL.md": "sha256-eqfobIZwds4KZjk7tmCE6G2h3iZ1MV3N8q1USH19zDs="
       }
     },
     "inventory/skills/vercel-deploy": {

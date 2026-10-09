@@ -705,14 +705,27 @@ orchestrator is reviewing. Pick whose worktree it is and say so in the brief.
 
 Required sections:
 
-1. **Facts** — what the product/system actually is; never assume shared context.
-2. **Decisions already made** — as a table, marked do-not-relitigate, so it does not
+1. **`## Role`, first** (the `external-worker-delegation` wrapper refuses a brief without
+   it) — that Grok is the worker for this brief and does not delegate onward; that no human
+   will answer during the run; the **tier** you assigned, and for Tier 3 that the approved
+   spec is the brief, so it must not stop for approval; and **which skills to load**, by
+   name, or that none are needed. A host with managed instructions installed gives the
+   worker the same skill-activation rules as the orchestrator, so left unstated, the worker
+   decides for itself what to read first. Observed on 1.0.50 (2026-10-10, one tiny Tier 1
+   task, four identical runs on four hosts with four default skills installed): the runs
+   read between 0 and 6 skill or instruction files before writing code, and the costliest
+   cost about three times the cheapest. One observation; measure your own.
+2. **Facts** — what the product/system actually is; never assume shared context.
+3. **Decisions already made** — as a table, marked do-not-relitigate, so it does not
    re-open settled questions.
-3. **Environment** — Gotcha 2/3/4 constraints, what is pre-installed, what not to run.
-4. **Deliverables** — concrete, with the code-vs-generate split spelled out.
-5. **Honesty constraints** — what it must not claim or invent. Agents fill gaps with
+4. **Environment** — Gotcha 2/3/4 constraints, what is pre-installed, what not to run.
+5. **Deliverables** — concrete, with the code-vs-generate split spelled out.
+6. **Honesty constraints** — what it must not claim or invent. Agents fill gaps with
    plausible fabrication (testimonials, metrics, unshipped features) unless forbidden.
-6. **`NOTES.md` requirement** — decisions it made, departures from the brief and why,
+   That includes its own closing summary: on the same runs, one worker reported "no global
+   instructions file" right after reading it. Check artifacts and the `end` event, not
+   the self-report.
+7. **`NOTES.md` requirement** — decisions it made, departures from the brief and why,
    what it could not verify, what a human must do next. This is where the real
    signal lands; read it first when the run ends.
 

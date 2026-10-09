@@ -160,7 +160,7 @@ on 1.0.46 a three-file task stopped after two files, with the third never create
 |------|--------------|-------------|---------|
 | 0 | `end_turn` | — | Ran to completion. Check artifacts anyway. |
 | 1 | `cancelled` | `max_turns_reached` | Hit `--max-turns`. Resume it. |
-| 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`. |
+| 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`, and on 1.0.50 (Linux aarch64, 2026-10-10) when a headless run had no `--always-approve` at all: the first shell command was refused, because nobody is there to approve it. |
 | non-zero | absent / `error` | `error` | Genuine failure. Read it; do not resume blindly. |
 | 1 | no event at all | none; one line on **stderr** | `grok` refused to start, before any model call (unknown or unappliable `--sandbox` profile). The stream is empty, so read stderr. Seen on 1.0.50, Linux aarch64 (2026-10-09). |
 
@@ -548,7 +548,7 @@ Tool visibility is no longer the reason — `streaming-json` has the same events
 
 | Want | Use |
 |------|-----|
-| One batch job, minimal client code | `-p` (+ `--prompt-file`) with `streaming-json` |
+| One batch job, minimal client code | `--prompt-file BRIEF.md` (or `-p "<prompt>"`; never both, `-p` takes the prompt as its value) with `--always-approve` and `streaming-json` |
 | Granular permissions, mid-run steering | `agent stdio` (ACP) |
 | Remote / multi-client | `agent serve` (WebSocket + `--secret`) |
 

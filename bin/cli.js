@@ -29,6 +29,13 @@ import {
   SCAFFOLD_MARKER,
   renderAgentsMd
 } from '../lib/instruction-templates.js';
+import {
+  HOSTS_SCHEMA,
+  HostsFileError,
+  loadHostsFile,
+  probeAll,
+  resolveHostsFile
+} from '../lib/hosts.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -2727,6 +2734,70 @@ homeCommand
     } catch (error) {
       console.error(chalk.red('Error configuring shell environment:'), error.message);
       process.exitCode = 1;
+    }
+  });
+
+function describeProbedHost(host) {
+  const tags = [host.dedicated ? 'dedicated' : null, host.proxy ? 'via proxy' : null].filter(Boolean);
+  const suffix = tags.length ? chalk.gray(`  [${tags.join(', ')}]`) : '';
+  if (host.status !== 'reachable') {
+    return `${chalk.red('✗')} ${host.name}  unknown (${host.reason})${suffix}`;
+  }
+  const f = host.facts;
+  const facts = [
+    [f.os, f.arch].filter(Boolean).join(' '),
+    f.memMb == null ? null : `${Math.round(f.memMb / 1024)} GB RAM`,
+    f.diskFreeGb == null ? null : `${f.diskFreeGb} GB free`,
+    f.grokVersion ?? 'no grok',
+    f.grokProcs ? `${f.grokProcs} grok running` : null,
+    f.tempC == null ? null : `${f.tempC} °C`
+  ].filter(Boolean).join(', ');
+  return `${chalk.green('✓')} ${host.name}  ${facts}${suffix}`;
+}
+
+async function runHomeHosts(options) {
+  let file = null;
+  let hosts;
+  try {
+    file = await resolveHostsFile(process.env);
+    hosts = await loadHostsFile(file);
+  } catch (error) {
+    if (!(error instanceof HostsFileError)) throw error;
+    printSkillError(options, error.message, { file, problems: error.problems });
+    return;
+  }
+
+  const probed = options.probe ? await probeAll(hosts) : null;
+  if (options.json) {
+    console.log(JSON.stringify({
+      schema: HOSTS_SCHEMA,
+      file,
+      ...(probed ? { probedAt: new Date().toISOString() } : {}),
+      hosts: probed ?? hosts
+    }, null, 2));
+    return;
+  }
+
+  console.log(chalk.gray(`${file}  (${hosts.length} declared host${hosts.length === 1 ? '' : 's'})`));
+  if (probed) {
+    for (const host of probed) console.log(describeProbedHost(host));
+    return;
+  }
+  for (const host of hosts) {
+    console.log(`${host.name}  ssh ${host.ssh}${host.dedicated ? chalk.gray('  [dedicated]') : ''}`);
+  }
+}
+
+homeCommand
+  .command('hosts')
+  .description('List the remote hosts declared in ~/.skill-forge/hosts.json; --probe checks each over ssh (read-only)')
+  .option('--probe', 'Connect to each declared host over ssh and report reachability and basic facts')
+  .option('--json', 'Output structured JSON')
+  .action(async (options) => {
+    try {
+      await runHomeHosts(options);
+    } catch (error) {
+      printSkillError(options, `Error reading declared hosts: ${error.message}`);
     }
   });
 

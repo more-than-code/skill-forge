@@ -256,3 +256,27 @@ if u.get("sessionUpdate") in ("tool_call", "tool_call_update"):
 
 Watch for `pending_interaction`: the agent is asking permission. Answer it instead of
 pre-approving everything with `yoloMode` when the run touches anything destructive.
+
+## 9. Running on a remote Linux host over SSH
+
+Observed shape on 1.0.50, Linux aarch64 (2026-10-09). `<host>` and `<project-dir>` are
+yours; see "Running on a remote host (SSH)" in SKILL.md for what was and was not measured.
+
+```bash
+set -o pipefail
+
+# Preflight on the host that will run it
+ssh -T -o LogLevel=ERROR <host> 'grok --version && grok models'
+
+# Source in (not build output), then run with the brief on stdin
+rsync -a --exclude node_modules ./project/ <host>:<project-dir>/
+ssh -T -o LogLevel=ERROR <host> 'cd <project-dir> && grok --output-format streaming-json --max-turns 40' \
+  < BRIEF.md 2> run.stderr | tee run.jsonl
+
+# Exit 1 and an empty run.jsonl means it refused to start; the cause is on stderr
+cat run.stderr
+
+# Artifacts back, then verify in your own shell; cost lives on the host that ran it
+rsync -a --exclude node_modules <host>:<project-dir>/ ./project-out/
+ssh -T -o LogLevel=ERROR <host> 'grok usage <sessionId>'
+```

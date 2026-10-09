@@ -95,6 +95,46 @@ Declare the machine's agent role, so delegation tooling can tell an orchestrator
 skf home env --install
 ```
 
+Declare the remote machines this one may delegate work to. You write
+`~/.skill-forge/hosts.json` (or `$SKILL_FORGE_HOME/hosts.json`) by hand; neither the CLI nor an
+agent ever writes it, because `"dedicated": true` is a trust grant that decides whether a delegated
+run may go unsandboxed. The file must be owned by you and not writable by group or others. A
+`SKILL_FORGE_HOME` override must be an absolute path outside the current directory and outside any
+git work tree, so a repository cannot point it at a file it ships; the default `~/.skill-forge` is
+always trusted. (This guards the override variable only; an environment that can change `HOME` or
+`PATH` is already outside what any check here can stop.)
+
+```json
+{ "schema": 1, "hosts": [ { "name": "pi4", "ssh": "pi4", "dedicated": true } ] }
+```
+
+`ssh` is an alias already defined in `~/.ssh/config`; keys, users and ports stay there. Only the
+literal `true` counts as dedicated, so leave the key out for any host you have not declared.
+
+```bash
+skf home hosts             # list the declared hosts
+skf home hosts --probe     # read-only ssh check of each declared host; add --json for agents
+```
+
+`--probe` never scans the network: it connects only to declared hosts, with `BatchMode`, strict
+host-key checking, and agent, port and X11 forwarding and connection sharing switched off, and runs
+one fixed command. That command reads no credentials; its one side effect is running
+`grok --version` on the host. It reports a short list of facts (OS, architecture, memory, disk,
+`grok` version, running `grok` processes, temperature) and never prints raw remote output.
+
+- Each host is `reachable` (with `facts`) or `unknown` with a `reason`: `loopback-alias`,
+  `resolve-failed`, `timeout`, `auth-failed`, `host-key-unverified`, `ssh-error` or `bad-output`.
+  A host that is `unknown` is data, not an error. `proxy: true` flags an alias that goes through a
+  ProxyCommand or ProxyJump.
+- An alias that resolves to loopback (`localhost`, `*.localhost`, `127.*`, `::1` and their numeric
+  spellings) is refused without connecting. That check is best effort: it does not do DNS, so a
+  name that DNS maps to loopback is not caught.
+- Exit codes: `0` when the file is valid and the command finished, `1` for a missing, invalid or
+  refused file. With `--json`, a failure prints `{ "error", "file", "problems" }` and a probe prints
+  `{ "schema", "file", "probedAt", "hosts": [{ name, ssh, dedicated, status, reason?, proxy, facts? }] }`.
+- The remote account's shell must be POSIX-compatible (`bash`, `sh`, `zsh`); `fish` or `csh` give
+  `bad-output`.
+
 ## Common Commands
 
 List installable skills:

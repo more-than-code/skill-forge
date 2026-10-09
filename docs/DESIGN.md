@@ -157,6 +157,12 @@ shows per-project role variation matters.
 - There is no `.skill-forge/` project directory. Sync writes only committed
   artifacts (manifest, lockfile, vendored skill bodies), so no machine-local
   project state exists to store or gitignore.
+- Machine-local, per-user state lives in `~/.skill-forge/` (or `$SKILL_FORGE_HOME`), never in a
+  project. `hosts.json` there declares the remote machines this machine may delegate to
+  (`skf home hosts`). It is hand-written and per machine on purpose: how a host is reached is a
+  fact about one machine's network, and `"dedicated": true` is a trust grant that must stay a
+  deliberate act by the user. It holds no secrets, no project data and no probe results, and a
+  probe can measure a host but never declare it dedicated.
 
 ### Mental model
 

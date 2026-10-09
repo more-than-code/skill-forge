@@ -1,20 +1,23 @@
 ---
 name: grok-build-harness
 description: >
-  Harness for delegating a build to the locally installed Grok Build CLI (`grok`):
+  Harness for delegating a build to the Grok Build CLI (`grok`), installed locally or
+  on a remote Linux host reached over SSH:
   capturing its output with the four headless formats, reading the `end` event to
   tell completion from turn exhaustion, sandbox write boundaries and custom sandbox
   profiles, the model-judged `--permission-mode auto` gate, per-session cost via
   `grok usage`, the default context window, fast mode, Imagine image/video tool usage, and self-contained brief structure. Activate when handing work to Grok, spawning
   `grok` headlessly, streaming or parsing grok output, tracking its cost or reading its context window, debugging
   a grok run that exits 0 having done nothing, generating images/video with
-  image_gen / image_edit / image_to_video, or driving grok over ACP
-  (`grok agent stdio` / `serve`).
+  image_gen / image_edit / image_to_video, driving grok over ACP
+  (`grok agent stdio` / `serve`), running grok on a remote Linux host over SSH, or
+  signing a headless host in with `grok login --device-auth`.
 ---
 
 # Grok Build Harness
 
-Delegating a substantial build to the local **Grok Build** CLI (`grok`). Grok is a
+Delegating a substantial build to the **Grok Build** CLI (`grok`), on this machine or on
+a remote Linux host over SSH (see "Running on a remote host"). Grok is a
 capable agentic coder with image and video generation the host agent may lack — but
 headless runs fail in specific, repeatable ways. This skill is that harness.
 
@@ -42,7 +45,13 @@ grok inspect              # skills, agents, hooks, permissions, sandbox for THIS
 ```
 
 `grok models` failing or printing a login prompt means the delegation cannot run —
-the user must `grok login` themselves.
+the user must `grok login` themselves. On a headless host that is
+`grok login --device-auth`: it prints a URL and a one-time code, and the user approves
+it in any browser (see "Running on a remote host" for what this was observed to do).
+
+On a remote host run the same three through `ssh -T <host> '…'`, with `grok inspect`
+from the project directory on that host (`cd <project-dir> && grok inspect`), because
+its output is per directory and per host.
 
 `grok inspect` is the one to actually read before writing a brief: it prints which
 instruction files, skills, agents and hooks Grok will load *in that directory*, which
@@ -153,6 +162,7 @@ on 1.0.46 a three-file task stopped after two files, with the third never create
 | 1 | `cancelled` | `max_turns_reached` | Hit `--max-turns`. Resume it. |
 | 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`. |
 | non-zero | absent / `error` | `error` | Genuine failure. Read it; do not resume blindly. |
+| 1 | no event at all | none; one line on **stderr** | `grok` refused to start, before any model call (unknown or unappliable `--sandbox` profile). The stream is empty, so read stderr. Seen on 1.0.50, Linux aarch64 (2026-10-09). |
 
 So: a **non-zero exit plus `max_turns_reached`** is the resume signal, and `end_turn`
 with deliverables missing is a real model stop worth reading the narration for. The
@@ -253,6 +263,19 @@ profile you intend to use before writing a brief around it. On 1.0.46 (2026-10-0
 probe host had no `/var/run/docker.sock` at all and all five profiles started and
 enforced, which fits the link being the trigger; the symlink case itself was not re-run
 on 1.0.46.
+
+**On a Linux host the built-in profiles can also fail closed for want of `bubblewrap`.**
+Probed on 1.0.50, Linux aarch64, one host (2026-10-09), with no `bwrap` installed:
+`workspace`, `read-only` and `strict` each exited 1 with **zero events on stdout** and a
+single stderr line saying the sandbox "could not enforce its deny list on Linux" and to
+install `bubblewrap`; nothing ran (checked on disk). `--sandbox off` ran. An unknown
+profile name also exited 1 with its message on stderr only. **Not measured:** `devbox`;
+custom profiles with no `deny` rules; and any profile's write, read or network
+enforcement with `bubblewrap` installed. The bundled guide names Landlock as the Linux
+mechanism; on that host it looked absent (not in the kernel config, and the active
+security modules listed only `capability`), which was inferred and not tested. The guide
+also repeats the "continues without enforcement" sentence for an unappliable sandbox; it
+did not describe this case.
 
 **Custom profiles are the real fix for cache paths.** Define them in `~/.grok/sandbox.toml`
 (global) or `.grok/sandbox.toml` (per project) and pass the name to `--sandbox`:
@@ -534,6 +557,76 @@ Emacs are working clients — prefer one over hand-rolling. `EXAMPLES.md` carrie
 ~40-line Python client that completes the handshake above.
 
 
+## Running on a remote host (SSH)
+
+Everything above holds on a remote Linux host. What changes is where `grok` runs and
+where its files and state live. Observed on 1.0.50, Linux aarch64, one host reached over
+SSH (2026-10-09), unless marked *not measured*.
+
+```bash
+set -o pipefail
+ssh -T -o LogLevel=ERROR <host> 'cd <project-dir> && grok --output-format streaming-json --max-turns 40' \
+  < BRIEF.md 2> run.stderr | tee run.jsonl
+```
+
+- **`ssh -T`, stream to a local file.** No terminal; events arrive on stdout and the log
+  lives on the orchestrating machine. Keep stderr separate (`2> run.stderr`) and quiet
+  ssh's own warnings with `-o LogLevel=ERROR`; they share that stream.
+- **Brief on stdin from the orchestrator** (`< BRIEF.md`) ran with exit 0 and a normal
+  `end` event, with nothing to copy first. `--prompt-file` works too, but the path must
+  already exist **on the remote host**.
+- **`cd` into the project in the same remote command.** `grok -c` resumes the latest
+  session for the cwd, so a different cwd is a different session.
+- **Exit status.** ssh returned the remote command's status (0 and 1 were observed).
+  Treat **255 as an ssh failure**, not a grok result: grok may still be running. Run
+  `tee` on the orchestrating side with `pipefail`, never in the remote command, or
+  `tee`'s status replaces grok's.
+- **Environment does not travel** by default (general OpenSSH behaviour, *not measured*
+  here). A role marker or any variable the run needs must be set inside the remote
+  command, for example `ssh -T <host> 'cd <dir> && SOME_VAR=value grok …'`.
+
+**Files in, artifacts out.** The project has to exist on the host: sync source only
+(`rsync` or `git`), not build output. Binaries and `node_modules` built there for the
+remote architecture will not run on the orchestrator. Then verify as usual, either by
+running the gates over ssh on the host, or by syncing back and rebuilding locally. A
+completion check based on file times (`find -newer`) needs the times preserved
+(`rsync -a`) or has to run on the host.
+
+**Sandbox on a host the user has declared dedicated.** `--sandbox off` is the default
+and the only profile that started with no extra packages on the probed host (see the
+`bubblewrap` note above). It is acceptable only where **the user has declared that host
+dedicated to this work** (`"dedicated": true` in their own hosts file, or, for a host listed
+there, said so in the conversation, which covers that session only) **and**
+`skf home hosts --probe --json` shows that entry `reachable`
+in this session. Connect with the entry's `ssh` field, never its `name`. Never decide
+"dedicated" yourself from a name, hardware or a probe result, and never write that file. Under
+`off` the run can read and write everything the account can, which includes: the host's
+SSH `authorized_keys` (readable on the probe; writable by the table above), Grok's own
+credential in `~/.grok`, any secrets in the synced project, and whatever the host's
+network can reach. Keep other credentials off that host and say in the brief what is
+off-limits. This does not relax the Permission note below: a host-side block on spawning
+`grok` is not a reason to route the same command through ssh.
+
+**Login and state are per host.** Each host has its own `~/.grok`, login, sessions and
+usage store.
+- `grok login --device-auth` printed a URL and code and completed once the user approved
+  it in a browser, on each of four hosts. The agent never types the credential.
+- Browser sign-ins expire after about 7 days (per Grok's README, *not measured*; that
+  README lags the binary). `XAI_API_KEY` on the host is the durable alternative, set by
+  the user.
+- `grok usage <sessionId>` requires the id and reads the store of the host that ran the
+  session, so run it there (`ssh -T <host> grok usage <sessionId>`). On the probe it
+  matched the `end` event's token counts.
+
+**Long runs over a flaky link (*not measured*).** One resumed iteration runs 15 to 25
+minutes. If ssh drops, it exits 255, the stream is lost, and `grok` may keep running on
+the host. Consider running detached on the host (`tmux`, `nohup`, or `systemd-run`) with
+the stream written to a file there and fetched afterwards, `-o ServerAliveInterval=30`,
+and not starting `grok -c` while a run for that cwd may still be alive.
+
+**ACP.** `ssh -T <host> grok agent stdio` is a possible alternative to `agent serve`
+(*not measured*). If you use `serve`, bind it to loopback and tunnel to it.
+
 ## The brief
 
 Grok starts **cold** — it cannot see the delegating conversation. Write a
@@ -642,7 +735,8 @@ on merit, and record accepted departures upstream.
 The host agent may be blocked from spawning an unattended `grok` process by its own
 permission classifier, regardless of flags. That is a host-side control: explain what
 you are trying to run and let the user launch it or add a permission rule. Do not
-paper over it with flag variations.
+paper over it with flag variations, and do not route the same command through ssh to
+another host to get around it.
 
 ## Anti-patterns
 
@@ -658,6 +752,9 @@ paper over it with flag variations.
 | Assume a package manager still segfaults in-sandbox | Re-probe; pnpm 12.x relocates its store and installs fine |
 | `--sandbox devbox` / no sandbox to dodge write errors | A custom profile with `read_write` for the cache path |
 | Assume an unappliable sandbox degrades to unsandboxed | It refuses to start; probe the profile first |
+| Treat a remote host as disposable because it looks like a dev box | Only when the user has declared it dedicated (`"dedicated": true` in their hosts file, or in chat for a host listed there) and a probe this session shows it `reachable`; connect with its `ssh` field; state what `--sandbox off` leaves reachable in the brief |
+| Judge a run with an empty stream only by stdout | Exit 1 with no events means it refused to start; read stderr |
+| Read an ssh exit code as grok's, or `tee` inside the remote command | 255 is ssh itself; `tee` on the orchestrator with `pipefail` |
 | `--permission-mode auto` on a headless brief | `--always-approve` with the sandbox as the boundary; if you keep `auto`, scan for `Auto mode blocked` |
 | Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |

@@ -163,6 +163,21 @@ Pre-build the environment before dispatch (dependencies installed, toolchains ve
 sandboxes commonly cannot write to package caches, and a worker that burns its run fighting a
 scaffolder produces nothing. The transport skill covers the specifics.
 
+## Where the worker runs
+
+When the worker lives on another machine, the orchestrator does not guess which one. Ask this
+machine's own declaration: `skf home hosts --json` lists the hosts the user declared, and
+`skf home hosts --probe --json` adds a read-only reachability check. Choose only among declared
+hosts that probe as `reachable` in this session; treat `unknown` as unavailable, whatever the
+reason. Connect with the entry's `ssh` field, never its `name`. If the file is missing, empty, or
+lists no suitable host, **ask the user**. Do not scan the network, infer a host from a name, or
+add one yourself, and never write the hosts file. The host must be in that file in every case;
+only the user can make it dedicated, with `"dedicated": true` there or by saying so in the
+conversation (which covers that session only). That declaration is the only thing that makes an
+unsandboxed worker acceptable, and the host must still probe as `reachable`; a probe result, a
+hostname or the hardware never makes a host dedicated. The transport skill covers running the
+worker once a host is chosen.
+
 ## Dispatch with the wrapper
 
 Both ends run the same shared instructions, including this pattern's own description, so a worker
@@ -314,6 +329,7 @@ artifacts on disk, never the worker's claim of completion.
 |-------|-------|
 | Delegate labor, then have the primary read all output | Acceptance ladder; primary reads findings, not diffs |
 | Spawn in-harness reviewers "because they're cheap" | They bill to the primary; use fresh worker sessions |
+| Pick a worker host by scanning the LAN, or by its name or hardware | `skf home hosts --json`; ask the user if nothing suitable is declared |
 | Same session writes and reviews | Fresh session, diff + lens only |
 | Worker writes to the primary working tree | Dedicated worktree/branch the orchestrator merges |
 | Dispatch a worktree off a dirty tree | Commit first; else the in-tree fallback with a checksum sweep |

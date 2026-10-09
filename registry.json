@@ -292,7 +292,7 @@
     {
       "type": "skill",
       "name": "grok-build-harness",
-      "version": "0.5.6",
+      "version": "0.5.7",
       "scope": "custom",
       "path": "inventory/skills/grok-build-harness",
       "installable": true,

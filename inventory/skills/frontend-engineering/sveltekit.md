@@ -7,6 +7,7 @@ Load this companion after `svelte.md` for SvelteKit app work.
 - Prefer `load` for route data dependencies instead of pushing initial page data fetching into `onMount`.
 - Choose universal `load` or server `load` deliberately. Use server-only load functions, actions, or endpoints for secrets, cookies, privileged access, and auth-sensitive data.
 - Browser globals must be guarded during SSR and prerendering.
+- Read page state from `$app/state` (`page.url`, `page.data`), not the deprecated `$app/stores` (`$page`); `$app/state` needs SvelteKit 2.12+. Add `{ name: "$app/stores", message: "Use $app/state." }` to the `no-restricted-imports` paths from the `svelte.md` version gate.
 - Forms that mutate server state should use SvelteKit form actions when that model fits, so progressive enhancement and navigation behavior stay aligned with the framework.
 - After mutations, make invalidation and refresh paths explicit with `invalidate`, `invalidateAll`, redirects, or returned action data.
 - Put auth and permission checks at route or server boundaries instead of scattering them through UI components.

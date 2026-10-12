@@ -15,7 +15,7 @@ Read this file first for shared frontend principles. If the task is framework-sp
 load the matching companion file in this directory:
 
 - `react.md` for React-specific hooks, rendering, composition, and performance guidance
-- `svelte.md` for Svelte-specific component syntax, runes, props, events, snippets, stores, and component APIs
+- `svelte.md` for Svelte-specific component syntax, runes, props, events, snippets, stores, and component APIs. All Svelte code is Svelte 5+ in runes mode; `svelte.md` carries the Svelte 4 → 5 mapping and the version gate that enforces it
 - `sveltekit.md` for SvelteKit-specific routing, data loading, forms, actions, and SSR guidance; load after `svelte.md`
 
 ## Related Skills

@@ -30,19 +30,35 @@ Per-component fallback, not all-or-nothing.
    customElement>`. Generate a thin wrapper per component in a scratch dir:
 
    ```svelte
-   <svelte:options customElement={{ tag: "ds-button", shadow: "open" }} />
+   <svelte:options customElement={{
+     tag: "ds-button",
+     shadow: "open",
+     props: { variant: { type: "String" }, disabled: { type: "Boolean" }, onclick: {} },
+   }} />
    <script>
      import Button from "$lib/components/ui/button/button.svelte";
      let { ...props } = $props();
    </script>
-   <Button {...props}>{@render props.children?.()}<slot /></Button>
+   <Button {...props}><slot /></Button>
    ```
 
-   `shadow: "open"` keeps `<slot>` working (with `shadow: "none"` Svelte custom
-   elements do not support slots). That means global CSS must be adopted into each
-   shadow root — see step 3.
+   **Declare every prop in `customElement.props`** — one entry per prop of the wrapped
+   component, generated from its `$props()` type (the same list step 4 passes as
+   `propNames` and step 5 writes to `.d.ts`). A rest `$props()` gives Svelte nothing to
+   infer from, so without `props` the element exposes no properties: step 4's
+   `el[name] = value` assignments never reach the component, every prop silently does
+   nothing, and the compiler only says so as a `custom_element_props_identifier`
+   warning. `type` (`String`/`Number`/`Boolean`/`Array`/`Object`) matters only for
+   attribute conversion; use `{}` for callback props.
 
-2. **Compile** the wrappers with Vite + `@sveltejs/vite-plugin-svelte`,
+   `shadow: "open"` keeps `<slot>` working (with `shadow: "none"` Svelte custom
+   elements do not support slots). This native shadow-DOM `<slot>` is the one place
+   Svelte 5 code still uses `<slot>`; the host's light-DOM children arrive through it,
+   so the wrapper has no `children` snippet to render. That means global CSS must be
+   adopted into each shadow root — see step 3.
+
+2. **Compile** the wrappers and treat any compiler warning as a failure — a
+   `custom_element_props_identifier` warning means a wrapper exposes no props. Build them with Vite + `@sveltejs/vite-plugin-svelte`,
    `compilerOptions: { customElement: true }`, `build.lib` with `formats: ["iife"]`,
    `name` = the global. The IIFE must, on load: register every custom element and
    assign a namespace object to `window.<globalName>`.

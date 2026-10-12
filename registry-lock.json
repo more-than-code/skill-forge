@@ -144,13 +144,13 @@
     },
     "inventory/skills/design-sync-svelte": {
       "name": "design-sync-svelte",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-WTo91kCf/YxZgVCTS+uX+5WTuC/sgcSTRUJaYgFfE2w=",
+      "integrity": "sha256-q2zpO+cEy2RmZgkcvnBaCBGGC6Xea/u0wa/u+kXrPuo=",
       "files": {
-        "references/custom-elements.md": "sha256-bzAzxvmXcb68v5dBcmQxdWqIRLL8K2oaPv+PekbrCQc=",
+        "references/custom-elements.md": "sha256-FQSXCtVTSl7rZ0WkOIE600oNNTMjPSWkVe9eRbr2Gs8=",
         "references/ds-layout.md": "sha256-SzuQKE6TxAliUrX4hrKRmXJHlJxe6+MQJVuvzdpuSAE=",
         "SKILL.md": "sha256-hUmWwKa37UTP0L8k4lffmHl8qOB2ElXoKGzuiwX1BIo="
       }

@@ -253,8 +253,8 @@ Universal sections:
    two writing the same file). Probed on 1.0.46: Grok ran two subagents in parallel and their spend
    rolled into the run's total and `grok usage`. Where a task should run on one agent and the worker
    CLI can enforce that, set it too, and probe that it holds: Grok's `--no-subagents` flag was
-   accepted but did not stop spawning on 1.0.46, while `GROK_SUBAGENTS=0` did. The brief still states
-   the role, for the CLIs that cannot enforce anything.
+   accepted but did not stop spawning on 1.0.46 or 1.0.50, while `GROK_SUBAGENTS=0` did; on 1.0.60
+   the flag works too. The brief still states the role, for the CLIs that cannot enforce anything.
 2. **Facts** — what the system actually is.
 3. **Decisions already made** — a table, marked do-not-relitigate.
 4. **Environment** — what is pre-installed, what it must not run or re-scaffold.

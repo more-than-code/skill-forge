@@ -53,18 +53,21 @@ the media checks before you consider yourself done, and write NOTES.md.'
 
 for i in $(seq 1 30); do
   echo "########## ITERATION $i $(date +%H:%M:%S) ##########"
+  # Log each iteration on its own, so the cap check below never sees an earlier one.
   grok -c -p "$PROMPT" --sandbox workspace --always-approve --max-turns 400 \
-    --output-format streaming-json | tee -a run.jsonl
+    --output-format streaming-json | tee "run.$i.jsonl"
+  cat "run.$i.jsonl" >> run.jsonl
   # Completion markers = artifacts on disk, not the model's word
   if [ -f NOTES.md ] && ls static/video/*.mp4 >/dev/null 2>&1; then
     echo "=== COMPLETE after iteration $i ==="; break
   fi
-  # A turn-cap stop exits non-zero too, so branch on stopReason, not on rc.
-  last=$(grep '"type":"end"' run.jsonl | tail -1)
-  case "$last" in
-    *'"stopReason":"cancelled"'*) echo "turn cap; resuming" ;;
-    *) echo "stopped for another reason; inspect run.jsonl"; break ;;
-  esac
+  # A turn-cap stop exits non-zero too, so branch on the max_turns_reached event, not on rc.
+  # (Its stopReason moved from cancelled to max_turn_requests by 1.0.60, so match neither.)
+  if grep -q '"type":"max_turns_reached"' "run.$i.jsonl"; then
+    echo "turn cap; resuming"
+  else
+    echo "stopped for another reason; inspect run.$i.jsonl"; break
+  fi
 done
 ```
 
@@ -102,8 +105,8 @@ print(f'TOTAL \${tot:.4f}')
 ```
 
 On 1.0.x: `stopReason: end_turn` = ran to completion (check artifacts anyway);
-`stopReason: cancelled` alongside a `max_turns_reached` event = hit `--max-turns`,
-so resume. The value is snake_case — matching `EndTurn` finds nothing.
+a `max_turns_reached` event = hit `--max-turns`, so resume (its `stopReason` is
+`cancelled` on the versions probed up to 1.0.50 and `max_turn_requests` on 1.0.60). The value is snake_case — matching `EndTurn` finds nothing.
 
 `tool_call` / `tool_call_update` give live write visibility, including diffs:
 
@@ -174,7 +177,7 @@ rasters (`ffmpeg -encoders | grep webp`), and fall back to PNG/JPEG or `sips`.
 
 | Symptom | Cause | Action |
 |---------|-------|--------|
-| Non-zero exit, `stopReason: cancelled`, `max_turns_reached` | turn cap | resume with `-c` |
+| Non-zero exit, `max_turns_reached` (`stopReason` `cancelled` or `max_turn_requests`) | turn cap | resume with `-c` |
 | Exit 0, `end_turn`, deliverables missing | model stopped early | read the narration; tighten the brief |
 | Exit 0, truncated narration, few files, **0.2.x** | single-turn `-p` | upgrade; else driver loop with `-c` |
 | Crash in a create/scaffold CLI | cache write outside sandbox | pre-scaffold outside |

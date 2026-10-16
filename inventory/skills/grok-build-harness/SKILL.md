@@ -39,7 +39,7 @@ phase, and how to accept what comes back — activate `external-worker-delegatio
 ## Preflight (always)
 
 ```bash
-grok --version            # observations below are stamped 1.0.40-1.0.50; latest re-probe 1.0.50 (2026-10-09)
+grok --version            # observations below are stamped 1.0.40-1.0.60; latest re-probe 1.0.60 (2026-10-16)
 grok models               # confirms login + available models
 grok inspect              # skills, agents, hooks, permissions, sandbox for THIS directory
 ```
@@ -87,7 +87,7 @@ what the help calls "the agent's native format" is the same session-update vocab
 `grok agent stdio` pushes. Tool visibility is therefore in headless mode, and the
 guidance that it was ACP-only is obsolete.
 
-Directly observed on 1.0.40, 1.0.41, 1.0.46 and 1.0.50: `text`, `thought`, `tool_call`, `tool_call_update`,
+Directly observed on 1.0.40, 1.0.41, 1.0.46, 1.0.50 and 1.0.60: `text`, `thought`, `tool_call`, `tool_call_update`,
 `usage`, `available_commands`, `end`, and `max_turns_reached` (under `--max-turns`).
 Carried over from earlier versions but not seen in these probes: `error`,
 `auto_compact_*`. The list is **not exhaustive** and it grows between versions, so
@@ -106,7 +106,7 @@ find work/src work/static -type f -newer work/BRIEF.md | sort
 `available_commands` enumerates the live tool and slash-command inventory for the
 session. Read it instead of assuming which tools exist in the version you are driving.
 
-The `end` event is the run's post-mortem, verified shape on 1.0.40 and unchanged on 1.0.41, 1.0.46 and 1.0.50:
+The `end` event is the run's post-mortem, verified shape on 1.0.40 and unchanged on 1.0.41, 1.0.46, 1.0.50 and 1.0.60 (only the turn-cap `stopReason` value moved, below):
 
 ```json
 {"type":"end","stopReason":"end_turn","sessionId":"…","requestId":"…",
@@ -116,7 +116,7 @@ The `end` event is the run's post-mortem, verified shape on 1.0.40 and unchanged
 
 Read four fields every time:
 
-- **`stopReason`** — why it stopped, and now **snake_case** (`end_turn`, `cancelled`).
+- **`stopReason`** — why it stopped, and now **snake_case** (`end_turn`, `cancelled`, `max_turn_requests`).
   A driver loop grepping for the old `EndTurn` matches nothing and loops forever.
 - **`num_turns`** — how much it actually did.
 - **`total_cost_usd`** — accumulate across iterations. `total_cost_usd_ticks` is the
@@ -146,6 +146,15 @@ accepts the prompt on piped stdin in headless mode (`echo "…" | grok --output-
 streaming-json …` ran and wrote its file), so a brief no longer has to be a `-p` argument
 or a `--prompt-file`. The same-file collision probe was not repeated on 1.0.50.
 
+Re-confirmed on 1.0.60 (2026-10-16, one sample each): the same three-step brief ran in 7
+turns with `end_turn`; `-m grok-4.7-build-fast` ran as that model; a prompt on piped stdin
+still worked; `grok usage <sessionId>` reported `costUsdTicks` equal to the `end` event's
+`total_cost_usd_ticks`; `grok --help` lists no `--fast` flag; the `end` event carries a
+top-level `cwd` field (not compared with earlier versions); the `workspace`, `read-only` and
+`strict` profiles still blocked a `~/.ssh` write from a scratch CWD; and the context windows in
+`models_cache.json` were unchanged. Not repeated on 1.0.60: the same-file collision probe, the
+bwrap and remote-host observations, and Imagine.
+
 The old trap is gone. On **0.2.x**, `-p` ran exactly one assistant turn: the model did
 a batch of tool calls, ended its response intending to continue, and the process exited
 0 mid-plan with a truncated narration ("Scaffolding next…"). That failure mode cost
@@ -153,14 +162,14 @@ hours of misdiagnosis and is what the driver loop below existed to work around. 
 are on a 0.2.x build, it still applies — and the fix is to upgrade, not to loop.
 
 **What still stops a run early is the turn cap**, and it is cheap to identify because
-the signals are unambiguous (verified on 1.0.40, 1.0.41, 1.0.46 and 1.0.50 with `--max-turns 2`;
+the signals are unambiguous (verified on 1.0.40, 1.0.41, 1.0.46, 1.0.50 and 1.0.60 with `--max-turns 2`;
 on 1.0.46 a three-file task stopped after two files, with the third never created):
 
 | Exit | `stopReason` | Extra event | Meaning |
 |------|--------------|-------------|---------|
 | 0 | `end_turn` | — | Ran to completion. Check artifacts anyway. |
-| 1 | `cancelled` | `max_turns_reached` | Hit `--max-turns`. Resume it. |
-| 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`, and on 1.0.50 (Linux aarch64, 2026-10-10) when a headless run had no `--always-approve` at all: the first shell command was refused, because nobody is there to approve it. |
+| 1 | `cancelled` on 1.0.40, 1.0.41, 1.0.46 and 1.0.50; **`max_turn_requests` on 1.0.60** (1.0.51-1.0.59 not probed) | `max_turns_reached` | Hit `--max-turns`. Resume it. The `stopReason` value changed between 1.0.50 and 1.0.60, so key a driver loop on the `max_turns_reached` event, not on either string. |
+| 0 | `cancelled` | none; the `tool_call_update` is `failed` with "User cancelled the execution" | A tool call was cancelled and nothing ran. Seen on 1.0.46 when `--permission-mode default` was passed beside `--always-approve`, and on 1.0.50 (Linux aarch64, 2026-10-10) when a headless run had no `--always-approve` at all: the first shell command was refused, because nobody is there to approve it. On 1.0.60 (one sample, the `--permission-mode default` + `--always-approve` case) the refusal also appeared on **stderr** ("permission required: Write … was not run, as a headless run cannot ask for approval"), so a driver that keeps stderr can see why. |
 | non-zero | absent / `error` | `error` | Genuine failure. Read it; do not resume blindly. |
 | 1 | no event at all | none; one line on **stderr** | `grok` refused to start, before any model call (unknown or unappliable `--sandbox` profile). The stream is empty, so read stderr. Seen on 1.0.50, Linux aarch64 (2026-10-09). |
 
@@ -190,7 +199,7 @@ Rules for the loop:
   of reusing the id.
 - Break on a genuine error. Note that a `max_turns_reached` run also exits non-zero,
   so a loop that breaks on *any* non-zero exit will not resume — distinguish the two
-  by `stopReason` rather than by exit code alone.
+  by the `max_turns_reached` event, not by exit code and not by a `stopReason` string.
 - One resumed iteration commonly runs 15–25 min and does enormous work. Budget for it.
 
 ## Gotcha 2 — the sandbox write boundary, and how to widen it
@@ -402,7 +411,7 @@ grok usage <sessionId> <turn>   # one turn
 It returns JSON: `inputTokens`, `outputTokens`, `cachedReadTokens`,
 `reasoningTokens`, `modelCalls`, `turnCount`, `primaryModelId`, and `costUsdTicks`
 (USD x 10^10 — `899470000` is $0.0899), nested under `session` for the totals and
-`turns[]` per turn. Verified on 1.0.40, 1.0.41, 1.0.46 and 1.0.50 against the same session's `end`
+`turns[]` per turn. Verified on 1.0.40, 1.0.41, 1.0.46, 1.0.50 and 1.0.60 against the same session's `end`
 event; the cost figures agree to the tick.
 
 **The two commands count different "turns".** `grok usage`'s `turnCount` and its
@@ -668,9 +677,16 @@ Two settings worth applying to a delegated spawn:
   give each subagent its own files, or have them edit or append rather than rewrite a shared
   one. These are small, timing-dependent samples: clean runs show no failure here, not that
   one cannot happen.
-- **Subagents off, when a task should run on one agent: use `GROK_SUBAGENTS=0`, and probe
-  that it worked.** On 1.0.46 and again on 1.0.50 (2026-10-09) **`--no-subagents` was accepted but did not stop spawning in
-  headless `-p`.** Asked to use `spawn_subagent`, a run with the flag, whether before or after
+- **Subagents off, when a task should run on one agent: `--no-subagents` works on 1.0.60;
+  use `GROK_SUBAGENTS=0` on 1.0.50 and earlier (1.0.51-1.0.59 not probed), and probe that it worked.** On 1.0.46 and 1.0.50
+  (2026-10-09) **`--no-subagents` was accepted but did not stop spawning in headless `-p`.**
+  On 1.0.60 (2026-10-16) it does: three runs told to call `spawn_subagent` with the flag wrote
+  the file themselves and never spawned, while the two runs without it spawned, and `GROK_SUBAGENTS=0`
+  still removed the tool. With either control, `spawn_subagent` was also absent from the
+  `available_commands` event, which is a probe that needs no model call. The bundled
+  changelog's 1.0.51-1.0.60 entries do not mention the fix.
+
+  The older 1.0.46/1.0.50 observation: asked to use `spawn_subagent`, a run with the flag, whether before or after
   the prompt, spawned a subagent that ran and returned its output, exactly as the run without
   it did. With `GROK_SUBAGENTS=0` in the environment the model searched for the tool, found
   none, and reported it unavailable. The flag's help text and the bundled docs both say it
@@ -756,8 +772,8 @@ another host to get around it.
 | Wrong | Right |
 |-------|-------|
 | Treat exit 0 as success | Check artifacts; read `stopReason` and `num_turns` |
-| Match `stopReason` against `EndTurn` | `end_turn` / `cancelled` — snake_case since 1.0 |
-| Break the driver loop on any non-zero exit | `max_turns_reached` also exits non-zero; branch on `stopReason` |
+| Match `stopReason` against `EndTurn` | `end_turn` / `cancelled` / `max_turn_requests` — snake_case since 1.0 |
+| Break the driver loop on any non-zero exit | `max_turns_reached` also exits non-zero; branch on the `max_turns_reached` event |
 | Raise `--max-turns` until it finishes | An unfinished brief at a high cap means the brief was too big |
 | Reach for ACP to see tool calls | `streaming-json` has them since 1.0; use ACP for permissions and steering |
 | Trust a wire-format claim from an older version — or from Grok's own README | `grok --version`, then probe; record both |
@@ -771,11 +787,11 @@ another host to get around it.
 | `--permission-mode auto` on a headless brief | `--always-approve` with the sandbox as the boundary; if you keep `auto`, scan for `Auto mode blocked` |
 | Let Grok scaffold and install in-sandbox | Pre-build the environment outside it |
 | Pass `--worktree` into a dispatcher-managed worktree | One isolation mechanism; decide whose and state it |
-| Rely on `--no-subagents` to switch subagents off | `GROK_SUBAGENTS=0`, and probe that `spawn_subagent` is really gone; the flag was accepted but ineffective on 1.0.46 and 1.0.50 |
+| Trust a subagent-off control without probing it | Check that `spawn_subagent` is gone from `available_commands`; `--no-subagents` was ineffective on 1.0.46 and 1.0.50 and works on 1.0.60, `GROK_SUBAGENTS=0` worked on all three |
 | Let two subagents `write` the same file whole | Give each its own files, or have them make targeted edits or appends; a whole-file write silently loses the other's work |
 | Switch subagents off by default "for safety" | Leave them on and say in the brief what is allowed; their spend is in the run's total |
-| Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46 and 1.0.50 and exited 0 having done nothing |
-| Look for a `--fast` flag | There is none on 1.0.50; fast mode is the `grok-4.7-build-fast` model, `-m grok-4.7-build-fast`, at about twice the price |
+| Add `--permission-mode default` beside `--always-approve` | `--always-approve` alone; the combination cancelled the tool call on 1.0.46, 1.0.50 and 1.0.60 and exited 0 having done nothing |
+| Look for a `--fast` flag | There is none on 1.0.60; fast mode is the `grok-4.7-build-fast` model, `-m grok-4.7-build-fast`, at about twice the price |
 | Read the context window from the `end` event | `~/.grok/models_cache.json`, or ACP `session/new` metadata; the headless `end` event omits it |
 | Scrape cost only from `run.jsonl` | `grok usage <sessionId>` persists it |
 | `image_gen` a UI mockup or anything with real copy | Build it in code |

@@ -191,16 +191,16 @@
     },
     "inventory/skills/frontend-engineering": {
       "name": "frontend-engineering",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-tSZI5KP+PQS22mIQ60szrUUe4obvtJBPb5Ii5zUU184=",
+      "integrity": "sha256-cwW8++kmMEsBa0YLSqb95tM1IYWh/DxXK7UG9WssI5Q=",
       "files": {
         "react.md": "sha256-eUQ+eaye6m1J1CQC2qiHzTTcO60WZHEf5DqbkqKZq8E=",
-        "SKILL.md": "sha256-kUIKxCGI897urv1665goBQIADGuDlbNpfTrIzaPkTkk=",
+        "SKILL.md": "sha256-kbFaMZt16lduL4m+z68nDVnM6TFyG+sfczRiA4ybyUA=",
         "svelte.md": "sha256-n9k2DvqZzZrkNIeXtgYU8g4VfnMUmC3YhR1SODD58TQ=",
-        "sveltekit.md": "sha256-HMaSThmAepo6rB2yrC3P9ObKaTVvXITuFuDzFIypj8w="
+        "sveltekit.md": "sha256-3QJt70SJUrGZKuGlCuAwOmJM3f0+Ni0V/8/plru3vuw="
       }
     },
     "inventory/skills/fvm-flutter": {

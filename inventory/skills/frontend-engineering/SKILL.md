@@ -77,6 +77,7 @@ Then load a companion file when:
 - [ ] Overflow is intentional and tested on small screens
 - [ ] Z-index usage follows a scale, not one-off escalation
 - [ ] Global styles are narrowly scoped and do not leak across features
+- [ ] Font stacks include fallbacks for every script the UI renders (for example CJK), not only Latin
 
 ### Data Fetching & Real-Time
 - [ ] Data loads in a predictable lifecycle boundary, not during render
@@ -91,6 +92,12 @@ Then load a companion file when:
 - [ ] Focus is managed during modal and route transitions
 - [ ] Color contrast and non-color cues satisfy the UI state being communicated
 - [ ] Dynamic status changes are announced when users would otherwise miss them
+
+### Dependencies & Toolchain
+- [ ] On starting work in a project, its framework and build packages were checked for updates (`pnpm outdated` or the project's equivalent), and any a major version behind was reported
+- [ ] Toolchain upgrades ship as their own change with the gates rerun, not folded into a feature diff
+- [ ] The project's existing version policy (ranges or exact pins) is followed, and its lockfile is committed: the lockfile is what pins installs
+- [ ] The project uses one package manager and one lockfile
 
 ## Anti-Patterns
 

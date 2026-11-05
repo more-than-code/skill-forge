@@ -13,6 +13,16 @@ Load this companion after `svelte.md` for SvelteKit app work.
 - Put auth and permission checks at route or server boundaries instead of scattering them through UI components.
 - Prefer existing local UI primitives, route conventions, API helpers, and type models before introducing new local patterns. Check common SvelteKit locations such as `src/lib/components`, `src/lib/types`, and `src/routes/api` when they exist.
 
+## Tailwind v4 and shadcn-svelte
+
+Applies when the project uses them: `@tailwindcss/vite` in `package.json`, `components.json` at the root.
+
+- Tailwind v4 has no `tailwind.config`. Theme tokens live in `@theme` and shadcn-svelte's CSS variables in the entry CSS, usually `src/app.css`. Add or change a token there instead of hard-coding the value in a component.
+- shadcn-svelte components are copied into the repo (the `ui` alias in `components.json`), not installed as a package. Upgrading the CLI or `bits-ui` does not change components already added: re-add a component through the CLI to pick up upstream changes, and review the diff against local edits.
+- Add a primitive with the CLI (`pnpm dlx shadcn-svelte@latest add <component>`) before hand-writing one that shadcn-svelte ships. The CLI also installs what it depends on, such as `svelte-sonner` for toasts.
+- Keep local edits to copied components small and deliberate, so a later re-add is a reviewable diff instead of a rewrite.
+- `bits-ui` is the headless layer under the copied components. On a `bits-ui` major upgrade, re-add or check every copied component that imports it.
+
 ## SvelteKit Patterns
 
 ### Universal route data

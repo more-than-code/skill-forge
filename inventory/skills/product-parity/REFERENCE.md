@@ -272,6 +272,29 @@ declared endpoints are asserted; query strings are ignored. Waive a capture with
 A declared endpoint that **neither** client requested fails too: the manifest entry is
 stale, so the capture no longer shows the state it claims to.
 
+**The bag contract.** The skill ships the checkers; each project writes its own capture code.
+The source bag, `<out>/api/<id>.json`, is the file between them, so its shape is fixed here:
+
+```jsonc
+{
+  "GET /api/me": { "name": "Ana" },                                   // the parsed response body
+  "GET /api/tips": { "_parity": { "kind": "stub", "status": 0, "reason": "not served offline" } },
+  "GET /api/export": { "_parity": { "kind": "non-json", "status": 200, "reason": "text/csv" } }
+}
+```
+
+- **Key:** `"METHOD /path"`; a query string is ignored.
+- **Value:** the parsed body, or exactly one marker `{ "_parity": { kind, status, reason } }`,
+  `kind` one of `error`, `non-json`, `stub`, `status` an integer.
+- **A marker never replaces a body already recorded for the same key.** A repeat call whose
+  body could not be read keeps the earlier recording.
+- **A mirror harness treats a marker as "no data"** — a stub — never as a response.
+
+The gate fails `api-bag` on any entry with a `_parity…` or `__…` key that is not exactly
+that marker, and `api-bag:2xx-error` on an `error` marker whose status is 2xx: the server
+answered, the capture failed to read it. Marker counts are reported as a note. The mirror's
+own record, `<id>.<mirror column>.json` with `consumed`, is not a bag and is not checked here.
+
 ### K — control names
 
 ```jsonc

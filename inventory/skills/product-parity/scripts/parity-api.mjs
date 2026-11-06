@@ -29,11 +29,84 @@
 // Query strings are ignored on both sides: `GET /api/chats?limit=20` and `GET /api/chats`
 // are the same endpoint for parity purposes, and treating them as different would fail on
 // pagination defaults that are not a parity concern.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { columns } from './parity-columns.mjs';
 
 const stripQuery = (k) => String(k).split('?')[0].trim();
+
+// THE BAG CONTRACT. A source bag, <out>/api/<id>.json, maps "METHOD /path" to the parsed
+// response body — or, when there is no body to record, to exactly one marker:
+//   { "_parity": { "kind": "error" | "non-json" | "stub", "status": <int>, "reason": "…" } }
+// A marker never replaces a body already recorded for the same key, and a mirror harness
+// treats a marker as "no data", never as a response.
+//
+// Observed 2026-11-07: a capture invented three marker shapes; a failed read of a repeat
+// call overwrote good recordings (status 200 every time), and the mirror harness decoded
+// the markers as data and crashed 19 of 31 captures. Nothing checked the values, only keys.
+const MARKER_KINDS = new Set(['error', 'non-json', 'stub']);
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const markerish = (v) => isObject(v) && Object.keys(v).some((k) => k.startsWith('_parity') || k.startsWith('__'));
+const validMarker = (v) =>
+  isObject(v) &&
+  Object.keys(v).length === 1 &&
+  isObject(v._parity) &&
+  MARKER_KINDS.has(v._parity.kind) &&
+  Number.isInteger(v._parity.status);
+
+function checkBags(apiDir, mirrorId, notes, failures) {
+  if (!existsSync(apiDir)) return;
+  const badShape = [];
+  const readFailures = [];
+  let markers = 0;
+  const withMarkers = new Set();
+  const files = readdirSync(apiDir).filter((f) => f.endsWith('.json') && !f.endsWith(`.${mirrorId}.json`)).sort();
+  for (const f of files) {
+    const id = f.replace(/\.json$/, '');
+    let bag;
+    try {
+      bag = JSON.parse(readFileSync(join(apiDir, f), 'utf8'));
+    } catch {
+      badShape.push(`${id}: not valid JSON`);
+      continue;
+    }
+    if (!isObject(bag)) {
+      badShape.push(`${id}: not an object of "METHOD /path" keys`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(bag)) {
+      if (!markerish(value)) continue;
+      if (!validMarker(value)) {
+        badShape.push(`${id}: ${key}`);
+        continue;
+      }
+      markers++;
+      withMarkers.add(id);
+      const { kind, status } = value._parity;
+      if (kind === 'error' && status >= 200 && status < 300) readFailures.push(`${id}: ${key} (status ${status})`);
+    }
+  }
+  if (markers) notes.push(`api bags: ${markers} marker(s) across ${withMarkers.size} capture(s) — recorded as no data, not as responses`);
+  if (badShape.length) {
+    failures.push({
+      id: 'api-bag',
+      msg:
+        `${badShape.length} bag entr(ies) carry a marker that is not the documented one, so a mirror harness ` +
+        `may decode it as data. Write exactly { "_parity": { "kind", "status", "reason" } } (see REFERENCE.md, check J).`,
+      items: badShape,
+    });
+  }
+  if (readFailures.length) {
+    failures.push({
+      id: 'api-bag:2xx-error',
+      msg:
+        `${readFailures.length} bag entr(ies) record an error for a request the server answered with 2xx — the ` +
+        `capture failed to read the body, not the server. Fix the capture; never let a marker replace a ` +
+        `body already recorded for the same key.`,
+      items: readFailures,
+    });
+  }
+}
 const setOf = (arr) => new Set(arr.map(stripQuery).filter(Boolean));
 
 export function runApi(cfg, root) {
@@ -46,6 +119,7 @@ export function runApi(cfg, root) {
   const captures = JSON.parse(readFileSync(manifestPath, 'utf8')).captures ?? [];
   const waived = new Set(cfg.api?.waivers?.map((w) => w.capture) ?? []);
   const { source, mirror } = columns(cfg);
+  checkBags(join(outDir, 'api'), mirror.id, notes, failures);
 
   let compared = 0;
   let mirrorMissing = 0;
@@ -131,7 +205,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const root = resolve(dirname(cfgPath), cfg.root ?? '.');
   const { notes, failures } = runApi(cfg, root);
   for (const n of notes) console.log(`  · ${n}`);
-  for (const f of failures) console.log(`\n  ✗ ${f.id}: ${f.msg}`);
+  for (const f of failures) {
+    console.log(`\n  ✗ ${f.id}: ${f.msg}`);
+    for (const i of f.items ?? []) console.log(`      ${i}`);
+  }
   console.log(failures.length ? '\n[parity-api] FAIL' : '\n[parity-api] ok');
   process.exit(failures.length ? 1 : 0);
 }

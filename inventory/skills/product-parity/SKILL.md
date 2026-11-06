@@ -110,7 +110,7 @@ A lens is one question about one screen — **except the ones that are not**:
 | Geometry | do declared regions share a centre on both? | check H | per-capture |
 | Interaction | are the affordances real, activatable controls? | check I + semantics dump | per-capture |
 | Control names | do both clients expose the same controls in shared chrome? | check K | per-region |
-| Data / API | did both clients request the declared endpoints? | check J + api bags | per-capture |
+| Data / API | did both clients request the declared endpoints? | check J + api bags (one documented entry shape — `REFERENCE.md`, J) | per-capture |
 | Tokens | do both clients use canon values? | check D | **project-wide** |
 | Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
 | Assets | does every source image asset have a mirror counterpart? | check N | **project-wide** |

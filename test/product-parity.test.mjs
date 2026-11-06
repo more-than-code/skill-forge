@@ -480,3 +480,35 @@ test('freshness and assets fail when a configured path resolves to nothing', asy
   assert.ok(checks.includes('freshness-unresolved'), checks.join(', '));
   assert.ok(checks.includes('assets-unresolved:brand'), checks.join(', '));
 });
+
+// --- 0.12.0: the API bag contract -----------------------------------------------------------
+test('api bags: only the documented marker may stand in for a body, and never on a 2xx read', async () => {
+  const marker = (kind, status) => ({ _parity: { kind, status, reason: 'r' } });
+  const dir = await fixture(
+    { manifest: 'manifest.json' },
+    {
+      'api/home.json': {
+        'GET /api/me': { name: 'Ana' },
+        'GET /api/tips': marker('stub', 0),
+        'GET /api/feed': marker('error', 503),
+        'GET /api/app-build': marker('error', 200),
+      },
+      'api/settings.json': {
+        'GET /api/a': { _parity_error: 'json_parse_failed', status: 200 },
+        'GET /api/b': { __status: 404 },
+        'GET /api/c': { _parity_non_json: true, status: 200, contentType: 'text/html' },
+        'GET /api/d': { _parity: { kind: 'oops', status: 500 } },
+      },
+      // The mirror's record has its own shape and is not a bag.
+      'api/home.mobile.json': { consumed: ['GET /api/me'] },
+    },
+  );
+  const result = await gate(dir);
+  const shape = result.failures.find((x) => x.check === 'api-bag');
+  assert.ok(shape, JSON.stringify(result.failures));
+  assert.deepEqual(shape.items, ['settings: GET /api/a', 'settings: GET /api/b', 'settings: GET /api/c', 'settings: GET /api/d']);
+  const read = result.failures.find((x) => x.check === 'api-bag:2xx-error');
+  assert.ok(read, JSON.stringify(result.failures));
+  assert.deepEqual(read.items, ['home: GET /api/app-build (status 200)']);
+  assert.ok(result.notes.some((n) => n.startsWith('api bags: 3 marker(s) across 1 capture(s)')), result.notes.join('\n'));
+});

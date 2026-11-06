@@ -295,20 +295,20 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-VoTjoaRAhcwjPdQ78jVpVOBEintVVuttpM2mjD1A3lk=",
+      "integrity": "sha256-JRuOf45Dd6LPygvDhLRUuf0hr+X5qEC1ZHO8C6Ddh3o=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-5F7BVO2i0d4MZk9z2k0nfdZB8TLsqYbW25hMdHZxIL8=",
         "RECIPES.md": "sha256-rVRTeXh0E8cPmFVOmbHcPAiWPAsd0u4yjMygCjd+Vag=",
-        "REFERENCE.md": "sha256-0L789evnaUeecLX4W6PYfBygszogwsfh3P8VSOemDj8=",
-        "scripts/parity-api.mjs": "sha256-NgHr3u7QOa3zQK6/oV4B1Flhfli2za0Yt/Uk9qF9CiQ=",
+        "REFERENCE.md": "sha256-kHOlro9zYBBxZlUOZua7SeT6gFJqxWGBe9K3YvzViUY=",
+        "scripts/parity-api.mjs": "sha256-FlKLZUkmf89cfstq7UTYe4NRdEW7H1h0Km3IA3DWeXQ=",
         "scripts/parity-assets.mjs": "sha256-YOZnuoinVizZTg65iSmaMfUSdKVsnfoaZpHOHn2ud9A=",
         "scripts/parity-columns.mjs": "sha256-zuR8q4ieJe5xL5xy0YOwSjRNKPS88g3EJNCFcuKNXG0=",
         "scripts/parity-freshness.mjs": "sha256-xMElacd0mZ+tTfLQkpN7zAPfnoz8CCYlq3X16J8/bn8=",
-        "scripts/parity-gate.mjs": "sha256-rqj0EESVqrTc1MbiLPnQtQUJtN26T1PeGL7sgPO4hqw=",
+        "scripts/parity-gate.mjs": "sha256-POCgEC0rrYeC6M2G24nan4C7X8ocwAao4MAaRDe/uAI=",
         "scripts/parity-geometry.mjs": "sha256-BOQfHW7/5mvOoILYKccskDpD2E8YyEhw6JbnrPP3Kas=",
         "scripts/parity-interactive.mjs": "sha256-gCY6DUmAJorMiD4b1Jb1kKzkRiWTXD6l8l61/S7B6cU=",
         "scripts/parity-names.mjs": "sha256-DyNT0VzIprP0RFvj2E3fpauBtvVWiC3Ho5KTfwuO1zA=",
@@ -316,7 +316,7 @@
         "scripts/parity-session.mjs": "sha256-xr00LC5jGM0sNnZxccyflVJ5QIv4hXYbgmuKZV5I0Gc=",
         "scripts/parity-strings.mjs": "sha256-Mipw1gQG64QwtSGTG4IjLrbT1NTy+bjk+jbyaYgUp90=",
         "scripts/parity.config.example.json": "sha256-E/zJUGRKi9MN2LoKMN9QHmj/UJltK/9up9yvv66KKXs=",
-        "SKILL.md": "sha256-qKyxtmEffCsLD/tWBBsmxpKfDWSTtIqKaFWnVpiyXm4="
+        "SKILL.md": "sha256-yp0yS+QixgbnsZ2062TYhpRxHaIoMI3bFExfAYG/fR8="
       }
     },
     "inventory/skills/production-readiness": {

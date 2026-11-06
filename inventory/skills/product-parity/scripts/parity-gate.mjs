@@ -872,7 +872,7 @@ function checkVisual() {
 function checkApi() {
   const { notes: aNotes, failures: aFailures } = runApi(cfg, ROOT);
   for (const n of aNotes) notes.push(n);
-  for (const f of aFailures) failures.push({ check: f.id, message: f.msg });
+  for (const f of aFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
 }
 
 function checkInteractive() {

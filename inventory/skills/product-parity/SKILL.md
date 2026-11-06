@@ -17,7 +17,7 @@ never asks whether either client is *right*. Treat look as one lens among severa
 
 Companion files in this directory — load the one the task needs:
 
-- **`REFERENCE.md`** — the bundled gate: every script, checks A–L, their config blocks and
+- **`REFERENCE.md`** — the bundled gate: every script, checks A–N, their config blocks and
   the files they read. Load it to configure the harness or trace a gate failure.
 - **`DYNAMIC-STATES.md`** — capturing menus, sheets and API-driven states with `prep` steps.
 - **`RECIPES.md`** — implementation recipes: manifest shape, source and mirror capture,
@@ -113,7 +113,8 @@ A lens is one question about one screen — **except the ones that are not**:
 | Data / API | did both clients request the declared endpoints? | check J + api bags | per-capture |
 | Tokens | do both clients use canon values? | check D | **project-wide** |
 | Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
-| Run validity | can this run's artifacts be trusted at all? | checks G, L | **per-run** |
+| Assets | does every source image asset have a mirror counterpart? | check N | **project-wide** |
+| Run validity | can this run's artifacts be trusted at all — and are they newer than the source UI? | checks G, L, M | **per-run** |
 
 **A project-wide lens cannot answer a per-screen question, and a screen is never "done"
 on its say-so.** Check D compares token *declarations* across the whole app; checks B/C
@@ -348,7 +349,7 @@ That is one observation on one product, and it is here to explain a MECHANISM, n
 as a benchmark: **run your own sensitivity test** (`REFERENCE.md`, "Review backends")
 rather than citing a number from someone else's project.
 
-The check that closes it is **check K, the control-name set diff**: both clients dump their
+The check that closes it is **check K, the control-name set diff** — which also compares *images* in the region, so a source image whose label the mirror shows only as text fails as "image on the source, text on the mirror". Both clients dump their
 accessibility tree and the gate compares the sets of accessible names. It needs a semantics
 dump from **both** clients; until the source client emits one, this class is uncovered — say
 so when reporting coverage rather than letting a green review imply otherwise.
@@ -420,6 +421,18 @@ states (e.g. guest vs signed-in home) — that one may be a real finding.
 **A screen absent from the manifest reads as silence, and silence is
 indistinguishable from success.** This is the single most likely way a parity
 board misleads.
+
+**A green Tier 1 gate says nothing about visuals.** Routes, strings, API calls and
+control names are text, and an image usually carries a text alternative — so a logo on
+the source and the same word as plain text on the mirror pass every one of those checks.
+A visual parity claim needs a **Tier 2 capture newer than the last UI commit** to the
+source client, and the gate now refuses to pass a board older than that (check M).
+Observed 2026-11-07 on one project: the source client added a brand wordmark to its
+header, login and standalone pages; the mirror had no brand assets and printed the
+product name. The last full capture was nearly three months old, the gate was green, and
+the gap surfaced only when the owner asked. It was the third miss of one shape: a visible
+difference no check could see (§6, "Probably the harness"). Declare the source's asset
+folders (check N) so a new image fails the day it lands, with no capture needed.
 
 Rules:
 - **Never report "N/N green" without stating what is not captured** — and which checks
@@ -571,6 +584,8 @@ These need no capture infrastructure and catch a large share of drift:
 
   **Cross-client comparison, not absolute offsets.** Asserting an absolute "correct" offset would make the script the arbiter of good design. Comparing the two keeps the source client the source of truth.
 
+- **Freshness (M).** Declare the source client's UI folders (routes, components, brand and design assets). A commit to them newer than the captures fails the gate with the commits listed, so a board nobody re-ran cannot stay green; `sourceFiles` on a manifest entry narrows it to one screen. Every other validity check compares artifacts with each other — M is the only one that compares them with the product.
+- **Asset parity (N).** Pair each source asset folder with the mirror folder that should carry the same images; a source image with no counterpart fails unless waived with a reason, owner, date and `removeWhen`. It needs no capture, so it is the cheapest visual check there is.
 - **Behaviour (I, K) and data (J).** Declared affordances must be activatable controls (I); the controls named in a shared-chrome region must agree across clients (K); both clients must request the endpoints a screen declares (J). These are the only checks that see what a screen *does* and what it is *built from* — a dead icon, a swapped icon-only control and a skipped fetch are all pixel-identical to the correct screen. Declare few of each, for the same reason as H.
 
 ### Design-system conformance (check D) — when there is a canon

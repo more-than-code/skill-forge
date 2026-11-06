@@ -295,26 +295,28 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-lQd5U4xFM+/whsMTCHHHOfN0HgbwvtTdorIamqWMat4=",
+      "integrity": "sha256-AuqilZlKZCe0sDjk3dVAo9yWuK1+ZysLAokvO8V+l7g=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-5F7BVO2i0d4MZk9z2k0nfdZB8TLsqYbW25hMdHZxIL8=",
-        "RECIPES.md": "sha256-sUy5DWKG2S7HX9tmwSp1AW/omvuGCazDv9Se/JKw0HE=",
-        "REFERENCE.md": "sha256-ylf3Uv7C/gcbzvTiqiot8S0TAL8uYgQZaRvI0RDln84=",
+        "RECIPES.md": "sha256-rVRTeXh0E8cPmFVOmbHcPAiWPAsd0u4yjMygCjd+Vag=",
+        "REFERENCE.md": "sha256-UQodv3GGjpY/BCJVunKMKcS2aT06jtKlt66HFK2POUs=",
         "scripts/parity-api.mjs": "sha256-xbUy0mZdIreVuWiyXTvVdcgA2KoxVNg6McRD8ei34N0=",
+        "scripts/parity-assets.mjs": "sha256-rbNNK3ZGwLkluQIn8ExgBlKO3ZRIMQXG+bVzUHyLq80=",
         "scripts/parity-columns.mjs": "sha256-zuR8q4ieJe5xL5xy0YOwSjRNKPS88g3EJNCFcuKNXG0=",
-        "scripts/parity-gate.mjs": "sha256-QaIvd5EQo8vhHYVqxEp5rgqZlRni9kPKPFYaPq9GwdQ=",
+        "scripts/parity-freshness.mjs": "sha256-fM+kv8v6d5b5rtVRy5Lg4kaIIksdU6qivUAUU2QPv3g=",
+        "scripts/parity-gate.mjs": "sha256-pTZu4obOJhmwwrFB34lMKW+tlXGZuBq3Gk+yXQ61TFk=",
         "scripts/parity-geometry.mjs": "sha256-BOQfHW7/5mvOoILYKccskDpD2E8YyEhw6JbnrPP3Kas=",
         "scripts/parity-interactive.mjs": "sha256-gCY6DUmAJorMiD4b1Jb1kKzkRiWTXD6l8l61/S7B6cU=",
-        "scripts/parity-names.mjs": "sha256-J+AdRnnNJXsXVnpEouljhahCWOOpRCgISsevJHbRNBA=",
+        "scripts/parity-names.mjs": "sha256-DyNT0VzIprP0RFvj2E3fpauBtvVWiC3Ho5KTfwuO1zA=",
         "scripts/parity-review.mjs": "sha256-92Z3oQyZ0EyYKpoGHFgs+3d6IYxCpt0kZp4zqwlwqyo=",
         "scripts/parity-session.mjs": "sha256-xr00LC5jGM0sNnZxccyflVJ5QIv4hXYbgmuKZV5I0Gc=",
         "scripts/parity-strings.mjs": "sha256-Mipw1gQG64QwtSGTG4IjLrbT1NTy+bjk+jbyaYgUp90=",
-        "scripts/parity.config.example.json": "sha256-rmOfISakFfVIJI//Rn8U77mOi/GkJ7y4c0qSGO5Wkno=",
-        "SKILL.md": "sha256-qJOQivHJMIaL7nnbvP6fXeKPsNtnKY58AgCPZ/v+D6Y="
+        "scripts/parity.config.example.json": "sha256-/FGHzs1mMAl3tIcTQ83Ng83FN7/kTQUXUDPAFzq69Ts=",
+        "SKILL.md": "sha256-sFlLpe8Q0Gmd4174b91Yi/9V7q+QImtkX1qzwOdwQww="
       }
     },
     "inventory/skills/production-readiness": {

@@ -50,6 +50,36 @@ const norm = (s) =>
 const INTERACTIVE = new Set(['button', 'textbox', 'link', 'menuitem', 'tab', 'switch', 'checkbox']);
 const roleOf = (r) => (r === 'textarea' || r === 'input' ? 'textbox' : r);
 
+// Images count too: a logo on the source and the same word as TEXT on the mirror is a
+// visual gap that every name-only comparison scores as a match. Observed 2026-11-07 on one
+// project: a brand wordmark (`<img alt>`) against the product name printed as text.
+const IMAGE_ROLES = new Set(['img', 'image']);
+const isImage = (n, role) => IMAGE_ROLES.has(role) || n.isImage === true;
+
+function imagesInRegion(nodes, region, pick) {
+  const out = new Set();
+  for (const n of nodes) {
+    const { name, role, fy } = pick(n);
+    if (fy == null || !isImage(n, role)) continue;
+    if (fy < region.y1 || fy > region.y2) continue;
+    const v = norm(name);
+    if (v) out.add(v);
+  }
+  return out;
+}
+
+// Every named, non-image node in the region — to tell "missing" from "rendered as text".
+function textInRegion(nodes, region, pick) {
+  const out = new Set();
+  for (const n of nodes) {
+    const { name, role, fy } = pick(n);
+    if (fy == null || isImage(n, role) || fy < region.y1 || fy > region.y2) continue;
+    const v = norm(name);
+    if (v) out.add(v);
+  }
+  return out;
+}
+
 function namesInRegion(nodes, region, pick) {
   const out = new Set();
   for (const n of nodes) {
@@ -126,8 +156,13 @@ export function runNames(cfg, root) {
       });
       continue;
     }
-    const W = namesInRegion(web, region, (n) => ({ name: n.name, role: n.role, fy: n.y }));
-    const M = namesInRegion(mob, region, (n) => ({ name: n.label, role: n.role, fy: n.fy }));
+    const pickWeb = (n) => ({ name: n.name, role: n.role, fy: n.y });
+    const pickMob = (n) => ({ name: n.label, role: n.role, fy: n.fy });
+    const W = namesInRegion(web, region, pickWeb);
+    const M = namesInRegion(mob, region, pickMob);
+    const WI = imagesInRegion(web, region, pickWeb);
+    const MI = imagesInRegion(mob, region, pickMob);
+    const MT = textInRegion(mob, region, pickMob);
 
     // Accepted differences carry provenance, like every other waiver in this harness.
     // A bare list of names is a silence switch: nobody can tell later whether an entry was
@@ -145,8 +180,11 @@ export function runNames(cfg, root) {
     const ok = new Set(entries.map((e) => norm(e.name)));
     const webOnly = [...W].filter((x) => !M.has(x) && !ok.has(x));
     const mobOnly = [...M].filter((x) => !W.has(x) && !ok.has(x));
+    const imagesMissing = [...WI].filter((x) => !MI.has(x) && !ok.has(x));
+    const imagesAsText = imagesMissing.filter((x) => MT.has(x));
+    const imagesAbsent = imagesMissing.filter((x) => !MT.has(x));
 
-    if (!W.size && !M.size) {
+    if (!W.size && !M.size && !WI.size && !MI.size) {
       // Both empty means the region matched nothing on either side — almost always a bad
       // region, not two clean clients. Reported, because a vacuous check that prints "ok"
       // is the failure mode this whole harness exists to prevent.
@@ -157,19 +195,21 @@ export function runNames(cfg, root) {
       continue;
     }
 
-    if (webOnly.length || mobOnly.length) {
+    if (webOnly.length || mobOnly.length || imagesMissing.length) {
       failures.push({
         id: `names:${region.name}`,
         msg:
           `Control names differ in "${region.name}" on ${region.capture}.\n` +
           (webOnly.length ? `      source-only (mirror may be missing): ${webOnly.join(' · ')}\n` : '') +
           (mobOnly.length ? `      mirror-only (extra on mirror):       ${mobOnly.join(' · ')}\n` : '') +
+          (imagesAsText.length ? `      image on the source, text on the mirror: ${imagesAsText.join(' · ')}\n` : '') +
+          (imagesAbsent.length ? `      image on the source, absent on the mirror: ${imagesAbsent.join(' · ')}\n` : '') +
           `      matched: ${[...W].filter((x) => M.has(x)).length}. ` +
           `Adjudicate each: a real gap, a copy divergence, or a legitimate platform delta to accept.`,
       });
       continue;
     }
-    notes.push(`names: ${region.name} ok — ${W.size} control(s) agree on ${region.capture}`);
+    notes.push(`names: ${region.name} ok — ${W.size} control(s) and ${WI.size} image(s) agree on ${region.capture}`);
   }
   return { notes, failures };
 }

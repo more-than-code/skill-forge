@@ -36,6 +36,12 @@
 //                         dominated by content the two clients legitimately differ on.
 //   L  run attribution  — every artifact was written by the run that claims it (.run.json).
 //                         The only check that sees a CONCURRENT writer.
+//   M  freshness        — the captures are newer than the last source commit to the UI they
+//                         show. G and L compare artifacts with each other; M compares them
+//                         with the product, so a board nobody re-ran cannot stay green.
+//   N  asset parity     — every image in a declared source asset folder has a mirror
+//                         counterpart. The only check that sees images: a logo and the same
+//                         word as text satisfy every text check.
 //
 // Columns: `source.column` / `source.name` and `mirror.column` / `mirror.name` in the config
 // (see parity-columns.mjs). Defaults: web / webapp and mobile / Flutter mobile app.
@@ -49,6 +55,8 @@ import { runInteractive } from './parity-interactive.mjs';
 import { runNames } from './parity-names.mjs';
 import { runSession } from './parity-session.mjs';
 import { runApi } from './parity-api.mjs';
+import { runFreshness } from './parity-freshness.mjs';
+import { runAssets } from './parity-assets.mjs';
 import { columns } from './parity-columns.mjs';
 import { readTable, readLocaleMap } from './parity-strings.mjs';
 
@@ -724,6 +732,18 @@ function checkSession() {
   for (const f of sFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
 }
 
+function checkFreshness() {
+  const { notes: fNotes, failures: fFailures } = runFreshness(cfg, ROOT);
+  for (const n of fNotes) notes.push(n);
+  for (const f of fFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
+function checkAssets() {
+  const { notes: aNotes, failures: aFailures } = runAssets(cfg, ROOT);
+  for (const n of aNotes) notes.push(n);
+  for (const f of aFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
 function checkNames() {
   const { notes: nNotes, failures: nFailures } = runNames(cfg, ROOT);
   for (const n of nNotes) notes.push(n);
@@ -741,6 +761,8 @@ checkGeometry();
 checkInteractive();
 checkNames();
 checkApi();
+checkFreshness();
+checkAssets();
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ok: failures.length === 0, config: configPath, notes, failures }, null, 2));

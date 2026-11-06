@@ -209,3 +209,105 @@ test('a11y ratchet ignores the source client semantics dump', async () => {
   const result = await gate(dir);
   assert.ok(result.notes.includes('a11y: 0/1 interactive controls have no accessible name'), result.notes.join('\n'));
 });
+
+// --- 0.10.0: freshness (M), asset parity (N), images in check K ---------------------------
+const GIT_ENV = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_AUTHOR_NAME: 't',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't',
+  GIT_COMMITTER_EMAIL: 't@t',
+};
+
+// A source repo at <dir>/web with one UI commit `minutesAgo` minutes old.
+async function sourceRepo(dir, minutesAgo, subject = 'Add brand wordmark to the header') {
+  const web = path.join(dir, 'web');
+  await fs.mkdir(path.join(web, 'src', 'lib'), { recursive: true });
+  await fs.writeFile(path.join(web, 'src', 'lib', 'Header.svelte'), '<img alt="Brand" src="wordmark.svg">\n');
+  const when = new Date(Date.now() - minutesAgo * 60_000).toISOString();
+  const env = { ...GIT_ENV, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when };
+  await run('git', ['init', '-q'], { cwd: web, env });
+  await run('git', ['add', '-A'], { cwd: web, env });
+  await run('git', ['commit', '-q', '-m', subject], { cwd: web, env });
+}
+
+test('freshness fails when captures predate the newest source UI commit', async () => {
+  const config = { manifest: 'manifest.json', freshness: { paths: ['web/src/lib'] } };
+  const dir = await fixture(config, { 'web/home.png': 'a', 'mobile/home.png': 'b' }, { 'web/home.png': 120, 'mobile/home.png': 120 });
+  await sourceRepo(dir, 30);
+  const stale = await gate(dir);
+  const f = stale.failures.find((x) => x.check === 'captures-stale');
+  assert.ok(f, JSON.stringify(stale.failures));
+  assert.match(f.message, /older than 1 source commit/);
+  assert.ok(f.items.some((i) => i.includes('Add brand wordmark to the header')), f.items.join('\n'));
+
+  // Captures newer than the commit: pass, with a note saying what was compared.
+  const fresh = await fixture(config, { 'web/home.png': 'a', 'mobile/home.png': 'b' }, { 'web/home.png': 5, 'mobile/home.png': 5 });
+  await sourceRepo(fresh, 30);
+  const ok = await gate(fresh);
+  assert.equal(ok.failures.find((x) => x.check === 'captures-stale'), undefined, JSON.stringify(ok.failures));
+  assert.ok(ok.notes.some((n) => n.startsWith('freshness: captures are newer than the last commit')), ok.notes.join('\n'));
+});
+
+test('freshness says loudly when it is not configured', async () => {
+  const result = await gate(await fixture({ manifest: 'manifest.json' }, { 'web/home.png': 'a' }));
+  assert.ok(result.notes.some((n) => n.startsWith('freshness: NOT configured')), result.notes.join('\n'));
+});
+
+test('asset parity fails on a source asset with no mirror counterpart, and honours a full waiver', async () => {
+  const files = {
+    'web/brand/wordmark.svg': '<svg/>',
+    'web/brand/mark-dark.svg': '<svg/>',
+    'mobile/assets/brand/wordmark.png': 'png',
+  };
+  const pairs = [{ name: 'brand', source: 'web/brand', mirror: 'mobile/assets/brand' }];
+  const write = async (dir) => {
+    for (const [rel, body] of Object.entries(files)) {
+      await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+      await fs.writeFile(path.join(dir, rel), body);
+    }
+  };
+
+  const failing = await fixture({ manifest: 'manifest.json', assets: { pairs } });
+  await write(failing);
+  const result = await gate(failing);
+  const f = result.failures.find((x) => x.check === 'asset-parity:brand');
+  assert.ok(f, JSON.stringify(result.failures));
+  assert.deepEqual(f.items, ['mark-dark.svg']);
+
+  const waived = await fixture({
+    manifest: 'manifest.json',
+    assets: { pairs, waivers: [{ asset: 'brand/mark-dark.svg', reason: 'dark mode not on mobile', owner: 'o', addedOn: '2026-11-07', removeWhen: 'mobile ships dark mode' }] },
+  });
+  await write(waived);
+  assert.equal((await gate(waived)).failures.find((x) => x.check.startsWith('asset-parity')), undefined);
+
+  const bare = await fixture({ manifest: 'manifest.json', assets: { pairs, waivers: [{ asset: 'brand/mark-dark.svg' }] } });
+  await write(bare);
+  const bad = await gate(bare);
+  assert.ok(bad.failures.some((x) => x.check === 'asset-parity:waivers' && /missing: reason, owner, addedOn, removeWhen/.test(x.message)), JSON.stringify(bad.failures));
+});
+
+test('check K: a source image the mirror renders as text is a failure', async () => {
+  const config = { manifest: 'manifest.json', names: { regions: [{ name: 'header', capture: 'home', y1: 0, y2: 0.2 }] } };
+  const sourceDump = { nodes: [{ name: 'Brand', role: 'img', y: 0.05 }, { name: 'Menu', role: 'button', y: 0.05 }] };
+
+  const asText = await fixture(config, {
+    'semantics/home.web.json': sourceDump,
+    'semantics/home.json': { nodes: [{ label: 'Brand', role: 'text', fy: 0.05 }, { label: 'Menu', role: 'button', fy: 0.05 }] },
+  });
+  const failing = await gate(asText);
+  const f = failing.failures.find((x) => x.check === 'names:header');
+  assert.ok(f, JSON.stringify(failing.failures));
+  assert.match(f.message, /image on the source, text on the mirror: brand/);
+
+  const asImage = await fixture(config, {
+    'semantics/home.web.json': sourceDump,
+    'semantics/home.json': { nodes: [{ label: 'Brand', isImage: true, fy: 0.05 }, { label: 'Menu', role: 'button', fy: 0.05 }] },
+  });
+  const passing = await gate(asImage);
+  assert.equal(passing.failures.find((x) => x.check === 'names:header'), undefined, JSON.stringify(passing.failures));
+  assert.ok(passing.notes.some((n) => n.includes('1 control(s) and 1 image(s) agree')), passing.notes.join('\n'));
+});

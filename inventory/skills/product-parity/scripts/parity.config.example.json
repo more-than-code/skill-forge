@@ -70,6 +70,19 @@
       }
     ]
   },
+  "freshness": {
+    "$comment": "Check M. Source-client folders whose commits change what a capture shows. Omit and the gate prints that freshness is NOT checked.",
+    "paths": ["web/src/routes", "web/src/lib/components", "web/brand"]
+  },
+  "assets": {
+    "$comment": "Check N. Each source image needs a mirror counterpart (matched by normalised file stem) or a waiver with every field.",
+    "pairs": [
+      { "name": "brand", "source": "web/brand/svg", "mirror": "mobile/assets/brand" }
+    ],
+    "waivers": [
+      { "asset": "brand/favicon.svg", "reason": "browser-only", "owner": "you@example.com", "addedOn": "2026-01-01", "removeWhen": "never: no mobile equivalent" }
+    ]
+  },
   "geometry": {
     "$comment": "OPTIONAL — omit (or leave invariants empty) and check H is a silent no-op. SHARED CHROME ONLY: composer, page header, canvas header, list row. Keep under ~5 entries. Per-screen invariants rot and train people to ignore the check. Cross-client spread comparison — not absolute offsets. Regions are fractions of image width/height.",
     "inkThreshold": 170,

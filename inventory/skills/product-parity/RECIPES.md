@@ -123,6 +123,15 @@ TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
     (call) async => null);
 ```
 
+### Mark images in the semantics dumps
+
+Check K compares images as well as controls, so both dumps must say which nodes are
+images. In the mirror's Flutter dump, emit `isImage: true` for nodes whose semantics carry
+`SemanticsFlag.isImage` (wrap logos and other meaningful images in
+`Semantics(image: true, label: …)`). In the source dump, keep `role: "img"` for `<img alt>`
+and `role="img"` elements. Without that flag the mirror's image reads as an unnamed node and
+the source's logo matches whatever text carries the same word.
+
 ### Load real image assets — and flag the captures that fell back
 
 Test runners do not decode network images, and often not asset images either, so avatars

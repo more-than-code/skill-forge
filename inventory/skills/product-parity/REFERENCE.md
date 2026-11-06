@@ -29,13 +29,15 @@ the harness the day the skill moves between profiles.
 
 | File | Role |
 |---|---|
-| `scripts/parity-gate.mjs` | The gate. Runs checks A–L below, plus i18n locale coverage; no browser, no simulator, ~1s. |
+| `scripts/parity-gate.mjs` | The gate. Runs checks A–N below, plus i18n locale coverage; no browser, no simulator, ~1s. |
 | `scripts/parity-review.mjs` | The LLM vision review — structured findings to `<out>/findings.json`. Feeds check F. |
 | `scripts/parity-geometry.mjs` | Check H. Also runnable standalone. |
 | `scripts/parity-interactive.mjs` | Check I. Also runnable standalone. |
 | `scripts/parity-api.mjs` | Check J. |
 | `scripts/parity-names.mjs` | Check K. Also runnable standalone. |
 | `scripts/parity-session.mjs` | Check L. Also runnable standalone. |
+| `scripts/parity-freshness.mjs` | Check M. Also runnable standalone. |
+| `scripts/parity-assets.mjs` | Check N. Also runnable standalone. |
 | `scripts/parity-columns.mjs` | Which client is the source and which the mirror; shared by all of the above. |
 | `scripts/parity-strings.mjs` | Reads string tables (TS/JS objects, JSON/ARB, Dart locale maps) for checks B, C and locale coverage. |
 | `scripts/parity.config.example.json` | Config template. |
@@ -91,6 +93,8 @@ not a pass.
 | J API parity | did both clients request the endpoints the manifest declares? | manifest `api` arrays | per capture |
 | K control names | does the set of control names agree within a region? | `names` | per region |
 | L run attribution | was every artifact written by the run that claims it? | `.run.json` | per run |
+| M freshness | are the captures newer than the last source commit to the UI they show? | `freshness.paths`; manifest `sourceFiles` | per run / per capture |
+| N asset parity | does every image in a source asset folder have a mirror counterpart? | `assets.pairs` | project |
 
 ### A — coverage ratchet
 
@@ -239,7 +243,9 @@ declared endpoints are asserted; query strings are ignored. Waive a capture with
 ```
 
 Compares the set of activatable control names on both clients within a vertical band of
-shared chrome. Needs both semantics dumps, with **painted, viewport-relative** coordinates:
+shared chrome — and the set of **image** labels: a source node with role `img`/`image`
+must match a mirror node with role `image` or `isImage: true` and the same label. A mirror
+node carrying that label as text fails as "image on the source, text on the mirror". Needs both semantics dumps, with **painted, viewport-relative** coordinates:
 the check refuses to grade a dump whose nodes fall outside `[0,1]`. Regions are mandatory
 — see "Icon-only affordances" in `SKILL.md` for why an unscoped diff gets switched off.
 
@@ -249,6 +255,42 @@ The pipeline script writes `<out>/.run.json` with `runId` and `startedAt` before
 and adds `finishedAt` after. Any PNG older than the start (a leftover) or newer than the
 finish (a concurrent writer) fails the check. With no stamp the check is a note, and
 concurrent writes are undetectable.
+
+### M — freshness
+
+```jsonc
+"freshness": {
+  // Source-client folders whose commits change what a capture shows.
+  "paths": ["web/src/routes", "web/src/lib/components", "web/brand"]
+}
+// optional, per manifest entry: { "id": "login", "sourceFiles": ["web/src/routes/login"], … }
+```
+
+The capture time is the **older** column's newest PNG. Any commit to `paths` newer than it
+fails `captures-stale`, listing up to 10 commits; a manifest entry's `sourceFiles` does the
+same for that screen alone (`captures-stale-screens`). Commits only — uncommitted edits do
+not count. Unconfigured, the gate prints that freshness is **not** checked.
+
+### N — asset parity
+
+```jsonc
+"assets": {
+  "pairs": [
+    { "name": "brand", "source": "web/brand/svg", "mirror": "mobile/assets/brand",
+      "map": { "lockup.svg": "brand_lockup_full.png" } }      // optional, for differing stems
+  ],
+  "waivers": [
+    { "asset": "brand/favicon.svg", "reason": "browser-only", "owner": "…",
+      "addedOn": "YYYY-MM-DD", "removeWhen": "never: no mobile equivalent" }
+  ]
+}
+```
+
+Images (`svg png jpg jpeg webp gif ico avif`, recursively) are matched by normalised stem:
+lower case, `-`/`_`/spaces folded, extension and `@2x`/`@3x` ignored — `wordmark.svg`
+matches `wordmark.png`. A source image with no counterpart fails `asset-parity:<name>`
+unless waived; a waiver missing any field fails `asset-parity:waivers`. Mirror-only assets
+are counted in a note, not failed.
 
 ## Review backends
 

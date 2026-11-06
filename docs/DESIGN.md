@@ -410,9 +410,11 @@ becomes:
 
 1. Hand-authored project skills declared in `skills.local`.
 2. Vendored project skills resolved by `skill-forge.lock.json`.
-3. Home-profile skills.
-4. Unmanaged tool-neutral or tool-specific global skills.
-5. Platform/system skills when relevant.
+3. Vendored overlay skills resolved by the untracked `skill-forge.local.lock.json`
+   (one checkout only; a name is never in both the profile and the overlay).
+4. Home-profile skills.
+5. Unmanaged tool-neutral or tool-specific global skills.
+6. Platform/system skills when relevant.
 
 `skf sync` never overwrites a path it does not own: a name collision with an
 undeclared local skill is a hard error naming the path and the fix (declare it
@@ -425,6 +427,36 @@ state: manifest hash, lockfile hash, and vendored content hashes, plus the home
 profile's lockfile hash for the session environment. Each evaluation run
 records those alongside the synced tool set and exact skill versions —
 attribution no longer depends on what happened to be installed on the machine.
+
+The local overlay (below) is the one exception: it is untracked by design, so a
+run in a checkout with an overlay must also record `skill-forge.local.lock.json`,
+or its skills are invisible to attribution.
+
+### Local overlay (shipped 2026-11-06)
+
+A session rooted in a linked git worktree reads only that worktree's
+`.agents/skills`, which the child repo's tracked profile fills. Skills the slice
+needs beyond that (an umbrella-only skill) would otherwise have to be committed
+into the child repo and merged with its branch, or hand-copied, which the Skill
+Location Policy forbids.
+
+`skf project add <skill> --overlay` writes an untracked `skill-forge.local.json`
+(registry `skills.dependencies` only). `sync` resolves it separately from the
+tracked profile, vendors into the same store, and writes an untracked
+`skill-forge.local.lock.json` with `source: "overlay"` entries; the tracked lock
+never contains them. Overlay paths are kept out of git by one marked block per
+work tree in the repository's shared `info/exclude` (located via
+`git rev-parse --git-common-dir`, as `dispatch.sh` does). Because that file is
+shared, `sync` in any checkout removes a skill's line from every overlay block as
+soon as a tracked profile declares it — an excluded new folder would otherwise be
+left out of `git add -A` while `sync --check` passed.
+
+Rejected: a stateless `sync --add` (no record, no staleness check or prune),
+declaring in the tracked profile without committing (one `git add -A` merges it),
+and `.gitignore` (tracked). Limits: git work trees only, on top of an existing
+`skill-forge.json`; `skill bump --update-pins` does not rewrite overlay ranges;
+`git worktree remove` runs no skf code, so `skf project overlay --clear` is a
+retire step.
 
 ### Existing CLI disposition
 
@@ -619,4 +651,5 @@ any new component.
 | 2026-07-20 | Sync targets derive from the manifest `tools` map | `.agents/skills/` only when a non-Claude tool is enabled; `.claude/skills/` for Claude Code; narrowing the tool set prunes orphaned copies and husk dirs |
 | 2026-10-04 | `skf project instructions`: a read-only check for `AGENTS.md` and `CLAUDE.md` in a session root | The layout was prose only, and 11 child repos had `AGENTS.md` without the `CLAUDE.md` Claude Code reads. Scoped to roots that declare a profile; `CLAUDE.md` required only with the `claude-code` shim; no scaffold or manifest change yet (Phase 2) |
 | 2026-10-04 | `skf project scaffold`, and an optional `instructions.role` in the manifest | The check could report missing files but not fix them. Create-only (exclusive create, so symlinks are never written through), placeholder templates, `CLAUDE.md` only with the `claude-code` shim. The role is stored because role-aware layout checks (a later `project doctor` that composes `sync --check`, `instructions` and those rules) need it; the project lock hashes the registry and resolved skills, never the manifest, so the key cannot make `sync --check` stale, and only the instruction commands validate it, so a bad value cannot break `sync` or `status` |
+| 2026-11-06 | Local overlay: untracked `skill-forge.local.json` + its own lock, kept out of git by a per-work-tree block in the shared `info/exclude` | Worktree slices need skills their child repo's profile does not declare, without committing them into that repo. Separate locks keep the tracked lock byte-identical; promotion into a tracked profile clears the exclude lines everywhere, because a shared exclude would otherwise hide the new tracked folder from `git add` |
 | 2026-10-05 | `skf project doctor`: one read-only gate composing the profile check, `project instructions`, and role-aware layout rules | A repo needed three commands to be sure it was healthy. Composition only, so it reverses the earlier "doctor is redundant" argument without duplicating anything; the two checks stay separate. Severities came from a read-only scan of seven umbrellas (37 children): umbrella ledger 7/7 and absolute path 6/7 pass (issues), unnamed children 4/37 (warning, heuristic match), child SESSION.md hook and git-ignored ledger fail often enough to be real findings (issues, only where a root opts in with a recorded role). The ledger rule asks git itself, so any failure to run git (no binary, a refusal, a timeout) degrades to a warning |

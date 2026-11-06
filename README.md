@@ -254,8 +254,10 @@ exact copies into the repo, and pins versions and integrity hashes in
 committed together.
 
 ```bash
-skf project init [--tools codex,claude-code,copilot-cli,grok]  # default: all
+skf project init [--shims claude-code]  # default: every known shim
 skf project add [<skill>...]     # interactive search when no names are given
+skf project add <skill>... --overlay   # this checkout only, never committed (below)
+skf project overlay [--clear]
 skf sync [--check]               # vendor + lock; --check is the CI drift gate
 skf project status [--json]
 ```
@@ -282,6 +284,30 @@ the rest were already no-ops.
 directory holds anything Skill Forge does not manage. If a symlink cannot be
 created, `sync` fails rather than silently falling back to a second copy — a
 platform without symlinks is not supported.
+
+### Local overlay (one checkout, never committed)
+
+A git worktree working one slice sometimes needs skills its repository's profile
+does not declare — an umbrella-only skill, say. Adding them to `skill-forge.json`
+would commit them into the repo and merge them on. `--overlay` writes them to an
+untracked `skill-forge.local.json` instead:
+
+- `sync` vendors overlay skills into the same `.agents/skills/` (so shims see them)
+  and locks them in an untracked `skill-forge.local.lock.json`. The tracked
+  lockfile never contains them.
+- Both files and every overlay skill folder are kept out of git by a block in the
+  repository's `info/exclude`. That file is shared by every worktree of the repo,
+  so each worktree owns one marked block. When any checkout's tracked profile
+  starts declaring an overlay skill, `sync` removes that skill's line from every
+  block, so the new tracked folder is not silently ignored.
+- `sync --check`, `project status` and `project doctor` report overlay drift with an
+  `overlay:` prefix; `status --json` adds an `overlay` field when one exists.
+- Overlays hold registry dependencies only, work only inside a git work tree on
+  top of an existing `skill-forge.json`, and refuse a skill the tracked profile
+  already declares.
+- `skf project overlay --clear` removes overlay skills, both files and this
+  worktree's exclude block. Run it before `git worktree remove`: git runs no skf
+  code on removal. `skill bump --update-pins` does not rewrite overlay ranges.
 
 `$HOME` is the same mechanism for machine-wide skills, with its own spelling:
 

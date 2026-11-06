@@ -192,10 +192,10 @@ When **two sessions** would edit the **same child repo** at once:
 - A **branch** is not enough if both share one working directory.
 - **`git worktree add`** each **git** child you will change as `umbrella/work-<slice>`, inside the umbrella next to the primary checkouts (same branch name across related children).
 - Role sessions stay rooted at the **umbrella**; a slice session is rooted at **only** its `work-<slice>/` folder.
-- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. Its **`SESSION.md`** carries what it still cannot load: role, the approvals it must get in its own chat, scope, ports and DB, plan SSOT, how to hand back. Untracked via `info/exclude`; rewritten fresh per slice. Child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
+- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. An umbrella-only skill the slice needs goes in through the untracked **local overlay** (`skf project add <skill> --overlay` + `skf sync` in the worktree), never the child's tracked profile. Its **`SESSION.md`** carries what it still cannot load: role, the approvals it must get in its own chat, scope, ports and DB, plan SSOT, how to hand back. Untracked via `info/exclude`; rewritten fresh per slice. Child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
 - Own DB file and ports per worktree. Distinguish **git worktrees** from **copies**.
 - Slice-specific absolute paths belong in the umbrella **plan** / `SESSION.md`, not in this skill.
-- When the slice is done: hand back to Main Dev, merge **code** from the primary checkout, then `worktree remove`. Do not merge gitignored runtime data unless asked.
+- When the slice is done: hand back to Main Dev, merge **code** from the primary checkout, `skf project overlay --clear` if it had an overlay, then `worktree remove`. Do not merge gitignored runtime data unless asked.
 
 **Full procedure:** companion **`PARALLEL-WORKTREES.md`** (load when seeding, briefing or retiring a worktree, or the user mentions worktree / work-* / parallel session).
 

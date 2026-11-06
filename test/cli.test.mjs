@@ -1096,6 +1096,184 @@ test('sync refuses undeclared collisions, prunes removed deps, and records local
   assert.deepEqual(Object.keys(lock.skills), ['my-override']);
 });
 
+// --- Local overlay (skill-forge.local.json) ---
+
+const EXTRA_SKILL_MD = '---\nname: extra-skill\ndescription: Second skill for overlay tests.\n---\n\n# Extra\n';
+const OVERLAY_GIT_ENV = {
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_AUTHOR_NAME: 't',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 't',
+  GIT_COMMITTER_EMAIL: 't@t'
+};
+
+/**
+ * A committed consumer (demo-skill tracked) with a linked worktree beside it, plus a second
+ * registry skill for the overlay. `primary` and `worktree` are both session roots.
+ */
+async function overlayFixture() {
+  const fx = await projectFixture();
+  await fx.runWithStdin(['skill', 'write', 'extra-skill', '--set-version', '0.1.0', '--tags', 'demo'], EXTRA_SKILL_MD);
+  const env = { ...fx.env, ...OVERLAY_GIT_ENV };
+  const primary = fx.projectRoot;
+  const inDir = (dir, args) => run('node', [CLI, ...args], { cwd: dir, env });
+  const git = (dir, args) => run('git', args, { cwd: dir, env });
+
+  await inDir(primary, ['project', 'init']);
+  await inDir(primary, ['project', 'add', 'demo-skill']);
+  await inDir(primary, ['sync']);
+  await git(primary, ['init', '-q', '-b', 'main']);
+  await git(primary, ['add', '-A']);
+  await git(primary, ['commit', '-q', '-m', 'profile']);
+  const worktree = path.join(await tempDir('skf-wt-'), 'work-slice');
+  await git(primary, ['worktree', 'add', '-q', worktree, '-b', 'slice']);
+
+  const { stdout: commonDir } = await git(worktree, ['rev-parse', '--git-common-dir']);
+  const excludePath = path.join(path.resolve(worktree, commonDir.trim()), 'info', 'exclude');
+  return {
+    ...fx,
+    primary,
+    worktree,
+    inDir,
+    git,
+    excludePath,
+    readExclude: () => fs.readFile(excludePath, 'utf8').catch(() => ''),
+    porcelain: async (dir) => (await git(dir, ['status', '--porcelain'])).stdout,
+    exists: (p) => fs.access(p).then(() => true, () => false)
+  };
+}
+
+test('overlay: add --overlay + sync vendors into a worktree without touching tracked files or git status', async () => {
+  const fx = await overlayFixture();
+  const trackedLockBefore = await fs.readFile(path.join(fx.worktree, 'skill-forge.lock.json'), 'utf8');
+
+  const { stdout: addOut } = await fx.inDir(fx.worktree, ['project', 'add', 'extra-skill', '--overlay']);
+  assert.match(addOut, /\+ extra-skill \^0\.1\.0 \(overlay\)/);
+  const overlay = JSON.parse(await fs.readFile(path.join(fx.worktree, 'skill-forge.local.json'), 'utf8'));
+  assert.deepEqual(overlay, { schemaVersion: 1, skills: { dependencies: { 'extra-skill': '^0.1.0' } } });
+
+  const { stdout: syncOut } = await fx.inDir(fx.worktree, ['sync']);
+  assert.match(syncOut, /1 overlay/);
+  for (const dir of ['.agents/skills', '.claude/skills']) {
+    assert.equal(await fs.readFile(path.join(fx.worktree, dir, 'extra-skill', 'SKILL.md'), 'utf8'), EXTRA_SKILL_MD);
+  }
+  const overlayLock = JSON.parse(await fs.readFile(path.join(fx.worktree, 'skill-forge.local.lock.json'), 'utf8'));
+  assert.deepEqual(Object.keys(overlayLock.skills), ['extra-skill']);
+  assert.equal(overlayLock.skills['extra-skill'].source, 'overlay');
+
+  assert.equal(await fs.readFile(path.join(fx.worktree, 'skill-forge.lock.json'), 'utf8'), trackedLockBefore, 'tracked lock untouched');
+  assert.equal(await fx.porcelain(fx.worktree), '', 'overlay files are excluded from git');
+  assert.match(await fx.readExclude(), /^\/\.agents\/skills\/extra-skill\/$/m);
+
+  await fx.inDir(fx.worktree, ['sync', '--check']);
+  const status = JSON.parse((await fx.inDir(fx.worktree, ['project', 'status', '--json'])).stdout);
+  assert.deepEqual(status.skills.find((s) => s.name === 'extra-skill'), { name: 'extra-skill', version: '0.1.0', source: 'overlay', state: 'clean' });
+  assert.deepEqual(status.overlay, { file: 'skill-forge.local.json', skills: ['extra-skill'] });
+  assert.match((await fx.inDir(fx.worktree, ['project', 'status'])).stdout, /extra-skill@0\.1\.0 \(overlay\)/);
+
+  // A registry bump makes the overlay lock stale, reported as an overlay issue; sync repairs.
+  await fx.run(['skill', 'bump', 'extra-skill']);
+  await assert.rejects(fx.inDir(fx.worktree, ['sync', '--check']), /overlay: skill-forge\.local\.lock\.json is stale/);
+  await fx.inDir(fx.worktree, ['sync']);
+  await fx.inDir(fx.worktree, ['sync', '--check']);
+  // Any registry change refreshes the tracked lock's registry hash (as without an overlay);
+  // no overlay path may surface.
+  assert.equal(await fx.porcelain(fx.worktree), ' M skill-forge.lock.json\n');
+});
+
+test('overlay: removing a skill prunes it, and overlay --clear restores the worktree', async () => {
+  const fx = await overlayFixture();
+  await fx.inDir(fx.worktree, ['project', 'add', 'extra-skill', '--overlay']);
+  await fx.inDir(fx.worktree, ['sync']);
+
+  const overlayPath = path.join(fx.worktree, 'skill-forge.local.json');
+  await fs.writeFile(overlayPath, `${JSON.stringify({ schemaVersion: 1, skills: { dependencies: {} } }, null, 2)}\n`);
+  await assert.rejects(fx.inDir(fx.worktree, ['sync', '--check']), /overlay: \.agents\/skills\/extra-skill is no longer in the overlay/);
+  await fx.inDir(fx.worktree, ['sync']);
+  assert.equal(await fx.exists(path.join(fx.worktree, '.agents', 'skills', 'extra-skill')), false);
+  assert.equal(await fx.exists(path.join(fx.worktree, 'skill-forge.local.lock.json')), false, 'empty overlay drops its lock');
+  assert.doesNotMatch(await fx.readExclude(), /extra-skill/);
+  assert.equal(await fx.porcelain(fx.worktree), '', 'the overlay file itself stays excluded while it exists');
+
+  await fx.inDir(fx.worktree, ['project', 'add', 'extra-skill', '--overlay']);
+  await fx.inDir(fx.worktree, ['sync']);
+  const { stdout } = await fx.inDir(fx.worktree, ['project', 'overlay', '--clear']);
+  assert.match(stdout, /Cleared/);
+  assert.equal(await fx.exists(overlayPath), false);
+  assert.equal(await fx.exists(path.join(fx.worktree, '.agents', 'skills', 'extra-skill')), false);
+  assert.doesNotMatch(await fx.readExclude(), /skill-forge overlay/);
+  assert.equal(await fx.porcelain(fx.worktree), '');
+  await fx.inDir(fx.worktree, ['sync', '--check']);
+});
+
+test('overlay: a skill promoted into the tracked profile loses its exclude lines everywhere', async () => {
+  const fx = await overlayFixture();
+  await fx.inDir(fx.worktree, ['project', 'add', 'extra-skill', '--overlay']);
+  await fx.inDir(fx.worktree, ['sync']);
+  assert.match(await fx.readExclude(), /extra-skill/);
+
+  // The primary checkout shares info/exclude; without cleanup its new tracked copy would be invisible to git.
+  await fx.inDir(fx.primary, ['project', 'add', 'extra-skill']);
+  const { stdout } = await fx.inDir(fx.primary, ['sync']);
+  assert.match(stdout, /extra-skill is now tracked; removed it from overlay exclude blocks/);
+  assert.doesNotMatch(await fx.readExclude(), /extra-skill/);
+  assert.match(await fx.porcelain(fx.primary), /\?\? \.agents\/skills\/extra-skill\//);
+});
+
+test('overlay: misuse is refused with errors naming the overlay file', async () => {
+  const fx = await overlayFixture();
+  await assert.rejects(fx.inDir(fx.worktree, ['project', 'add', 'demo-skill', '--overlay']), /"demo-skill" is already declared in skill-forge\.json/);
+  await assert.rejects(fx.inDir(fx.worktree, ['project', 'add', 'missing-skill', '--overlay']), /not an installable registry skill/);
+
+  await fs.writeFile(
+    path.join(fx.worktree, 'skill-forge.local.json'),
+    `${JSON.stringify({ schemaVersion: 1, extends: ['base'], skills: { dependencies: {} } })}\n`
+  );
+  await assert.rejects(fx.inDir(fx.worktree, ['sync']), /skill-forge\.local\.json may only declare skills\.dependencies/);
+  await fs.rm(path.join(fx.worktree, 'skill-forge.local.json'));
+
+  // Outside git there is nothing to keep out of git: declare it in the tracked profile instead.
+  const plain = await projectFixture();
+  await plain.runInProject(['project', 'init']);
+  await assert.rejects(plain.runInProject(['project', 'add', 'demo-skill', '--overlay']), /needs a git work tree/);
+
+  // An overlay sits on top of a consumer; it is not one.
+  const bare = await tempDir('skf-bare-');
+  await fx.git(bare, ['init', '-q']);
+  await assert.rejects(fx.inDir(bare, ['project', 'add', 'demo-skill', '--overlay']), /No skill-forge\.json/);
+});
+
+test('overlay: two worktrees keep separate exclude blocks', async () => {
+  const fx = await overlayFixture();
+  const second = path.join(await tempDir('skf-wt2-'), 'work-other');
+  await fx.git(fx.primary, ['worktree', 'add', '-q', second, '-b', 'other']);
+
+  await fx.inDir(fx.worktree, ['project', 'add', 'extra-skill', '--overlay']);
+  await fx.inDir(fx.worktree, ['sync']);
+  await fx.inDir(second, ['project', 'add', 'extra-skill', '--overlay']);
+  await fx.inDir(second, ['sync']);
+  assert.equal((await fx.readExclude()).match(/^# >>> skill-forge overlay /gm).length, 2);
+
+  await fx.inDir(fx.worktree, ['project', 'overlay', '--clear']);
+  const exclude = await fx.readExclude();
+  assert.equal(exclude.match(/^# >>> skill-forge overlay /gm).length, 1);
+  assert.match(exclude, /extra-skill/, 'the other worktree keeps its block');
+  assert.equal(await fx.porcelain(second), '');
+});
+
+test('overlay: a git consumer without an overlay syncs exactly as before', async () => {
+  const fx = await overlayFixture();
+  const excludeBefore = await fx.readExclude();
+  const { stdout } = await fx.inDir(fx.worktree, ['sync']);
+  assert.doesNotMatch(stdout, /overlay/);
+  assert.equal(await fx.readExclude(), excludeBefore, 'info/exclude untouched');
+  const status = JSON.parse((await fx.inDir(fx.worktree, ['project', 'status', '--json'])).stdout);
+  assert.equal(status.overlay, undefined);
+  const { stdout: listOut } = await fx.inDir(fx.worktree, ['project', 'overlay']);
+  assert.match(listOut, /No overlay/);
+});
+
 test('extends resolves registry profiles and enforces their ranges', async () => {
   const fx = await projectFixture();
   const registry = await fx.readRegistry();

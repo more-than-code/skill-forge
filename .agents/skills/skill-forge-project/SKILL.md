@@ -164,6 +164,14 @@ exists to prevent.
 - **Commit together.** `skill-forge.json`, `skill-forge.lock.json`, and the
   vendored `.agents/skills/`/`.claude/skills/` directories change as one unit —
   don't split them across commits.
+- **One checkout's extra skills go in the overlay, never the tracked profile.**
+  When a single checkout — typically a git worktree slice — needs a skill its
+  repo should not declare, `skf project add <name> --overlay` + `skf sync`. The
+  overlay (`skill-forge.local.json` and its lock) and its skill folders stay out
+  of git through `info/exclude`; there is nothing to commit. It holds registry
+  skills only, refuses a name the tracked profile declares, and works only in a
+  git work tree. Clear it with `skf project overlay --clear` before the
+  worktree is removed. `sync --check` reports overlay drift as `overlay: …`.
 
 ## Authoring a repo-local skill
 
@@ -235,6 +243,8 @@ only. If a skill is needed at both levels, promote it to the registry
 skf skill list --json                 # candidates: name, version, tags, description
 skf project init [--shims <list>]      # only if skill-forge.json is missing
 skf project add [<name>...]            # confirmed names, or interactive if omitted
+skf project add <name>... --overlay    # this checkout only; untracked, kept out of git
+skf project overlay [--clear]          # list the overlay, or remove it entirely
 skf project status [--json]            # resolved skills, sources, sync state, issues
 skf home init|add|status|sync          # same flow for the machine-wide $HOME profile
 skf sync                               # vendor + write lockfile
@@ -261,6 +271,8 @@ skf project doctor [--check]           # one read-only gate: profile + instructi
 | Declare `skills.local` and expect `sync` to place the directory for you | Put the source at `.agents/skills/<name>` first, then declare that path |
 | Copy a local skill's source into a second repo or level so both see it | One source dir; if both levels need it, promote it to the registry |
 | Put a product-specific house rule in `inventory/skills` so it is "reusable" | `skills.local` in the repo it is true for |
+| Add a skill to a worktree's tracked `skill-forge.json` "just for this slice" | `skf project add <name> --overlay`; the tracked profile merges with the branch |
+| `git worktree remove` a worktree that has an overlay | `skf project overlay --clear` first, so its `info/exclude` block goes too |
 
 ## Related
 

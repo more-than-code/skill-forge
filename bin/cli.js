@@ -74,6 +74,12 @@ const CLI_NAME = ['skill-forge', 'skf'].includes(path.basename(process.argv[1] |
   : 'skf';
 const PROJECT_MANIFEST_NAME = 'skill-forge.json';
 const PROJECT_LOCK_NAME = 'skill-forge.lock.json';
+// The local overlay: extra registry skills for one checkout, never committed (see
+// readOverlayManifest). Its own lock, and a per-work-tree block in info/exclude.
+const PROJECT_OVERLAY_NAME = 'skill-forge.local.json';
+const PROJECT_OVERLAY_LOCK_NAME = 'skill-forge.local.lock.json';
+const OVERLAY_EXCLUDE_START = '# >>> skill-forge overlay';
+const OVERLAY_EXCLUDE_END = '# <<< skill-forge overlay';
 // Tools no longer choose where skills land: every profile materializes them once
 // into the neutral directory. A *shim* is the one leftover accommodation — a
 // symlink at the path a tool insists on reading. A tool with no shim needs no
@@ -87,7 +93,7 @@ const program = new Command();
 program
   .name(CLI_NAME)
   .description('CLI to manage skills from the skill-forge registry')
-  .version('1.3.0');
+  .version('1.4.0');
 
 function expandHome(targetPath) {
   if (!targetPath) return targetPath;
@@ -1001,6 +1007,152 @@ async function writeProjectManifest(projectRoot, manifest) {
   await fs.writeJson(projectManifestPath(projectRoot), manifest, { spaces: 2 });
 }
 
+// --- Local overlay (skill-forge.local.json) ---
+//
+// The tracked profile is shared by every checkout of a repo. A git worktree working one
+// slice sometimes needs skills that profile does not declare, and declaring them there
+// commits them into the repo and merges them on. The overlay adds registry skills for this
+// work tree only: vendored with the rest, locked in its own untracked lock, and kept out of
+// git by a block in the repo's info/exclude. That file is shared by every work tree of the
+// repo, so each work tree owns one block, keyed by its top-level path.
+
+function overlayManifestPath(projectRoot) {
+  return path.join(projectRoot, PROJECT_OVERLAY_NAME);
+}
+
+function overlayLockPath(projectRoot) {
+  return path.join(projectRoot, PROJECT_OVERLAY_LOCK_NAME);
+}
+
+async function readOverlayManifest(projectRoot) {
+  const overlayPath = overlayManifestPath(projectRoot);
+  if (!await fs.pathExists(overlayPath)) return null;
+  const raw = await fs.readJson(overlayPath);
+  if (raw.schemaVersion !== 1) {
+    throw new Error(`Unsupported ${PROJECT_OVERLAY_NAME} schemaVersion ${raw.schemaVersion}; expected 1.`);
+  }
+  const extra = [
+    ...Object.keys(raw).filter((key) => !['schemaVersion', 'skills'].includes(key)),
+    ...Object.keys(raw.skills || {}).filter((key) => key !== 'dependencies').map((key) => `skills.${key}`)
+  ];
+  const deps = raw.skills?.dependencies;
+  if (deps !== undefined && (typeof deps !== 'object' || Array.isArray(deps))) extra.push('a non-object skills.dependencies');
+  if (extra.length > 0) {
+    throw new Error(`${PROJECT_OVERLAY_NAME} may only declare skills.dependencies (registry skills for this checkout); found ${extra.join(', ')}. Profiles, local skills and shims belong in ${PROJECT_MANIFEST_NAME}.`);
+  }
+  return raw;
+}
+
+function resolveOverlay(registry, overlay, resolution) {
+  const tracked = new Set([...resolution.resolved.map(({ name }) => name), ...resolution.locals.map(({ name }) => name)]);
+  const resolved = [];
+  const deps = Object.entries(overlay?.skills?.dependencies || {}).sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [name, range] of deps) {
+    if (tracked.has(name)) {
+      throw new Error(`"${name}" is already declared in ${PROJECT_MANIFEST_NAME}; remove it from ${PROJECT_OVERLAY_NAME}.`);
+    }
+    const { skill } = resolveSkill(registry, name);
+    if (!skill || !skill.installable) {
+      throw new Error(`Skill "${name}" is not an installable registry skill. See "${CLI_NAME} list".`);
+    }
+    if (!satisfiesRange(skill.version, range)) {
+      throw new Error(`Skill "${name}"@${skill.version} does not satisfy range "${range}" (${PROJECT_OVERLAY_NAME}). Update the range or the registry.`);
+    }
+    resolved.push({ name, skill });
+  }
+  return resolved;
+}
+
+/** null outside a git work tree. One rev-parse call; the common dir is where info/exclude lives. */
+async function gitWorkTreeInfo(projectRoot) {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', projectRoot, 'rev-parse', '--is-inside-work-tree', '--git-common-dir', '--show-prefix', '--show-toplevel'],
+      { env: gitEnvironment() }
+    );
+    const [inside, commonDir, prefix, toplevel] = stdout.split('\n');
+    if (inside !== 'true') return null;
+    return { excludePath: path.join(path.resolve(projectRoot, commonDir), 'info', 'exclude'), prefix, key: toplevel };
+  } catch {
+    return null;
+  }
+}
+
+function overlaySkillPattern(git, name) {
+  return `/${git.prefix}${PROJECT_NEUTRAL_SKILL_DIR.split(path.sep).join('/')}/${name}/`;
+}
+
+function overlayExcludeLines(git, names, { manifest, lock }) {
+  return [
+    ...(manifest ? [`/${git.prefix}${PROJECT_OVERLAY_NAME}`] : []),
+    ...(lock ? [`/${git.prefix}${PROJECT_OVERLAY_LOCK_NAME}`] : []),
+    ...[...names].sort().map((name) => overlaySkillPattern(git, name))
+  ];
+}
+
+function overlayBlockMarkers(key) {
+  return { start: `${OVERLAY_EXCLUDE_START} ${key} >>>`, end: `${OVERLAY_EXCLUDE_END} ${key} <<<` };
+}
+
+/** This work tree's block lines, or null when it has none. */
+async function readOverlayExclude(git) {
+  const { start, end } = overlayBlockMarkers(git.key);
+  const lines = (await fs.readFile(git.excludePath, 'utf8').catch(() => '')).split('\n');
+  const from = lines.indexOf(start);
+  if (from < 0) return null;
+  const to = lines.indexOf(end, from);
+  return lines.slice(from + 1, to < 0 ? lines.length : to);
+}
+
+/** Replace this work tree's block (none when `lines` is empty). Never touches a file it has no block in. */
+async function writeOverlayExclude(git, lines) {
+  const { start, end } = overlayBlockMarkers(git.key);
+  const text = await fs.readFile(git.excludePath, 'utf8').catch(() => '');
+  const kept = [];
+  let found = false;
+  let inBlock = false;
+  for (const line of text.split('\n')) {
+    if (line === start) {
+      found = true;
+      inBlock = true;
+    } else if (inBlock) {
+      if (line === end) inBlock = false;
+    } else {
+      kept.push(line);
+    }
+  }
+  if (!found && lines.length === 0) return;
+  while (kept.length > 0 && kept[kept.length - 1] === '') kept.pop();
+  if (lines.length > 0) kept.push(start, ...lines, end);
+  await fs.ensureDir(path.dirname(git.excludePath));
+  await fs.writeFile(git.excludePath, kept.length > 0 ? `${kept.join('\n')}\n` : '');
+}
+
+/**
+ * A skill now declared by a tracked profile must not stay excluded in ANY work tree's block:
+ * the exclude file is shared, and an excluded new folder is silently left out of `git add -A`.
+ * Returns the names whose lines were removed.
+ */
+async function dropTrackedFromOverlayExcludes(git, trackedNames) {
+  const text = await fs.readFile(git.excludePath, 'utf8').catch(() => null);
+  if (text === null || !text.includes(OVERLAY_EXCLUDE_START)) return [];
+  const patterns = new Map([...trackedNames].map((name) => [overlaySkillPattern(git, name), name]));
+  const removed = new Set();
+  let inBlock = false;
+  const kept = text.split('\n').filter((line) => {
+    if (line.startsWith(OVERLAY_EXCLUDE_START)) inBlock = true;
+    else if (line.startsWith(OVERLAY_EXCLUDE_END)) inBlock = false;
+    else if (inBlock && patterns.has(line)) {
+      removed.add(patterns.get(line));
+      return false;
+    }
+    return true;
+  });
+  if (removed.size > 0) await fs.writeFile(git.excludePath, kept.join('\n'));
+  return [...removed].sort();
+}
+
 function resolveProjectProfile(registry, manifest) {
   const rangesByName = new Map();
   const addRange = (name, range, origin) => {
@@ -1118,7 +1270,7 @@ async function getRegistryCommit() {
   }
 }
 
-async function buildProjectLock(projectRoot, registry, resolution) {
+async function buildProjectLock(projectRoot, registry, resolution, source = 'registry') {
   if (!await fs.pathExists(REGISTRY_LOCK_PATH)) {
     throw new Error(`registry-lock.json is missing in the Skill Forge repo; run "${CLI_NAME} lock" there first.`);
   }
@@ -1127,7 +1279,7 @@ async function buildProjectLock(projectRoot, registry, resolution) {
   const skills = {};
   for (const { name, skill } of resolution.resolved) {
     const { integrity } = await hashTree(assertPathWithinInventorySkills(skill.path));
-    skills[name] = { version: skill.version, integrity, source: 'registry' };
+    skills[name] = { version: skill.version, integrity, source };
   }
   for (const { name, relPath } of resolution.locals) {
     const absPath = path.join(projectRoot, relPath);
@@ -1166,6 +1318,17 @@ async function computeProjectState(projectRoot) {
   const lockPath = projectLockPath(projectRoot);
   const storedLock = await fs.pathExists(lockPath) ? await fs.readJson(lockPath) : null;
 
+  const overlay = await readOverlayManifest(projectRoot);
+  const overlayResolved = resolveOverlay(registry, overlay, resolution);
+  const expectedOverlayLock = overlayResolved.length > 0
+    ? await buildProjectLock(projectRoot, registry, { resolved: overlayResolved, locals: [] }, 'overlay')
+    : null;
+  const storedOverlayLock = await fs.pathExists(overlayLockPath(projectRoot)) ? await fs.readJson(overlayLockPath(projectRoot)) : null;
+  const git = overlay || storedOverlayLock ? await gitWorkTreeInfo(projectRoot) : null;
+  if (overlayResolved.length > 0 && !git) {
+    throw new Error(`${PROJECT_OVERLAY_NAME} needs a git work tree: it exists to keep skills out of a repository. Outside git, declare them in ${PROJECT_MANIFEST_NAME}.`);
+  }
+
   const issues = [];
   if (!storedLock) {
     issues.push(`${PROJECT_LOCK_NAME} is missing; run "${CLI_NAME} sync".`);
@@ -1192,7 +1355,44 @@ async function computeProjectState(projectRoot) {
     }
   }
 
+  if (expectedOverlayLock) {
+    if (!storedOverlayLock) {
+      issues.push(`overlay: ${PROJECT_OVERLAY_LOCK_NAME} is missing; run "${CLI_NAME} sync".`);
+    } else if (comparableProjectLock(storedOverlayLock) !== comparableProjectLock(expectedOverlayLock)) {
+      issues.push(`overlay: ${PROJECT_OVERLAY_LOCK_NAME} is stale (overlay or registry changed); run "${CLI_NAME} sync".`);
+    }
+  } else if (storedOverlayLock) {
+    issues.push(`overlay: ${PROJECT_OVERLAY_LOCK_NAME} is left over from an emptied overlay; run "${CLI_NAME} sync".`);
+  }
+  for (const { name } of overlayResolved) {
+    const destPath = path.join(projectRoot, realDir, name);
+    if (!await fs.pathExists(destPath)) {
+      vendored.push({ name, dir: realDir, status: 'missing' });
+      issues.push(`overlay: ${path.join(realDir, name)} is missing; run "${CLI_NAME} sync".`);
+    } else {
+      const { integrity } = await hashTree(destPath);
+      const status = integrity === expectedOverlayLock.skills[name].integrity ? 'clean' : 'differs';
+      vendored.push({ name, dir: realDir, status });
+      if (status === 'differs') issues.push(`overlay: ${path.join(realDir, name)} differs from the resolved skill; run "${CLI_NAME} sync".`);
+    }
+  }
+
   const resolvedNames = new Set(resolution.resolved.map(({ name }) => name));
+  const overlayNames = new Set(overlayResolved.map(({ name }) => name));
+  const overlayStaleNames = Object.keys(storedOverlayLock?.skills || {})
+    .filter((name) => !overlayNames.has(name) && !resolvedNames.has(name));
+  for (const name of overlayStaleNames) {
+    if (await fs.pathExists(path.join(projectRoot, realDir, name))) {
+      issues.push(`overlay: ${path.join(realDir, name)} is no longer in the overlay; run "${CLI_NAME} sync" to prune it.`);
+    }
+  }
+  const overlayExclude = git && overlay
+    ? overlayExcludeLines(git, overlayNames, { manifest: true, lock: overlayResolved.length > 0 })
+    : [];
+  if (git && JSON.stringify(await readOverlayExclude(git) ?? []) !== JSON.stringify(overlayExclude)) {
+    issues.push(`overlay: this work tree's block in ${git.excludePath} is out of date; run "${CLI_NAME} sync".`);
+  }
+
   const staleNames = Object.entries(storedLock?.skills || {})
     .filter(([name, entry]) => entry.source === 'registry' && !resolvedNames.has(name))
     .map(([name]) => name);
@@ -1231,7 +1431,9 @@ async function computeProjectState(projectRoot) {
     ...resolvedNames,
     ...Object.entries(storedLock?.skills || {})
       .filter(([, entry]) => entry.source === 'registry')
-      .map(([name]) => name)
+      .map(([name]) => name),
+    ...overlayNames,
+    ...Object.keys(storedOverlayLock?.skills || {})
   ]);
   const orphaned = [];
   for (const name of registryNames) {
@@ -1245,7 +1447,10 @@ async function computeProjectState(projectRoot) {
     }
   }
 
-  return { registry, manifest, resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, staleNames, orphaned, inactiveLinks, vendored, issues };
+  return {
+    registry, manifest, resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, staleNames, orphaned, inactiveLinks, vendored, issues,
+    overlay, overlayResolved, expectedOverlayLock, storedOverlayLock, overlayStaleNames, overlayExclude, git
+  };
 }
 
 async function syncProject(projectRoot) {
@@ -1258,24 +1463,27 @@ async function syncProject(projectRoot) {
   }
 
   const state = await computeProjectState(projectRoot);
-  const { resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock } = state;
+  const { resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, overlayResolved, expectedOverlayLock, storedOverlayLock } = state;
 
-  // One real copy, in the tool-neutral directory.
-  for (const { name, skill } of resolution.resolved) {
+  // One real copy, in the tool-neutral directory. A copy either lock owns may be replaced:
+  // a skill can move between the tracked profile and the overlay.
+  const ownedByLock = (name) => storedLock?.skills?.[name]?.source === 'registry' || Boolean(storedOverlayLock?.skills?.[name]);
+  const vendor = async ({ name, skill }, lock, label) => {
     const sourcePath = assertPathWithinInventorySkills(skill.path);
     const destPath = path.join(projectRoot, realDir, name);
     if (await fs.pathExists(destPath)) {
-      const owned = storedLock?.skills?.[name]?.source === 'registry';
       const { integrity } = await hashTree(destPath);
-      if (!owned && integrity !== expectedLock.skills[name].integrity) {
+      if (!ownedByLock(name) && integrity !== lock.skills[name].integrity) {
         throw new Error(`${path.join(realDir, name)} exists but is not managed by Skill Forge. Declare it in skills.local, rename it, or remove it.`);
       }
       await fs.remove(destPath);
     }
     await fs.ensureDir(path.dirname(destPath));
     await fs.copy(sourcePath, destPath);
-    console.log(chalk.green(`  ${name}@${skill.version} -> ${targetDirs.join(', ')}`));
-  }
+    console.log(chalk.green(`  ${name}@${skill.version} -> ${targetDirs.join(', ')}${label}`));
+  };
+  for (const entry of resolution.resolved) await vendor(entry, expectedLock, '');
+  for (const entry of overlayResolved) await vendor(entry, expectedOverlayLock, ' (overlay)');
 
   // Every tool directory is a link to that copy. Done after the copies exist so
   // a link never briefly resolves to nothing.
@@ -1283,7 +1491,9 @@ async function syncProject(projectRoot) {
     ...resolution.resolved.map(({ name }) => name),
     ...Object.entries(storedLock?.skills || {})
       .filter(([, entry]) => entry.source === 'registry')
-      .map(([name]) => name)
+      .map(([name]) => name),
+    ...overlayResolved.map(({ name }) => name),
+    ...Object.keys(storedOverlayLock?.skills || {})
   ]);
   for (const dir of linkDirs) {
     if (await ensureToolDirLink(projectRoot, dir, realDir, managedNames)) {
@@ -1301,6 +1511,14 @@ async function syncProject(projectRoot) {
     if (await fs.pathExists(destPath)) {
       await fs.remove(destPath);
       console.log(chalk.yellow(`  pruned ${path.join(realDir, name)}`));
+    }
+  }
+
+  for (const name of state.overlayStaleNames) {
+    const destPath = path.join(projectRoot, realDir, name);
+    if (await fs.pathExists(destPath)) {
+      await fs.remove(destPath);
+      console.log(chalk.yellow(`  pruned ${path.join(realDir, name)} (overlay)`));
     }
   }
 
@@ -1323,7 +1541,22 @@ async function syncProject(projectRoot) {
   }
 
   await fs.writeJson(projectLockPath(projectRoot), expectedLock, { spaces: 2 });
-  console.log(chalk.green(`Wrote ${PROJECT_LOCK_NAME} (${resolution.resolved.length} registry, ${resolution.locals.length} local skill(s)).`));
+  if (expectedOverlayLock) {
+    await fs.writeJson(overlayLockPath(projectRoot), expectedOverlayLock, { spaces: 2 });
+  } else if (storedOverlayLock) {
+    await fs.remove(overlayLockPath(projectRoot));
+  }
+  if (state.git) await writeOverlayExclude(state.git, state.overlayExclude);
+
+  const git = state.git ?? await gitWorkTreeInfo(projectRoot);
+  if (git) {
+    for (const name of await dropTrackedFromOverlayExcludes(git, resolution.resolved.map(({ name: n }) => n))) {
+      console.log(chalk.yellow(`  ${name} is now tracked; removed it from overlay exclude blocks in ${git.excludePath}`));
+    }
+  }
+
+  const overlayCount = state.overlay ? `, ${overlayResolved.length} overlay` : '';
+  console.log(chalk.green(`Wrote ${PROJECT_LOCK_NAME} (${resolution.resolved.length} registry, ${resolution.locals.length} local skill(s)${overlayCount}).`));
 }
 
 program
@@ -2079,12 +2312,81 @@ async function runProjectAdd(projectRoot, skillNames, { syncHint }) {
   console.log(chalk.gray(`Run "${syncHint}" to vendor and lock.`));
 }
 
+async function runOverlayAdd(projectRoot, skillNames) {
+  const registry = await readRegistry();
+  const manifest = await readProjectManifest(projectRoot);
+  const git = await gitWorkTreeInfo(projectRoot);
+  if (!git) {
+    throw new Error(`${PROJECT_OVERLAY_NAME} needs a git work tree: it exists to keep skills out of a repository. Outside git, declare them in ${PROJECT_MANIFEST_NAME}.`);
+  }
+  if (skillNames.length === 0) {
+    throw new Error('Provide skill names, e.g. "project add umbrella-workspace --overlay".');
+  }
+  const resolution = resolveProjectProfile(registry, manifest);
+  const tracked = new Set([...resolution.resolved.map(({ name }) => name), ...resolution.locals.map(({ name }) => name)]);
+  const overlay = await readOverlayManifest(projectRoot) || { schemaVersion: 1, skills: { dependencies: {} } };
+  overlay.skills = overlay.skills || {};
+  overlay.skills.dependencies = overlay.skills.dependencies || {};
+
+  for (const name of skillNames) {
+    const { skill } = resolveSkill(registry, name);
+    if (!skill || !skill.installable) {
+      throw new Error(`Skill "${name}" is not an installable registry skill. See "${CLI_NAME} list".`);
+    }
+    if (tracked.has(skill.name)) {
+      throw new Error(`"${skill.name}" is already declared in ${PROJECT_MANIFEST_NAME}; it needs no overlay.`);
+    }
+    overlay.skills.dependencies[skill.name] = `^${skill.version}`;
+    console.log(chalk.green(`+ ${skill.name} ^${skill.version} (overlay)`));
+  }
+
+  await fs.writeJson(overlayManifestPath(projectRoot), overlay, { spaces: 2 });
+  // Excluded at once, so the new file never shows in git status, even before a sync.
+  await writeOverlayExclude(git, overlayExcludeLines(git, Object.keys(overlay.skills.dependencies), {
+    manifest: true,
+    lock: await fs.pathExists(overlayLockPath(projectRoot))
+  }));
+  console.log(chalk.gray(`Run "${CLI_NAME} sync" to vendor and lock. ${PROJECT_OVERLAY_NAME} is untracked; this checkout only.`));
+}
+
+async function runProjectOverlay(projectRoot, { clear }) {
+  const overlay = await readOverlayManifest(projectRoot);
+  const storedOverlayLock = await fs.pathExists(overlayLockPath(projectRoot)) ? await fs.readJson(overlayLockPath(projectRoot)) : null;
+  if (!clear) {
+    if (!overlay) {
+      console.log(chalk.gray(`No overlay (${PROJECT_OVERLAY_NAME} absent).`));
+      return;
+    }
+    const deps = Object.entries(overlay.skills?.dependencies || {});
+    console.log(chalk.blue.bold(`\nOverlay (${PROJECT_OVERLAY_NAME}, untracked)`));
+    for (const [name, range] of deps) {
+      const locked = storedOverlayLock?.skills?.[name]?.version;
+      console.log(`- ${name} ${range}${locked ? ` (locked ${locked})` : chalk.yellow(' (not synced)')}`);
+    }
+    if (deps.length === 0) console.log(chalk.gray('Overlay declares no skills.'));
+    return;
+  }
+
+  // Never remove a copy the tracked profile owns, even if the overlay still names it.
+  const trackedLock = await fs.pathExists(projectLockPath(projectRoot)) ? await fs.readJson(projectLockPath(projectRoot)) : null;
+  const names = [...new Set([...Object.keys(overlay?.skills?.dependencies || {}), ...Object.keys(storedOverlayLock?.skills || {})])]
+    .filter((name) => !trackedLock?.skills?.[name]);
+  for (const name of names) await fs.remove(path.join(projectRoot, PROJECT_NEUTRAL_SKILL_DIR, name));
+  await fs.remove(overlayManifestPath(projectRoot));
+  await fs.remove(overlayLockPath(projectRoot));
+  const git = await gitWorkTreeInfo(projectRoot);
+  if (git) await writeOverlayExclude(git, []);
+  console.log(chalk.green(`Cleared the overlay: ${names.length} skill(s), ${PROJECT_OVERLAY_NAME}, its lock and this work tree's info/exclude block.`));
+}
+
 projectCommand
   .command('add [skills...]')
   .description(`Add registry skills as project dependencies in ${PROJECT_MANIFEST_NAME}; with no names, search interactively`)
-  .action(async (skillNames) => {
+  .option('--overlay', `Add to the untracked ${PROJECT_OVERLAY_NAME} instead: this checkout only (e.g. a git worktree), kept out of git`)
+  .action(async (skillNames, options) => {
     try {
-      await runProjectAdd(process.cwd(), skillNames, { syncHint: `${CLI_NAME} sync` });
+      if (options.overlay) await runOverlayAdd(process.cwd(), skillNames);
+      else await runProjectAdd(process.cwd(), skillNames, { syncHint: `${CLI_NAME} sync` });
     } catch (error) {
       console.error(chalk.red('Error adding project skill:'), error.message);
       process.exitCode = 1;
@@ -2103,6 +2405,19 @@ homeCommand
     }
   });
 
+projectCommand
+  .command('overlay')
+  .description(`List the untracked ${PROJECT_OVERLAY_NAME} skills for this checkout; --clear removes the overlay entirely`)
+  .option('--clear', 'Remove overlay skills, the overlay file, its lock and this work tree\'s info/exclude block')
+  .action(async (options) => {
+    try {
+      await runProjectOverlay(process.cwd(), options);
+    } catch (error) {
+      console.error(chalk.red('Error with project overlay:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
 function buildProjectStatusJson(state) {
   const skills = [];
   for (const { name, skill } of state.resolution.resolved) {
@@ -2113,12 +2428,17 @@ function buildProjectStatusJson(state) {
   for (const { name, relPath } of state.resolution.locals) {
     skills.push({ name, path: relPath, source: 'local', state: 'clean' });
   }
+  for (const { name, skill } of state.overlayResolved) {
+    const worst = state.vendored.find((entry) => entry.name === name && entry.status !== 'clean');
+    skills.push({ name, version: skill.version, source: 'overlay', state: worst ? worst.status : 'clean' });
+  }
   return {
     shims: state.manifest.skills?.shims || [],
     targets: state.targetDirs,
     extends: state.manifest.extends || [],
     skills,
     staleNames: state.staleNames,
+    ...(state.overlay ? { overlay: { file: PROJECT_OVERLAY_NAME, skills: state.overlayResolved.map(({ name }) => name) } } : {}),
     issues: state.issues
   };
 }
@@ -2146,6 +2466,13 @@ async function runProjectStatus(projectRoot, options) {
   }
   for (const name of state.staleNames) {
     console.log(chalk.yellow(`- ${name} (no longer in profile; sync will prune)`));
+  }
+  for (const { name, skill } of state.overlayResolved) {
+    const worst = state.vendored.find((entry) => entry.name === name && entry.status !== 'clean');
+    console.log(`- ${name}@${skill.version} (overlay) ${worst ? chalk.yellow(worst.status) : chalk.green('clean')}`);
+  }
+  for (const name of state.overlayStaleNames) {
+    console.log(chalk.yellow(`- ${name} (no longer in overlay; sync will prune)`));
   }
   if (state.resolution.resolved.length === 0 && state.resolution.locals.length === 0) {
     console.log(chalk.yellow(`No skills declared. Use "${CLI_NAME} project add <skills...>".`));

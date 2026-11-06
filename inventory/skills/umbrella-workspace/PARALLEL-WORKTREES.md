@@ -57,7 +57,7 @@ git -C child-be worktree list
 
 Do **not** open a primary checkout and a worktree of the same child in one multi-root workspace and "hope" the agent picks correctly. A session "knows" its tree from its **working directory / git toplevel**, not from a global registry.
 
-**A worktree session loads the child's tracked skills plus the home profile** (`~/.agents/skills`, `~/.claude/skills`, from `skf home`) — never the umbrella's own profile. So a skill every session of every product should have (`umbrella-workspace`, the `session-roles` / `role-*` set) belongs in the **home profile**, where worktree sessions get it for free. Only a skill that is genuinely specific to one umbrella is out of a worktree session's reach; put what that session needs from it into its `SESSION.md`.
+**A worktree session loads the child's tracked skills plus the home profile** (`~/.agents/skills`, `~/.claude/skills`, from `skf home`) — never the umbrella's own profile. So a skill every session of every product should have (`umbrella-workspace`, the `session-roles` / `role-*` set) belongs in the **home profile**, where worktree sessions get it for free. A skill that is genuinely specific to one umbrella is out of a worktree session's reach. When the slice needs it, give it through the **local overlay** in that worktree — `skf project add <skill> --overlay`, then `skf sync`: vendored and version-locked like any other skill, but untracked and kept out of git, so it is never committed into the child or merged with the branch. Never add it to the child's tracked `skill-forge.json` for one slice, and never hand-copy it. Name the overlay skills in `SESSION.md` too.
 
 ## `SESSION.md` — the brief a worktree session reads first
 
@@ -150,7 +150,7 @@ Published / generated content that is gitignored on purpose (packs, images, audi
 
 1. [ ] Confirm another session owns the primary checkout(s), or that you need parallel slices
 2. [ ] `git worktree add` each child to edit as `umbrella/work-<slice>`; shared branch name
-3. [ ] `skf sync` in each new worktree whose child declares skills
+3. [ ] `skf sync` in each new worktree whose child declares skills; add any umbrella-only skill the slice needs with `skf project add <skill> --overlay` + `skf sync` (untracked)
 4. [ ] Own DB file and ports: seed the DB, set the worktree `.env`
 5. [ ] Write a **fresh** `SESSION.md` in each worktree (role, approvals, scope, runtime, plan SSOT, hand back, cleanup); confirm it is in `info/exclude`
 6. [ ] Child `AGENTS.md` has the "if SESSION.md exists, read it" hook
@@ -165,9 +165,10 @@ When the slice is done, work resumes in the umbrella and the primary checkouts.
 2. **Stop** the worktree's servers and anything holding its DB.
 3. **Merge code** into the primary branch **from the primary checkout** (`git merge feature/…` while on that branch), with the owner's approval in Main Dev's chat. Do **not** check the feature branch out on the primary while a worktree still holds it.
 4. **Re-apply data on the target** — schema on the primary database; republish / sync gitignored assets. Do **not** copy worktree SQLite, audio, or published files unless the user asks.
-5. **Cleanup** (after anything the worktree still uniquely holds has been recreated on the target):
+5. **Cleanup** (after anything the worktree still uniquely holds has been recreated on the target). Clear any overlay first — `git worktree remove` runs no skf code, so its block in the shared `info/exclude` would outlive the worktree:
 
 ```bash
+(cd work-billing-be && skf project overlay --clear)   # only if the slice had an overlay
 git -C child-be worktree remove ../work-billing-be
 git -C child-fe worktree remove ../work-billing-fe
 git -C child-be worktree list   # no work-billing paths

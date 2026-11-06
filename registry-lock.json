@@ -1,12 +1,12 @@
 {
   "name": "skill-forge",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "lockfileVersion": 1,
   "requires": true,
   "packages": {
     "": {
       "name": "skill-forge",
-      "version": "1.3.0"
+      "version": "1.4.0"
     },
     "inventory/skills/api-contracts": {
       "name": "api-contracts",
@@ -408,13 +408,13 @@
     },
     "inventory/skills/skill-forge-project": {
       "name": "skill-forge-project",
-      "version": "0.5.4",
+      "version": "0.6.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-iIUGipPF6A/e1fnD6cB1MkaudINr5Z/3iXyHoSPk0gU=",
+      "integrity": "sha256-yXWZgLeCbh7iGgLQV4QkSSo5h1XNXtF0VS8HGeZbh0w=",
       "files": {
-        "SKILL.md": "sha256-Av7wGWpW7QonCZqIenHxgv098a1nvlW2gtf0xm+Jmb4="
+        "SKILL.md": "sha256-KJwO9KEZxYrh2sO0tq2olZBXgNwymG6A0wlCdopdIPk="
       }
     },
     "inventory/skills/supabase-postgres": {
@@ -452,14 +452,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-DZ6PTUo/EoDuINA1DyGBeA5RgtExVwncXLMEPBrFi3A=",
+      "integrity": "sha256-BFUVnoDfImHRNh1Nj56BDm2MRR6nmCh1iAgFtcCOv3g=",
       "files": {
-        "PARALLEL-WORKTREES.md": "sha256-u4QGEnPWauQUudDWGKwrv0fWFoUQfUY1VIDhR9IaG70=",
-        "SKILL.md": "sha256-JdlVqovuISzizb2OZEQQ/H4oPt0fA5VqFRQUUi8IlK8="
+        "PARALLEL-WORKTREES.md": "sha256-vJDy4Cf3/IS1tiahUhvDoDIALvz8HSfHJ4jq5DYFeR0=",
+        "SKILL.md": "sha256-0NgPjqBs9mSu3+XxqV3FGZcwD8gCjRvS3dOmGuwbUGM="
       }
     },
     "inventory/skills/vercel-deploy": {
@@ -479,9 +479,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-ZguoW0DFDVGeokse286spW/qkpeEFLGlArgCYrdMPAY=",
+      "integrity": "sha256-MGrwiWlC5hnqL2ETptGRu6VPRDOFL684XERTvlVIN+A=",
       "files": {
-        "core.md": "sha256-m8v6cQxYEj1LP6DBvmnrM33wIvLa5gD8wVIy424Ezm4="
+        "core.md": "sha256-Ht8MSBLvoyU+sjPh0qPB46n7iW7MCLyc1OrmkDnDz0Q="
       },
       "sourceOnly": true
     },

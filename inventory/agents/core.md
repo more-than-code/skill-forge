@@ -38,6 +38,7 @@ Domain expertise is packaged as Agent Skills in project and home-profile skill d
 ### Skill Location Policy
 - Skill placement is managed by Skill Forge profiles: the repo's `skill-forge.json` + `skf sync` for project skills, and the `$HOME` profile (`skf home init|add|sync`) for machine-wide skills.
 - Never hand-copy skills into skill directories; change the owning profile and re-sync (the `skill-forge-project` skill covers the workflow).
+- One checkout needing skills its repo's profile does not declare (typically a git worktree slice) gets them through the untracked local overlay — `skf project add <skill> --overlay`, then `skf sync` — never by editing the tracked profile it would then commit. Clear it with `skf project overlay --clear` before removing the worktree.
 - Hand-authored project-specific skills are declared under `skill-forge.json` `skills.local` with their own name (a name cannot be both a registry dependency and a local skill); keep the delta narrow and point back to the registry skill it refines.
 - Keep platform workflow skills in the owning tool's system directory.
 

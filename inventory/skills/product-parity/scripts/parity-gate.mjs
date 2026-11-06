@@ -8,7 +8,8 @@
 // Checks (all skipped gracefully when not configured):
 //   A  coverage ratchet — every source-client route needs a capture or dated waiver
 //   B  regeneration     — every mirror i18n key must exist in the generated artifact
-//   C  copy drift       — shared i18n keys must match the source client
+//   C  copy drift       — shared i18n keys must match the source client; every value must
+//                         parse, and every mirror locale must carry every base-locale key
 //   D  design tokens    — clients conform to the canonical design system (both, symmetric)
 //   E  a11y ratchet     — interactive controls with no accessible name (may only shrink)
 //   F  visual ratchet   — LLM findings not present in the accepted baseline
@@ -49,6 +50,7 @@ import { runNames } from './parity-names.mjs';
 import { runSession } from './parity-session.mjs';
 import { runApi } from './parity-api.mjs';
 import { columns } from './parity-columns.mjs';
+import { readTable, readLocaleMap } from './parity-strings.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
@@ -178,26 +180,40 @@ function checkCoverage() {
 }
 
 // ---------------------------------------------------------------------------
-// B + C. i18n
+// B + C. i18n, and locale coverage
 // ---------------------------------------------------------------------------
-// Single-line entries only. Wrapped/template values are counted as skipped
-// rather than guessed: a regex that silently mismatches multi-line values
-// invents "missing key" findings and destroys trust in the gate.
-function parseKeyValues(file, format) {
-  const src = readFileSync(file, 'utf8');
-  if (format === 'json' || format === 'arb') {
-    const obj = JSON.parse(src);
-    return { values: Object.fromEntries(Object.entries(obj).filter(([k]) => !k.startsWith('@'))), skipped: 0 };
+// Values are read by a literal parser (parity-strings.mjs), not a line regex: wrapped,
+// double-quoted and concatenated values are compared like any other. A value that is still
+// not a plain string FAILS by key — an exclusion count printed as a note reads as green.
+//
+// Locale coverage is independent of the source client. A key the mirror has in its base
+// locale but not in another locale falls back to the base language for those users, whether
+// or not the source has the key — and a shared-key comparison can never see it. Observed on
+// one project (2026-11-06): 70 such keys, found only after users of three locales had been
+// reading English for weeks.
+//
+// Point the mirror side at what the app actually SHIPS. Where a generated map is the runtime
+// table and the ARB files are partial, use `mirrorFormat: "dart-map"` on the generated file.
+function readMirrorLocales(i, mf, baseLocale) {
+  const format = i.mirrorFormat ?? 'arb';
+  if (format === 'dart-map') {
+    const { locales } = readLocaleMap(mf, i.mirrorVariable);
+    return Object.fromEntries(Object.entries(locales).map(([l, t]) => [l, { ...t, label: `${i.mirrorFile}[${l}]` }]));
   }
-  // ts-object / js-object: `key: 'value',`
-  const values = {};
-  let skipped = 0;
-  for (const line of src.split('\n')) {
-    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*:\s*'((?:[^'\\]|\\.)*)'\s*,?\s*$/);
-    if (m) values[m[1]] = m[2].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
-    else if (/^\s*[A-Za-z0-9_]+\s*:/.test(line)) skipped++;
+  const locales = { [baseLocale]: { ...readTable(mf, format), label: i.mirrorFile } };
+  if (!i.mirrorLocaleFiles) return locales;
+  // `l10n/app_{locale}.arb` → every file in l10n/ matching app_<locale>.arb
+  const dir = abs(path.dirname(i.mirrorLocaleFiles));
+  const [before, after] = path.basename(i.mirrorLocaleFiles).split('{locale}');
+  if (after === undefined) throw new Error('i18n.mirrorLocaleFiles must contain {locale}');
+  for (const f of existsSync(dir) ? readdirSync(dir).sort() : []) {
+    if (!f.startsWith(before) || !f.endsWith(after)) continue;
+    const locale = f.slice(before.length, f.length - after.length);
+    if (!locale || locale === baseLocale) continue;
+    const file = path.join(dir, f);
+    locales[locale] = { ...readTable(file, format), label: path.relative(ROOT, file) };
   }
-  return { values, skipped };
+  return locales;
 }
 
 function checkI18n() {
@@ -212,11 +228,37 @@ function checkI18n() {
     notes.push('i18n: configured files missing, checks skipped');
     return;
   }
-  const src = parseKeyValues(sf, i.sourceFormat ?? 'ts-object');
-  const mir = parseKeyValues(mf, i.mirrorFormat ?? 'arb');
-  if (src.skipped) notes.push(`i18n: ${src.skipped} source entries not single-line, excluded from drift check`);
+  const baseLocale = i.baseLocale ?? 'en';
+  const src = readTable(sf, i.sourceFormat ?? 'ts-object');
+  const locales = readMirrorLocales(i, mf, baseLocale);
+  const mir = locales[baseLocale];
+  if (!mir) {
+    failures.push({
+      check: 'i18n-config',
+      message: `The mirror table has no "${baseLocale}" locale. Set i18n.baseLocale to the mirror's base locale.`,
+      items: Object.keys(locales),
+    });
+    return;
+  }
 
-  if (i.generatedFile) {
+  const unparsed = [
+    ...src.unparsed.map((k) => `${i.sourceFile}: ${k}`),
+    ...Object.values(locales).flatMap((t) => t.unparsed.map((k) => `${t.label}: ${k}`)),
+  ];
+  if (unparsed.length) {
+    failures.push({
+      check: 'i18n-unparsed',
+      message:
+        `${unparsed.length} string-table value(s) are not plain string literals (interpolated templates, ` +
+        `calls, identifiers), so no i18n check can compare them. Make each a literal, or move it out of ` +
+        `the string table.`,
+      items: unparsed.slice(0, 20),
+    });
+  }
+
+  // B — only where an editable source (ARB/JSON) feeds a generated artifact. A dart-map
+  // mirror IS the generated artifact.
+  if (i.generatedFile && (i.mirrorFormat ?? 'arb') !== 'dart-map') {
     const gf = abs(i.generatedFile);
     if (existsSync(gf)) {
       const gen = readFileSync(gf, 'utf8');
@@ -233,6 +275,7 @@ function checkI18n() {
     }
   }
 
+  // C
   const shared = Object.keys(src.values).filter((k) => k in mir.values);
   const drift = shared.filter((k) => src.values[k] !== mir.values[k]);
   notes.push(`i18n: ${shared.length} shared keys compared`);
@@ -241,6 +284,44 @@ function checkI18n() {
       check: 'i18n-copy-drift',
       message: `${drift.length} shared i18n key(s) differ from the source client (source of truth).`,
       items: drift.slice(0, 20).map((k) => `${k}: source=${JSON.stringify(src.values[k])} mirror=${JSON.stringify(mir.values[k])}`),
+    });
+  }
+
+  // Locale coverage — ratcheted like the a11y check: recorded debt may only shrink.
+  const others = Object.keys(locales).filter((l) => l !== baseLocale).sort();
+  if (!others.length) {
+    notes.push(
+      'i18n: locale coverage NOT checked — only the base locale was read. Set i18n.mirrorLocaleFiles, ' +
+        'or point the mirror at the shipped multi-locale map (mirrorFormat "dart-map").',
+    );
+    return;
+  }
+  const baselinePath = i.coverageBaseline ? abs(i.coverageBaseline) : null;
+  const baseline = baselinePath && existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')).missing ?? {} : {};
+  const worse = [];
+  for (const l of others) {
+    const table = locales[l].values;
+    const missing = Object.keys(mir.values).filter((k) => !(k in table) || table[k] === '');
+    const allowed = baseline[l] ?? 0;
+    if (missing.length > allowed) {
+      const shown = missing.slice(0, 15).join(', ') + (missing.length > 15 ? `, … ${missing.length - 15} more` : '');
+      worse.push(`${l}: ${missing.length} missing — ${shown}`);
+    } else if (allowed) {
+      notes.push(
+        `i18n: ${l} ${missing.length} missing (baseline ${allowed})` +
+          (missing.length < allowed ? ' — lower the baseline to lock in the improvement' : ''),
+      );
+    }
+  }
+  notes.push(`i18n: locale coverage checked for ${others.join(', ')} against ${baseLocale}`);
+  if (worse.length) {
+    failures.push({
+      check: 'i18n-locale-coverage',
+      message:
+        `Keys present in the mirror's ${baseLocale} table are missing from other locales, so those users ` +
+        `silently see ${baseLocale}. Translate them, or record existing debt in i18n.coverageBaseline ` +
+        `({ "missing": { "<locale>": <count> } }), which may only shrink.`,
+      items: worse,
     });
   }
 }

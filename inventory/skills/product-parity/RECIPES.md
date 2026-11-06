@@ -123,6 +123,29 @@ TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
     (call) async => null);
 ```
 
+### Load real image assets — and flag the captures that fell back
+
+Test runners do not decode network images, and often not asset images either, so avatars
+and thumbnails render as their fallback (initials, a solid disc). That fallback is an
+artifact — and it is also exactly what a real bug looks like when a widget paints its
+fallback **over** a loaded image. Observed on one project (2026-11-06): an avatar drew its
+initial on top of every portrait for three months; on the board it looked like the
+harness's no-image fallback, because the other avatars really were falling back.
+
+- Serve fixture images from bundled assets (an asset-backed image provider or a fixture
+  `HttpOverrides`), and precache them inside `runAsync` before the golden is taken, so the
+  capture shows what a device shows.
+- Where an image still cannot load, **record it**: write the capture ids whose image
+  widgets used their fallback into the run's output, so the reviewer and the human know
+  which slots are unverifiable rather than assuming all of them are.
+
+### Image widgets with a fallback need two tests
+
+A widget that layers an image with a fallback (initials, an icon, a placeholder) gets a
+widget test with **a real asset and a missing one**, asserting the fallback is absent when
+the image loads and present when it does not. Finder-based tests pass either way unless
+they assert on that difference — the letter exists in the tree in both cases.
+
 ### Screens that fall through to the real network
 
 If a provider is not overridden, the screen uses the real HTTP repository, the
@@ -201,9 +224,10 @@ shared = [k for k in web if k in mob]
 diff   = [(k, web[k], mob[k]) for k in shared if web[k] != mob[k]]
 ```
 
-Two traps:
-- Compare the **generated** artifact, not only the source `.arb`/`.json` — an ARB edit is inert until regeneration.
-- Beware regex extraction over source files: wrapped/multi-line values silently fail to match and produce fake "missing key" counts. Verify any surprising count with a direct `grep` for a specific key before reporting it.
+Three traps:
+- Compare what the app **ships**. Where a generated map is the runtime table and the ARB files are partial, the ARBs report a clean bill of health while users read English. Point the gate at the generated map (`mirrorFormat: "dart-map"`).
+- Shared keys are not coverage. A key the mirror has in its base locale but not in another locale falls back silently and never appears in a shared-key diff. The gate's locale-coverage check counts these per locale.
+- Do not extract with a line regex: wrapped and multi-line values silently fail to match. The gate parses the literals and fails on any value it still cannot read. Verify any surprising count with a direct `grep` for a specific key before reporting it.
 
 ## Anti-patterns
 

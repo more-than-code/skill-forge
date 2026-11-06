@@ -265,12 +265,36 @@ Recurring artifact classes:
 |---|---|---|
 | Deliberately stubbed subsystem | A sync/feature bug (e.g. mirror shows 6 items, source shows 17) | A provider you overrode to a no-op to keep captures offline |
 | Missing glyph coverage | Broken text rendering | Test font stack lacks CJK/script glyphs; fine on real devices |
-| Image decoding | Missing assets | Asset/network images not decoded in the test runner; often inconsistent *within one screen* |
+| Image decoding | Missing assets | Asset/network images not decoded in the test runner; often inconsistent *within one screen*. A fallback drawn **over** an image that did load is not this — it is a bug (below) |
 | Fallback font | Wrong typeface / black bars | A style that bypasses the theme font resolves to the runner's default |
 | Concurrent writer | Reviewer non-determinism; a gap that appears or vanishes between runs | A second agent or process writing the same output tree — see below |
 
 The stubbed-subsystem one is the dangerous case: it mimics a real defect **and**
 often there is an open ticket about exactly that subsystem, so it gets believed.
+
+### "Probably the harness" is a hypothesis, never a verdict
+
+The artifact table cuts both ways. Once a class of difference is known to come from the
+harness, every difference that *resembles* it gets waved through — and a real defect that
+looks like an artifact sits on the board indefinitely.
+
+Observed 2026-11-06, on one project: a mirror avatar painted the person's initial on top of
+every portrait. It was visible in the parity captures for about three months and in device
+screenshots taken for unrelated changes. Reviewer and agents read it as the harness's
+no-image fallback, because other avatars on the same screens really were falling back to
+initials. Widget tests passed: the letter is in the tree either way.
+
+- **Every difference between the columns is a finding until it is adjudicated** — fixed, or
+  recorded in the accepted-findings baseline with a reason. An artifact explanation is
+  something to *verify* (does the artifact's mechanism produce exactly this?), not a label
+  to apply because it fits.
+- **Close the artifact where you can, rather than learning to see past it.** Load real image
+  assets in the headless harness, and record which captures still fell back, so a fallback
+  is a known, per-capture fact instead of a screen-wide excuse (`RECIPES.md`).
+- **A screenshot taken for one change is a parity sample of the whole frame.** When an agent
+  captures a device or browser to check one thing, it also compares the rest of the frame
+  with the source client and lists every difference it sees — in the same report, even when
+  the change under test is fine.
 
 ### Scope every suppression rule to a CAPTURE, never to a subject
 
@@ -536,7 +560,7 @@ everything below; this section is why each check exists and how to keep it hones
 These need no capture infrastructure and catch a large share of drift:
 
 - **Coverage ratchet (A).** Enumerate the source client's routes and assert every one has a manifest entry (or an explicit, dated waiver). **A new source route with no manifest entry fails the build.** This is the single highest-value gate — it converts the "silence looks like success" failure into a hard error at the moment the gap is created.
-- **Copy drift (B, C).** Diff every shared i18n key between source and mirror; fail on divergence. Compare the *generated* artifact, not only the source file.
+- **Copy drift (B, C) and locale coverage.** Diff every shared i18n key between source and mirror; fail on divergence. Compare the table the app *ships*, not only the editable source. Count, per locale, the mirror's base-locale keys that another locale lacks — they fall back silently, and no shared-key comparison can see them. Observed 2026-11-06 on one project: 70 such keys, hidden from a gate that compared only shared, single-line keys.
 - **Catalog invariants.** Enumerate catalogs and assert every entry carries the fields the UI reads (§7). Not part of the gate — write it as a test in the repo.
 - **Capture validity (G) and run attribution (L).** The ratchet is only as honest as its inputs, so the gate refuses to grade a run it cannot trust: duplicate captures, a review older than its captures, columns from different runs, artifacts written outside the run's stamped window. **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
 - **Geometry / alignment invariants (H).** Named regions on the captured PNGs that should share a vertical centre are measured on **both** clients; the gate fails when the *spread* between those centres differs across clients by more than a tolerance. This is the check for **implicit framework defaults with no counterpart in the source client** — a class of defect no token comparison and no vision reviewer can see.

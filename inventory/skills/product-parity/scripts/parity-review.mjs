@@ -214,9 +214,12 @@ Each rule is limited to what it names. Do NOT generalise a rule to other screens
 controls, or the opposite direction:
 - CJK (Japanese/Chinese) text renders as filled black boxes on the RIGHT only.
   The test font lacks CJK glyphs. It renders correctly on real devices.
-- Avatar and asset images may render as solid discs or initials on the RIGHT,
-  inconsistently within one screen. Images are not decoded in the test runner.
-  Judge whether the avatar SLOT exists, never the image content.
+- Avatar and asset images may render as solid discs or initials on the RIGHT
+  INSTEAD OF the image, inconsistently within one screen. Images are not decoded in
+  the test runner. Judge whether the avatar SLOT exists, never the image content.
+  This does NOT cover a letter, icon or placeholder drawn ON TOP OF an image that did
+  render: that is a real defect and IS a finding, even when other avatars on the
+  same screen are falling back.
 - Occasional text rendering as a solid black bar on the RIGHT is a font fallback
   artifact, not missing content.
 __PRODUCT_ARTIFACTS__

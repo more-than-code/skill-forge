@@ -29,7 +29,7 @@ the harness the day the skill moves between profiles.
 
 | File | Role |
 |---|---|
-| `scripts/parity-gate.mjs` | The gate. Runs checks A–L below; no browser, no simulator, ~1s. |
+| `scripts/parity-gate.mjs` | The gate. Runs checks A–L below, plus i18n locale coverage; no browser, no simulator, ~1s. |
 | `scripts/parity-review.mjs` | The LLM vision review — structured findings to `<out>/findings.json`. Feeds check F. |
 | `scripts/parity-geometry.mjs` | Check H. Also runnable standalone. |
 | `scripts/parity-interactive.mjs` | Check I. Also runnable standalone. |
@@ -37,6 +37,7 @@ the harness the day the skill moves between profiles.
 | `scripts/parity-names.mjs` | Check K. Also runnable standalone. |
 | `scripts/parity-session.mjs` | Check L. Also runnable standalone. |
 | `scripts/parity-columns.mjs` | Which client is the source and which the mirror; shared by all of the above. |
+| `scripts/parity-strings.mjs` | Reads string tables (TS/JS objects, JSON/ARB, Dart locale maps) for checks B, C and locale coverage. |
 | `scripts/parity.config.example.json` | Config template. |
 
 ## The two columns
@@ -80,6 +81,7 @@ not a pass.
 | A coverage ratchet | does every source route have a capture or a dated waiver? | `source.routes`, `manifest`, `waivers` | project |
 | B regeneration | does every mirror i18n key exist in the generated artifact? | `i18n` | project |
 | C copy drift | do shared i18n keys match the source client? | `i18n` | project |
+| — locale coverage | does every mirror locale carry every base-locale key? | `i18n` with `mirrorLocaleFiles` or `dart-map` | project |
 | D design tokens | do both clients declare the canonical tokens? | `design` | project |
 | E a11y ratchet | do new interactive controls lack an accessible name? | mirror semantics dumps | per capture |
 | F visual ratchet | is any vision-review finding new relative to the baseline? | `findings.json`, `acceptedFindings` | per capture |
@@ -97,12 +99,36 @@ SvelteKit `+page.svelte`, Next.js `app` + `page.tsx`, and similar — with
 `"list": [...]` as the escape hatch for anything else. Every discovered route needs a
 manifest entry or a dated waiver; a new source route with neither fails the build.
 
-### B, C — i18n
+### B, C — i18n, and locale coverage
 
-`i18n.sourceFile` / `sourceFormat` (`ts-object`), `mirrorFile` / `mirrorFormat` (`arb`),
-`generatedFile`. Single-line entries only: multi-line source entries are excluded from the
-drift comparison and **counted in the output** (`N source entries not single-line,
-excluded`). Read that number — those strings sit outside the check while it reads green.
+```jsonc
+"i18n": {
+  "sourceFile": "web/src/lib/i18n/en.ts",   "sourceFormat": "ts-object",   // or js-object, json
+  // The table the mirror app SHIPS. Either an editable source plus its locale files…
+  "mirrorFile": "mobile/lib/l10n/app_en.arb", "mirrorFormat": "arb",       // or json
+  "mirrorLocaleFiles": "mobile/lib/l10n/app_{locale}.arb",
+  "generatedFile": "mobile/lib/l10n/generated/app_localizations.dart",      // check B
+  // …or the generated runtime map itself:
+  //   "mirrorFile": "mobile/lib/l10n/generated/app_localizations.dart",
+  //   "mirrorFormat": "dart-map", "mirrorVariable": "_localizedValues",
+  "baseLocale": "en",
+  "coverageBaseline": "scripts/parity/i18n-coverage-baseline.json"           // optional ratchet
+}
+```
+
+- **Values are parsed, not regex-matched**: keys and values on separate lines, single,
+  double and triple quotes, `+` and adjacent-literal concatenation. A value that is still
+  not a plain string literal (an interpolated template, a call) fails `i18n-unparsed` by
+  key — it is never silently excluded.
+- **B** (`i18n-regeneration`) runs only when an editable mirror file feeds a separate
+  `generatedFile`. A `dart-map` mirror is the generated artifact.
+- **C** (`i18n-copy-drift`) compares the values of keys both clients have.
+- **Locale coverage** (`i18n-locale-coverage`) compares each mirror locale against the
+  mirror's own base locale: a base key missing or empty in locale L fails, whether or not
+  the source client has it. Existing debt can be recorded as
+  `{ "missing": { "<locale>": <count> } }` in `coverageBaseline` and may only shrink. With
+  one locale read (no `mirrorLocaleFiles`, not a `dart-map`), the gate prints that coverage
+  was **not** checked.
 
 ### D — design tokens
 

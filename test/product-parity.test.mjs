@@ -99,6 +99,104 @@ test('capture validity reads the configured columns, not web/mobile', async () =
   assert.match(skew.message, /desktop client and iOS app captures/);
 });
 
+// --- i18n -----------------------------------------------------------------------------
+// Writes repo files (not under parity-out) and returns the gate result.
+async function i18nGate(i18n, files) {
+  const dir = await fixture({ manifest: 'manifest.json', i18n });
+  for (const [rel, body] of Object.entries(files)) {
+    const p = path.join(dir, rel);
+    await fs.mkdir(path.dirname(p), { recursive: true });
+    await fs.writeFile(p, typeof body === 'string' ? body : JSON.stringify(body));
+  }
+  return gate(dir);
+}
+
+const SOURCE_TS = [
+  'const en = {',
+  "\tgreeting: 'Hello',",
+  '\tlong_hint:',
+  "\t\t'Wrapped onto its own line',",
+  '\tquoted: "Let\'s go",',
+  "\tjoined: 'one ' +",
+  "\t\t'two',",
+  '};',
+  'export default en;',
+].join('\n');
+
+test('copy drift parses multi-line, double-quoted and concatenated source values', async () => {
+  const result = await i18nGate(
+    { sourceFile: 'en.ts', mirrorFile: 'app_en.arb' },
+    {
+      'en.ts': SOURCE_TS,
+      'app_en.arb': { greeting: 'Hello', long_hint: 'Wrapped differently', quoted: "Let's go", joined: 'one two' },
+    },
+  );
+  const drift = result.failures.find((f) => f.check === 'i18n-copy-drift');
+  assert.ok(drift, JSON.stringify(result.failures));
+  assert.deepEqual(drift.items, ['long_hint: source="Wrapped onto its own line" mirror="Wrapped differently"']);
+  assert.ok(result.notes.includes('i18n: 4 shared keys compared'), result.notes.join('\n'));
+});
+
+test('a source value the parser cannot read fails instead of being excluded', async () => {
+  const result = await i18nGate(
+    { sourceFile: 'en.ts', mirrorFile: 'app_en.arb' },
+    { 'en.ts': 'const en = {\n\tok: \'Fine\',\n\tbuilt: `Hi ${name}`,\n\tcalled: t(\'x\'),\n};', 'app_en.arb': { ok: 'Fine' } },
+  );
+  const unparsed = result.failures.find((f) => f.check === 'i18n-unparsed');
+  assert.ok(unparsed, JSON.stringify(result.failures));
+  assert.deepEqual(unparsed.items, ['en.ts: built', 'en.ts: called']);
+});
+
+const DART_MAP = `
+const _localizedValues = <String, Map<String, String>>{
+  'en': <String, String>{
+    '@@locale': "en",
+    'greeting': "Hello",
+    'long_hint':
+        "Wrapped onto its own line",
+    'mirror_only': "Only on mobile",
+  },
+  'fr': <String, String>{
+    '@@locale': "fr",
+    'greeting': "Bonjour",
+  },
+};
+`;
+
+test('locale coverage fails for base-locale keys missing from another locale of the shipped map', async () => {
+  const result = await i18nGate(
+    { sourceFile: 'en.ts', mirrorFile: 'app_localizations.dart', mirrorFormat: 'dart-map' },
+    { 'en.ts': "const en = {\n\tgreeting: 'Hello',\n\tlong_hint:\n\t\t'Wrapped onto its own line',\n};", 'app_localizations.dart': DART_MAP },
+  );
+  const coverage = result.failures.find((f) => f.check === 'i18n-locale-coverage');
+  assert.ok(coverage, JSON.stringify(result.failures));
+  // Both the ported key and the mirror-only key count: neither is shared-key drift.
+  assert.deepEqual(coverage.items, ['fr: 2 missing — long_hint, mirror_only']);
+  assert.equal(result.failures.find((f) => f.check === 'i18n-copy-drift'), undefined);
+});
+
+test('locale coverage reads per-locale ARB files and ratchets against a baseline', async () => {
+  const files = {
+    'en.ts': "const en = {\n\tgreeting: 'Hello',\n};",
+    'l10n/app_en.arb': { '@@locale': 'en', greeting: 'Hello', extra: 'Extra', '@extra': { description: 'x' } },
+    'l10n/app_fr.arb': { '@@locale': 'fr', greeting: 'Bonjour' },
+    'l10n/app_ja.arb': { '@@locale': 'ja', greeting: 'こんにちは', extra: '追加' },
+  };
+  const i18n = { sourceFile: 'en.ts', mirrorFile: 'l10n/app_en.arb', mirrorLocaleFiles: 'l10n/app_{locale}.arb' };
+
+  const failing = await i18nGate(i18n, files);
+  const coverage = failing.failures.find((f) => f.check === 'i18n-locale-coverage');
+  assert.ok(coverage, JSON.stringify(failing.failures));
+  assert.deepEqual(coverage.items, ['fr: 1 missing — extra']);
+
+  const passing = await i18nGate(
+    { ...i18n, coverageBaseline: 'baseline.json' },
+    { ...files, 'baseline.json': { missing: { fr: 1 } } },
+  );
+  assert.equal(passing.failures.find((f) => f.check === 'i18n-locale-coverage'), undefined);
+  assert.ok(passing.notes.some((n) => n.startsWith('i18n: fr 1 missing (baseline 1)')), passing.notes.join('\n'));
+});
+
 test('a11y ratchet ignores the source client semantics dump', async () => {
   const dir = await fixture(
     { manifest: 'manifest.json', source: { routes: { list: [] } } },

@@ -27,7 +27,11 @@
     "sourceFormat": "ts-object",
     "mirrorFile": "mobile/lib/l10n/app_en.arb",
     "mirrorFormat": "arb",
-    "generatedFile": "mobile/lib/l10n/generated/app_localizations.dart"
+    "mirrorLocaleFiles": "mobile/lib/l10n/app_{locale}.arb",
+    "generatedFile": "mobile/lib/l10n/generated/app_localizations.dart",
+    "baseLocale": "en",
+    "coverageBaseline": "scripts/parity/i18n-coverage-baseline.json",
+    "$mirrorNote": "Point the mirror at what the app SHIPS. If a generated map is the runtime table and the ARBs are partial, set mirrorFile to the generated file, mirrorFormat to dart-map and mirrorVariable to _localizedValues, and drop mirrorLocaleFiles and generatedFile."
   },
   "review": {
     "$backend": "Chosen by PARITY_REVIEW_BACKEND=grok|claude|codex (default grok), not by this file.",

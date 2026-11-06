@@ -192,10 +192,11 @@ When **two sessions** would edit the **same child repo** at once:
 - A **branch** is not enough if both share one working directory.
 - **`git worktree add`** each **git** child you will change as `umbrella/work-<slice>`, inside the umbrella next to the primary checkouts (same branch name across related children).
 - Role sessions stay rooted at the **umbrella**; a slice session is rooted at **only** its `work-<slice>/` folder.
-- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. An umbrella-only skill the slice needs goes in through the untracked **local overlay** (`skf project add <skill> --overlay` + `skf sync` in the worktree), never the child's tracked profile. Its **`SESSION.md`** carries what it still cannot load: role, the approvals it must get in its own chat, scope, ports and DB, plan SSOT, how to hand back. Untracked via `info/exclude`; rewritten fresh per slice. Child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
+- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. An umbrella-only skill the slice needs goes in through the untracked **local overlay** (`skf project add <skill> --overlay` + `skf sync` in the worktree), never the child's tracked profile. Its **`SESSION.md`** carries only what git cannot: role, the approvals it must get in its own chat, scope and off-limits paths, ports and DB, plan entry, how to hand back, overlay skills. Untracked via `info/exclude`; rewritten fresh per slice. The *read `SESSION.md` at session start* hook goes in the **umbrella** `AGENTS.md` (Claude Code reaches it through the parent folder) and in each child `AGENTS.md` (Codex, Grok).
+- **Claim each worktree in git**: `git worktree lock --reason "slice=… session=… started-by=… <date>"` on create, `unlock` on retire. `git worktree list --verbose` is the source of truth for what exists and who owns it; the ledger is a status view rebuilt from it. A `work-*` with no lock note is unclaimed — ask before touching it.
 - Own DB file and ports per worktree. Distinguish **git worktrees** from **copies**.
 - Slice-specific absolute paths belong in the umbrella **plan** / `SESSION.md`, not in this skill.
-- When the slice is done: hand back to Main Dev, merge **code** from the primary checkout, `skf project overlay --clear` if it had an overlay, then `worktree remove`. Do not merge gitignored runtime data unless asked.
+- When the slice is done: hand back to Main Dev, merge **code** from the primary checkout, `skf project overlay --clear` if it had an overlay, `worktree unlock`, then `worktree remove`. Do not merge gitignored runtime data unless asked.
 
 **Full procedure:** companion **`PARALLEL-WORKTREES.md`** (load when seeding, briefing or retiring a worktree, or the user mentions worktree / work-* / parallel session).
 
@@ -282,7 +283,8 @@ These rules check that things are present, not that they are correct.
 - Assuming the next agent has chat context
 - Two sessions editing the same child **folder** on different branches (or the same)
 - Putting ephemeral worktree absolute paths into this portable skill or into long-lived AGENTS as the only SSOT
-- Relying on `SESSION.md` without an AGENTS (or user) instruction to **read** it
+- Relying on `SESSION.md` without an AGENTS (or user) instruction to **read** it — or putting that hook only in a child `AGENTS.md`, which Claude Code never loads from a worktree
+- Treating the umbrella ledger as the record of which worktrees exist, instead of `git worktree list --verbose`
 - Treating a nested folder copy (deploy, vendor) as a `git worktree`
 - Merging worktree SQLite / uploads / published assets as if they were source
 - Continuing work in a `work-*` worktree after its slice was merged and retired

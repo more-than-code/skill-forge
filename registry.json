@@ -213,7 +213,7 @@
     {
       "type": "skill",
       "name": "umbrella-workspace",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "scope": "custom",
       "path": "inventory/skills/umbrella-workspace",
       "installable": true,

@@ -454,14 +454,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-BFUVnoDfImHRNh1Nj56BDm2MRR6nmCh1iAgFtcCOv3g=",
+      "integrity": "sha256-GFGc2vNhNwdoiWXyI6XIFUgJ4DcnM/iHPmR9NzQ8Gos=",
       "files": {
-        "PARALLEL-WORKTREES.md": "sha256-vJDy4Cf3/IS1tiahUhvDoDIALvz8HSfHJ4jq5DYFeR0=",
-        "SKILL.md": "sha256-0NgPjqBs9mSu3+XxqV3FGZcwD8gCjRvS3dOmGuwbUGM="
+        "PARALLEL-WORKTREES.md": "sha256-BIitBz15PQDwer98XxwZ1J9MwlG6xC1p5JX/927Aqzg=",
+        "SKILL.md": "sha256-M9KkcFR2RTv2cvbyl1Hg2NRzsmP9+xF9Zad+idmQoHk="
       }
     },
     "inventory/skills/vercel-deploy": {

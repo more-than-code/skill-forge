@@ -40,7 +40,11 @@ git -C child-be worktree add ../work-billing-be -b feature/billing
 # or attach an existing branch:
 # git -C child-be worktree add ../work-billing-be feature/billing
 
-git -C child-be worktree list
+# claim it at once — see "Claim it in git"
+git -C child-be worktree lock ../work-billing-be \
+  --reason "slice=billing session=<slice session id> started-by=<Main Dev session id> 2026-11-07"
+
+git -C child-be worktree list --verbose
 ```
 
 - Create worktrees **only for children you will edit**.
@@ -57,32 +61,75 @@ git -C child-be worktree list
 
 Do **not** open a primary checkout and a worktree of the same child in one multi-root workspace and "hope" the agent picks correctly. A session "knows" its tree from its **working directory / git toplevel**, not from a global registry.
 
+The root rule also leaves a record. An app session started with the worktree as its working folder is recorded with that path (and its transcript store is named after it), so "which session works in `work-billing-be`?" has an answer outside anyone's notes. A slice run from an umbrella session, or by an external worker, leaves no such record — which is why the lock note below names the session explicitly.
+
 **A worktree session loads the child's tracked skills plus the home profile** (`~/.agents/skills`, `~/.claude/skills`, from `skf home`) — never the umbrella's own profile. So a skill every session of every product should have (`umbrella-workspace`, the `session-roles` / `role-*` set) belongs in the **home profile**, where worktree sessions get it for free. A skill that is genuinely specific to one umbrella is out of a worktree session's reach. When the slice needs it, give it through the **local overlay** in that worktree — `skf project add <skill> --overlay`, then `skf sync`: vendored and version-locked like any other skill, but untracked and kept out of git, so it is never committed into the child or merged with the branch. Never add it to the child's tracked `skill-forge.json` for one slice, and never hand-copy it. Name the overlay skills in `SESSION.md` too.
+
+## Who owns a worktree: git first, the ledger second
+
+The umbrella ledger is gitignored, and the umbrella is usually not a repository, so `tasks/todo.md` can be lost or go stale. Ownership therefore lives where it cannot drift from the worktree itself:
+
+| Question | Source of truth |
+|---|---|
+| Which worktrees exist? | `git -C <child> worktree list` for each child — always right |
+| Who claimed it, and when? | the **lock note**: `git -C <child> worktree list --verbose` |
+| Which session is working in it? | the app's session record for that working folder (see *Session roots*), and the lock note |
+| What state is the slice in? | the umbrella `tasks/todo.md` — a **status view** rebuildable from the three above |
+
+### Claim it in git
+
+When Main Dev creates a worktree it locks it with a reason naming the slice, the slice session, the session that started it, and the date:
+
+```bash
+git -C child-be worktree lock ../work-billing-be \
+  --reason "slice=billing session=<id> started-by=<id> 2026-11-07"
+```
+
+The note lives exactly as long as the worktree, covers workers that are not app sessions (an external agent CLI), and blocks `git worktree prune` and a plain `git worktree remove`. **A `work-*` worktree with no lock note is unclaimed: ask the owner before touching it.** At session start Main Dev cross-checks `worktree list --verbose` for each child against the ledger and fixes the ledger, not the other way round.
 
 ## `SESSION.md` — the brief a worktree session reads first
 
-Nothing locks a folder; ownership is a note the session is told to read.
+A lock note says who; `SESSION.md` says how. It is the brief the session is told to read.
 
 ### 1. `SESSION.md` at the worktree root
 
-Written by Main Dev when it creates the worktree. It replaces the context a worktree session cannot get from the umbrella:
+Written fresh by Main Dev for each slice. It carries **only what git cannot**: the worktree path, branch, primary checkout and sibling worktrees all come from `git worktree list`, so do not repeat them — a copied value goes stale, a git answer does not.
 
-- **Role and owner** — which role this session plays (usually a delegated Main Dev for one slice), and which session started it, by id.
+- **Role** — which role this session plays (usually a delegated Main Dev for one slice).
 - **Approvals** — what needs the owner's yes **in this session's own chat** (commit, migration, push). A relayed approval from the starting session does not count (`session-roles`).
-- **Scope** — the paths it may edit; the paths that are off-limits; the primary checkout's path and who owns it.
-- **Branch** and the sibling worktrees on the same slice.
+- **Scope** — the paths it may edit, and the paths that are off-limits.
 - **Runtime** — its own ports and the absolute path of its own database file.
-- **Plan SSOT** — the umbrella `tasks/todo.md` section for this slice. The worktree session reports status there (or to Main Dev), never into a copy of the ledger.
-- **Hand back** — how it returns work: which session to message, and what "done" means (merged by Main Dev, not by the worker).
-- **Cleanup** — the exact `worktree remove` command.
+- **Plan entry** — the umbrella `tasks/todo.md` section for this slice. The session reports status there (or to Main Dev), never into a copy of the ledger.
+- **Hand back** — which session to message, and what "done" means (merged by Main Dev, not by the worker).
+- **Overlay skills** — any skills given through `skf project add --overlay`, so the session knows they are there.
+
+It sits inside the worktree, so it is also readable from the umbrella (`work-billing-be/SESSION.md`) when Main Dev checks on a slice.
 
 Keep `SESSION.md` **untracked**: add it to the child's `info/exclude` (`git -C child-be rev-parse --git-path info/exclude`; that file is shared by every worktree of the repo, so one entry covers them all).
 
 **Rewrite it for each new slice.** A `SESSION.md` copied from another worktree describes the wrong branch, scope and cleanup path — and is read with full trust. Observed on one project (2026-11-06): a worktree's `SESSION.md` still described a different slice's branch, scope and worktree path.
 
-### 2. Child `AGENTS.md` load hook
+### 2. Load hooks — one in the umbrella, one in each child
 
-In each child repo's `AGENTS.md` (safe to merge — no-op when the file is absent):
+Instruction files reach a worktree session by different paths per tool:
+
+- **Claude Code** loads `CLAUDE.md` from the session folder **and every parent folder**, not `AGENTS.md` directly. A child with `AGENTS.md` but no `CLAUDE.md` contributes nothing, so a session rooted in `umbrella/work-billing-be` loads the home `CLAUDE.md` and the **umbrella's** `CLAUDE.md` (`@AGENTS.md`) — never the child's hook.
+- **Codex, Grok** read the child's `AGENTS.md` at the worktree root.
+
+So put the hook in **both** places. The umbrella hook reaches every in-umbrella worktree session through the parent folder — a benefit of keeping `work-*` inside the umbrella. (Alternatively give each child a `CLAUDE.md` containing `@AGENTS.md`.) Verify once per tool: start a session in a `work-*` folder and ask which instruction files it loaded.
+
+In the **umbrella** `AGENTS.md`:
+
+```markdown
+## Worktree sessions
+
+**If this session's root is a `work-*` folder with a `SESSION.md`, read that file at
+session start** (or before the first edit). It is the slice brief: role, approvals,
+scope, runtime and how to hand back. Ownership is the worktree's lock note
+(`git worktree list --verbose`).
+```
+
+In each **child** repo's `AGENTS.md` (safe to merge — no-op when the file is absent):
 
 ```markdown
 ## Session ownership (worktree)
@@ -99,7 +146,7 @@ If absent, ignore this section — normal primary-tree work.
 
 ### 3. Umbrella `tasks/todo.md`
 
-One line per active worktree in the slice's task block: path, branch, owning session id. That is where Main Dev and Ops look before restarting shared services or cleaning up. Do not freeze worktree paths in umbrella `AGENTS.md`.
+One line per active worktree in the slice's task block: path, branch, owning session id. It is the status view Main Dev and Ops read before restarting shared services or cleaning up — rebuilt from `worktree list --verbose` whenever the two disagree. Do not freeze worktree paths in umbrella `AGENTS.md`.
 
 ## Worktree vs copy
 
@@ -134,6 +181,7 @@ Published / generated content that is gitignored on purpose (packs, images, audi
 ## What does not enforce isolation
 
 - Branch name alone
+- A worktree with no lock note — nobody has claimed it, whatever the ledger says
 - `SESSION.md` without AGENTS (or user) causing a read — or a `SESSION.md` left over from another slice
 - Two sessions both opened on the primary checkout
 - Assuming a worktree session has the umbrella's skills or ledger
@@ -149,12 +197,12 @@ Published / generated content that is gitignored on purpose (packs, images, audi
 ## Checklist (seed a slice)
 
 1. [ ] Confirm another session owns the primary checkout(s), or that you need parallel slices
-2. [ ] `git worktree add` each child to edit as `umbrella/work-<slice>`; shared branch name
+2. [ ] `git worktree add` each child to edit as `umbrella/work-<slice>`; shared branch name; `git worktree lock --reason "slice=… session=… started-by=… <date>"` each one
 3. [ ] `skf sync` in each new worktree whose child declares skills; add any umbrella-only skill the slice needs with `skf project add <skill> --overlay` + `skf sync` (untracked)
 4. [ ] Own DB file and ports: seed the DB, set the worktree `.env`
-5. [ ] Write a **fresh** `SESSION.md` in each worktree (role, approvals, scope, runtime, plan SSOT, hand back, cleanup); confirm it is in `info/exclude`
-6. [ ] Child `AGENTS.md` has the "if SESSION.md exists, read it" hook
-7. [ ] One line per worktree in the umbrella `tasks/todo.md` slice block
+5. [ ] Write a **fresh** `SESSION.md` in each worktree (role, approvals, scope, runtime, plan entry, hand back, overlay skills — nothing git already says); confirm it is in `info/exclude`
+6. [ ] The "read SESSION.md" hook is in the **umbrella** `AGENTS.md` (reaches Claude Code) and the child `AGENTS.md` (reaches Codex, Grok)
+7. [ ] One line per worktree in the umbrella `tasks/todo.md` slice block, matching the lock note
 8. [ ] Start the slice session with its root = the `work-<slice>/` folder only, and a brief that points at `SESSION.md`
 
 ## Retire on the primary
@@ -169,6 +217,8 @@ When the slice is done, work resumes in the umbrella and the primary checkouts.
 
 ```bash
 (cd work-billing-be && skf project overlay --clear)   # only if the slice had an overlay
+git -C child-be worktree unlock ../work-billing-be
+git -C child-fe worktree unlock ../work-billing-fe
 git -C child-be worktree remove ../work-billing-be
 git -C child-fe worktree remove ../work-billing-fe
 git -C child-be worktree list   # no work-billing paths

@@ -606,7 +606,7 @@
     {
       "type": "hooks",
       "name": "claude-code-hooks",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "scope": "claude-code",
       "path": "inventory/hooks/claude-code",
       "installable": false,

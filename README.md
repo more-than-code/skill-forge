@@ -516,6 +516,32 @@ timestamps — never prompt or transcript content) under
 pipe an equivalent JSON payload to `node bin/cli.js stats record`. The
 `site` command renders per-project aggregates from these files.
 
+## Enforcement Hooks (Claude Code)
+
+The same install and settings merge add two hooks that enforce rules the
+instructions otherwise only advise:
+
+- **`git-guard.mjs`** (`PreToolUse` on Bash) reads each command before it runs,
+  following `cd` and `git -C`. A `git commit` or `git push` in a repository
+  outside the session's project (`$CLAUDE_PROJECT_DIR`, its repository and any
+  repository inside it) is **denied**. A commit on `main`/`master`, a push that
+  updates `main`/`master`, or a command it cannot resolve (`bash -c`, `eval`, a
+  subshell, `cd "$(…)"`, `--git-dir`, a checkout before the commit) gets
+  **ask**: Claude Code shows its own permission prompt, so only the user's click
+  passes — never a message relayed from another session. Everything else is
+  silent. It never logs or echoes the command. It is a guardrail, not a sandbox:
+  it does not see git aliases (`git ci`), scripts (`sh deploy.sh`), merges,
+  rebases, pulls or cherry-picks onto `main`, `git branch -M`, push targets set
+  in config (`push.default`, `remote.*.push`), or `..` through a symlink.
+  Linked worktrees of the project's own repository count as the project.
+- **`staleness.mjs`** (`SessionStart`) runs `skf sync --check` (5 s timeout)
+  where a `skill-forge.json` exists and `skf` is on PATH, and on a stale profile
+  adds one note to the session's context (on startup and resume only). It never
+  runs `sync`.
+
+Grok is not covered yet; `grok-hooks` carries only the stats and
+delegation-mode hooks.
+
 For whole-session token and cost economics (including main-loop vs subagent
 spend), see [otel/README.md](otel/README.md) — a loopback-only container stack
 (root `docker-compose.yml`; OTel collector, Prometheus, Grafana — works with

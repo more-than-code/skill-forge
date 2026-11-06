@@ -1,5 +1,5 @@
 {
-  "_comment": "Merge the hooks block below into ~/.claude/settings.json (or a project's .claude/settings.json). PostToolUse on Task/Agent captures subagent type, model, and task description; SessionEnd marks session boundaries; UserPromptSubmit re-states the active task's delegation mode from tasks/todo.md (silent unless it is external-worker).",
+  "_comment": "Merge the hooks block below into ~/.claude/settings.json (or a project's .claude/settings.json). PostToolUse on Task/Agent captures subagent type, model, and task description; SessionEnd marks session boundaries; UserPromptSubmit re-states the active task's delegation mode from tasks/todo.md (silent unless it is external-worker). PreToolUse on Bash runs git-guard: it denies git commit/push in a repository outside the session's project and asks before main/master. SessionStart runs staleness: it reports a stale skill-forge.json profile (skf sync --check).",
   "hooks": {
     "PostToolUse": [
       {
@@ -28,6 +28,30 @@
           {
             "type": "command",
             "command": "node ~/.claude/hooks/skill-forge/delegation-mode.mjs"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/skill-forge/git-guard.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/skill-forge/staleness.mjs",
+            "timeout": 10
           }
         ]
       }

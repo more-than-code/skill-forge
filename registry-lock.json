@@ -608,16 +608,18 @@
     },
     "inventory/hooks/claude-code": {
       "name": "claude-code-hooks",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "type": "hooks",
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/hooks/skill-forge",
-      "integrity": "sha256-VOh6C6+sHmgIHuXxaf7pEZEfxNEsA4r74mucoIQUvlo=",
+      "integrity": "sha256-O+dRcSzUSAhzO50+nZDuL5FPJNEhjhtXcrPr78ivZ9o=",
       "files": {
         "delegation-mode.mjs": "sha256-QFg7ZLLyJ0x5WBmZyHFG8iI/1U2OrM7E3YqH2fKhuAI=",
-        "settings-snippet.json": "sha256-APU7Fg2+qzfYQCDwezMv8TXty1oBiG+TDTTe6cdcAGs=",
-        "skill-forge-stats.mjs": "sha256-lhblGEumHBUbOwDCfLxNqP5M6QZaA8Z0fBaco6yWU8A="
+        "git-guard.mjs": "sha256-yquAC/ONbsLhyyydJPbH2GObkALYyW/Ep8sll0Ur9l8=",
+        "settings-snippet.json": "sha256-ug1NLtQ4/sazRSBEyYMQ9B9HUgYtf0VsRgH68CSxKMU=",
+        "skill-forge-stats.mjs": "sha256-lhblGEumHBUbOwDCfLxNqP5M6QZaA8Z0fBaco6yWU8A=",
+        "staleness.mjs": "sha256-hbpqi7MPy1+wLGV8f6uybvLMqxz1Q3/5pIm37WsoTcM="
       }
     },
     "inventory/hooks/grok": {

@@ -327,6 +327,50 @@
         "SKILL.md": "sha256-hoA12WYCsn+PYTm5kcB+5B616uOi1qy9XKxGmadlrtg="
       }
     },
+    "inventory/skills/role-end-user": {
+      "name": "role-end-user",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-f6Z1UBaVwPBnwtNg9J/4tViwWkkXQumyXAxmeZg/KYw=",
+      "files": {
+        "SKILL.md": "sha256-e10lGjkgQaDCvseL5+WK8uDejx0S5l0I6SLS5HN+GQ8="
+      }
+    },
+    "inventory/skills/role-main-dev": {
+      "name": "role-main-dev",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-SuHT9HtAQu5cYIi2NEYM4B1ppuFiq95+1p1lnXyWjDA=",
+      "files": {
+        "SKILL.md": "sha256-yZOP9SIHwKbQsuaIUO4G2hry8l9AXRMvghG04PrbFHE="
+      }
+    },
+    "inventory/skills/role-ops": {
+      "name": "role-ops",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-23E34PAOaycjvpp4M3sBYihmIiFDSCMSYiUMulQ+O0Y=",
+      "files": {
+        "SKILL.md": "sha256-1lbAwN0qOmT5y94XBvAxeBzgsadO07/agh6m/30SnOs="
+      }
+    },
+    "inventory/skills/role-product-design": {
+      "name": "role-product-design",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-IqBxB9OTvEobDNPq+TrIbilkXT5TS3Hw9++dv3EMCwM=",
+      "files": {
+        "SKILL.md": "sha256-AvUl5d5l2rJE0q6Qk9GHSRiVPL8ezCQ6FkNhmjL4Gus="
+      }
+    },
     "inventory/skills/security-baseline": {
       "name": "security-baseline",
       "version": "0.1.0",
@@ -336,6 +380,17 @@
       "integrity": "sha256-6BrEv3S5yb6PakSghKmbONVwHilAxmkNQppRNPTv9tc=",
       "files": {
         "SKILL.md": "sha256-TmQqkT9LCc6dfrnEBO9fqvWVq8O/SKmyp0gucm55MGE="
+      }
+    },
+    "inventory/skills/session-roles": {
+      "name": "session-roles",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-/DpRwksZSDBvWL4YrD68za+UDq2FYcnSXUzUiNIRrjI=",
+      "files": {
+        "SKILL.md": "sha256-hE827c8fMaHDnhmHwh01Av0OJYVcbuLX5P/td7I/oec="
       }
     },
     "inventory/skills/skill-forge-authoring": {

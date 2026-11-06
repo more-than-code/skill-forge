@@ -456,6 +456,74 @@
         "postgres",
         "database"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "session-roles",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/session-roles",
+      "installable": true,
+      "tags": [
+        "roles",
+        "sessions",
+        "handoff",
+        "approvals"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "role-main-dev",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/role-main-dev",
+      "installable": true,
+      "tags": [
+        "roles",
+        "development",
+        "implementation"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "role-ops",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/role-ops",
+      "installable": true,
+      "tags": [
+        "roles",
+        "operations",
+        "deployment"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "role-product-design",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/role-product-design",
+      "installable": true,
+      "tags": [
+        "roles",
+        "marketing",
+        "ux",
+        "research"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "role-end-user",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/role-end-user",
+      "installable": true,
+      "tags": [
+        "roles",
+        "acceptance",
+        "testing",
+        "user"
+      ]
     }
   ],
   "managedAgents": [

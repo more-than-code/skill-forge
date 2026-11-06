@@ -385,13 +385,13 @@
     },
     "inventory/skills/session-roles": {
       "name": "session-roles",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-/DpRwksZSDBvWL4YrD68za+UDq2FYcnSXUzUiNIRrjI=",
+      "integrity": "sha256-a7klQHbwrphfKj7sTm/ztioSSHyJS+I1ai0vWy4D5+M=",
       "files": {
-        "SKILL.md": "sha256-hE827c8fMaHDnhmHwh01Av0OJYVcbuLX5P/td7I/oec="
+        "SKILL.md": "sha256-goVd6hxg897OBxibcgKlFLrljzktw4Bu7W5Ce5gRoMg="
       }
     },
     "inventory/skills/skill-forge-authoring": {
@@ -452,14 +452,14 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.9.4",
+      "version": "0.10.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-7VHRoBLIN8N/PqplpfKbjFneQCzU39GcoN6nHwlKUbM=",
+      "integrity": "sha256-DZ6PTUo/EoDuINA1DyGBeA5RgtExVwncXLMEPBrFi3A=",
       "files": {
-        "PARALLEL-WORKTREES.md": "sha256-Unsrd9oXTRrMllGyqRG8sbyMgCn9WByaNH2ClZZFyYU=",
-        "SKILL.md": "sha256-eqfobIZwds4KZjk7tmCE6G2h3iZ1MV3N8q1USH19zDs="
+        "PARALLEL-WORKTREES.md": "sha256-u4QGEnPWauQUudDWGKwrv0fWFoUQfUY1VIDhR9IaG70=",
+        "SKILL.md": "sha256-JdlVqovuISzizb2OZEQQ/H4oPt0fA5VqFRQUUi8IlK8="
       }
     },
     "inventory/skills/vercel-deploy": {

@@ -26,6 +26,12 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **Side forks** ("btw" questions, research spikes) keep the main thread clean. They hand
   their result back to the session that owns the work — with the owner's decisions quoted —
   and are archived when done.
+- **Slice sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), usually
+  as a delegated Main Dev for one feature branch. They load the child's skills and the home profile, not
+  the umbrella's — so keep this skill and the `role-*` set in the home profile, and have the
+  `SESSION.md` Main Dev writes for them carry the role, the approvals they must get in their
+  own chat, scope, and how to hand back
+  (`umbrella-workspace`, `PARALLEL-WORKTREES.md`). Main Dev merges their branch.
 - **Stale duplicates act on stale state.** When two sessions carry the same role and title,
   archive the older one. Observed on one project (2026-10-24): two deploy workers shared a
   name and the older one held out-of-date release facts.

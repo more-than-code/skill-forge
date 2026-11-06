@@ -6,13 +6,13 @@ description: >
   plan-vs-status split, where skill profiles belong (every session root declares its
   own; a session reads only its own root),
   and parallel agent sessions via git worktrees (SESSION.md
-  markers, AGENTS load hooks, thin feature umbrellas, worktree vs copy, retire
-  on primary). Use when working in a multi-repo container directory, starting or
+  briefs, AGENTS load hooks, work-* worktrees inside the umbrella, worktree vs
+  copy, retire on primary). Use when working in a multi-repo container directory, starting or
   resuming cross-repo plans, writing umbrella tasks/todo.md, adding pointer
   stubs, scaffolding or vendoring skills into a child repo, seeding a second checkout
   for parallel work, or when the user mentions
   umbrella workspace, cross-repo handoff, multi-repo cooperation, worktree,
-  feature umbrella, or parallel session.
+  work-* folder, or parallel session.
   Slash: /umbrella-workspace.
 ---
 
@@ -190,15 +190,14 @@ die with the ledger.
 When **two sessions** would edit the **same child repo** at once:
 
 - A **branch** is not enough if both share one working directory.
-- Prefer **`git worktree add`** for each **git** child you will change (same branch name across related children).
-- Prefer a **thin feature umbrella** (sibling folder, not a git repo) that *contains* those worktrees; open that folder as the session root.
-- Distinguish **git worktrees** from **folder copies**. Cleanup must remove both.
-- Open each session on the **correct root** only (primary vs feature umbrella).
-- Soft ownership: feature-umbrella **`SESSION.md`** + child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
-- Feature-specific absolute paths belong in the **plan** / `SESSION.md`, not in this skill.
-- When the feature is done: handoff on the **primary** umbrella, merge **code**, then remove worktrees and leftover copies. Do not merge gitignored runtime data unless asked.
+- **`git worktree add`** each **git** child you will change as `umbrella/work-<slice>`, inside the umbrella next to the primary checkouts (same branch name across related children).
+- Role sessions stay rooted at the **umbrella**; a slice session is rooted at **only** its `work-<slice>/` folder.
+- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. Its **`SESSION.md`** carries what it still cannot load: role, the approvals it must get in its own chat, scope, ports and DB, plan SSOT, how to hand back. Untracked via `info/exclude`; rewritten fresh per slice. Child **`AGENTS.md`** hook: *if `SESSION.md` exists, read it at session start*.
+- Own DB file and ports per worktree. Distinguish **git worktrees** from **copies**.
+- Slice-specific absolute paths belong in the umbrella **plan** / `SESSION.md`, not in this skill.
+- When the slice is done: hand back to Main Dev, merge **code** from the primary checkout, then `worktree remove`. Do not merge gitignored runtime data unless asked.
 
-**Full procedure:** companion **`PARALLEL-WORKTREES.md`** (load when seeding, retiring, or the user mentions worktree / feature umbrella / parallel session).
+**Full procedure:** companion **`PARALLEL-WORKTREES.md`** (load when seeding, briefing or retiring a worktree, or the user mentions worktree / work-* / parallel session).
 
 ## Handoff checklist (end of session on cross-repo work)
 
@@ -207,7 +206,7 @@ When **two sessions** would edit the **same child repo** at once:
 - [ ] Completed phases: status complete + gate evidence, or moved to `tasks/archive.md` with `**Archived:** YYYY-MM-DD`
 - [ ] Spec divergences written back into the plan doc, not only in chat
 - [ ] If this session used a worktree: `SESSION.md` still accurate; do not leave the other session editing the same tree
-- [ ] If retiring a feature umbrella: cold resume lives on the **primary** (`HANDOFF.md` or equivalent + primary `tasks/todo.md`); feature-umbrella `SESSION.md` redirects; do not continue there
+- [ ] If retiring a worktree: status is back in the umbrella `tasks/todo.md`, the worktree lines are removed, and the slice session is archived — nothing resumes in the removed `work-*` folder
 
 ## Cross-repo plan implementer protocol
 
@@ -286,10 +285,11 @@ These rules check that things are present, not that they are correct.
 - Relying on `SESSION.md` without an AGENTS (or user) instruction to **read** it
 - Treating a nested folder copy (deploy, vendor) as a `git worktree`
 - Merging worktree SQLite / uploads / published assets as if they were source
-- Continuing work in a feature umbrella after the retire handoff is on the primary
+- Continuing work in a `work-*` worktree after its slice was merged and retired
+- Copying a `SESSION.md` from another slice instead of writing a fresh one
 
 ## Related
 
 - Global agent process: risk tiers, mandatory gates, `tasks/` format (§13 style) — already in core instructions
 - `skill-forge-project` - choosing and applying a child's skill set; this skill covers only where profiles belong in a multi-repo layout
-- Companion: `PARALLEL-WORKTREES.md` — seed, thin feature umbrella, worktree vs copy, one DB file per tree, retire on primary, cleanup
+- Companion: `PARALLEL-WORKTREES.md` — `work-*` layout, session roots, `SESSION.md` brief, worktree vs copy, one DB file and port set per tree, retire on primary, cleanup

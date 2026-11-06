@@ -23,6 +23,10 @@
 //   assets.waivers  [{ asset: "<pair name>/<source path>", reason, owner, addedOn, removeWhen }]
 //                   for a source asset the mirror deliberately does not carry.
 //
+//   assets.optOut   a reason this project does not need the check. With neither pairs nor
+//                   optOut the check FAILS (`assets-not-configured`); a source folder that does
+//                   not exist fails `assets-unresolved:<name>`.
+//
 // Only source-side gaps fail. Mirror-only assets are counted in a note: a native icon set
 // is normal.
 //
@@ -56,8 +60,17 @@ export function runAssets(cfg, root) {
   const notes = [];
   const failures = [];
   const pairs = cfg.assets?.pairs ?? [];
+  // Unconfigured is a failure for the same reason as freshness: an info line reads as green.
+  const optOut = typeof cfg.assets?.optOut === 'string' ? cfg.assets.optOut.trim() : '';
   if (!pairs.length) {
-    notes.push('assets: not configured — image and brand assets are compared by no check. Set assets.pairs.');
+    if (optOut) notes.push(`assets: opted out — ${optOut}`);
+    else
+      failures.push({
+        id: 'assets-not-configured',
+        msg:
+          'assets is not configured, so image and brand assets are compared by no check. Set ' +
+          'assets.pairs, or set assets.optOut to the reason this project does not need it.',
+      });
     return { notes, failures };
   }
 
@@ -78,7 +91,11 @@ export function runAssets(cfg, root) {
     const srcDir = resolve(root, pair.source);
     const mirDir = resolve(root, pair.mirror);
     if (!existsSync(srcDir)) {
-      notes.push(`assets: ${pair.name} — ${pair.source} does not exist, not checked`);
+      // A typo here would disable the check as surely as no config.
+      failures.push({
+        id: `assets-unresolved:${pair.name}`,
+        msg: `${pair.source} does not exist, so the ${pair.name} pair checks nothing. Fix the path or remove the pair.`,
+      });
       continue;
     }
     const source = images(srcDir);

@@ -538,6 +538,12 @@ Accepting a finding into the baseline is a decision that needs an owner and a tr
 entry. Otherwise the baseline becomes where gaps go to be forgotten: the gate goes
 green, and "accepted" quietly reads as "resolved".
 
+**An acceptance is of one screen as it looked, not of a category forever.** Observed
+2026-11-07 on one project: `copy-mismatch` and `missing-state` accepted on a Settings
+capture in August silently covered a full Settings restructure in November. The gate pins
+each acceptance to the sha256 of the source capture it was reviewed against, so it lapses
+when that screen changes.
+
 ### 9.5 Route findings to a queue a human actually works
 
 Adjudication that happens by reading `findings.json` happens rarely, and a decision nobody
@@ -572,8 +578,8 @@ everything below; this section is why each check exists and how to keep it hones
 
 These need no capture infrastructure and catch a large share of drift:
 
-- **Coverage ratchet (A).** Enumerate the source client's routes and assert every one has a manifest entry (or an explicit, dated waiver). **A new source route with no manifest entry fails the build.** This is the single highest-value gate — it converts the "silence looks like success" failure into a hard error at the moment the gap is created.
-- **Copy drift (B, C) and locale coverage.** Diff every shared i18n key between source and mirror; fail on divergence. Compare the table the app *ships*, not only the editable source. Count, per locale, the mirror's base-locale keys that another locale lacks — they fall back silently, and no shared-key comparison can see them. Observed 2026-11-06 on one project: 70 such keys, hidden from a gate that compared only shared, single-line keys.
+- **Coverage ratchet (A).** Enumerate the source client's routes and assert every one has a manifest entry (or an explicit waiver with reason, date, owner and `removeWhen` — **one gap per waiver**; a waiver whose prose also covers another screen lends that screen its tracker and its hold, which is how one project's Settings drift went on hold behind an unrelated sign-in task). **A new source route with no manifest entry fails the build.** This is the single highest-value gate — it converts the "silence looks like success" failure into a hard error at the moment the gap is created.
+- **Copy drift (B, C) and locale coverage.** Diff every shared i18n key between source and mirror; fail on divergence. **A source key the mirror lacks fails too** — it is the cheapest evidence of a source UI the mirror never built. Observed 2026-11-07: a web Settings restructure added 8 keys, the gate printed *"637 shared keys compared"*, and stayed green for 2 days. List deliberate web-only keys in `i18n.sourceOnly` with a reason. Compare the table the app *ships*, not only the editable source. Count, per locale, the mirror's base-locale keys that another locale lacks — they fall back silently, and no shared-key comparison can see them. Observed 2026-11-06 on one project: 70 such keys, hidden from a gate that compared only shared, single-line keys.
 - **Catalog invariants.** Enumerate catalogs and assert every entry carries the fields the UI reads (§7). Not part of the gate — write it as a test in the repo.
 - **Capture validity (G) and run attribution (L).** The ratchet is only as honest as its inputs, so the gate refuses to grade a run it cannot trust: duplicate captures, a review older than its captures, columns from different runs, artifacts written outside the run's stamped window. **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
 - **Geometry / alignment invariants (H).** Named regions on the captured PNGs that should share a vertical centre are measured on **both** clients; the gate fails when the *spread* between those centres differs across clients by more than a tolerance. This is the check for **implicit framework defaults with no counterpart in the source client** — a class of defect no token comparison and no vision reviewer can see.
@@ -584,8 +590,8 @@ These need no capture infrastructure and catch a large share of drift:
 
   **Cross-client comparison, not absolute offsets.** Asserting an absolute "correct" offset would make the script the arbiter of good design. Comparing the two keeps the source client the source of truth.
 
-- **Freshness (M).** Declare the source client's UI folders (routes, components, brand and design assets). A commit to them newer than the captures fails the gate with the commits listed, so a board nobody re-ran cannot stay green; `sourceFiles` on a manifest entry narrows it to one screen. Every other validity check compares artifacts with each other — M is the only one that compares them with the product.
-- **Asset parity (N).** Pair each source asset folder with the mirror folder that should carry the same images; a source image with no counterpart fails unless waived with a reason, owner, date and `removeWhen`. It needs no capture, so it is the cheapest visual check there is.
+- **Freshness (M) — required.** Declare the source client's UI folders (routes, components, brand and design assets). A commit to them newer than the captures fails the gate with the commits listed, so a board nobody re-ran cannot stay green; `sourceFiles` on a manifest entry narrows it to one screen. Every other validity check compares artifacts with each other — M is the only one that compares them with the product. Unconfigured, it **fails**: an info line saying "not configured" reads as green, and one project ran on 3-month-old captures behind exactly that line. Opt out only with `freshness.optOut: "<reason>"`.
+- **Asset parity (N) — required.** Pair each source asset folder with the mirror folder that should carry the same images; a source image with no counterpart fails unless waived with a reason, owner, date and `removeWhen`. It needs no capture, so it is the cheapest visual check there is. Unconfigured, it fails unless `assets.optOut` gives a reason.
 - **Behaviour (I, K) and data (J).** Declared affordances must be activatable controls (I); the controls named in a shared-chrome region must agree across clients (K); both clients must request the endpoints a screen declares (J). These are the only checks that see what a screen *does* and what it is *built from* — a dead icon, a swapped icon-only control and a skipped fetch are all pixel-identical to the correct screen. Declare few of each, for the same reason as H.
 
 ### Design-system conformance (check D) — when there is a canon

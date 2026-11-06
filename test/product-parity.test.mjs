@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import os from 'os';
+import { createHash } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
 
@@ -251,11 +252,6 @@ test('freshness fails when captures predate the newest source UI commit', async 
   assert.ok(ok.notes.some((n) => n.startsWith('freshness: captures are newer than the last commit')), ok.notes.join('\n'));
 });
 
-test('freshness says loudly when it is not configured', async () => {
-  const result = await gate(await fixture({ manifest: 'manifest.json' }, { 'web/home.png': 'a' }));
-  assert.ok(result.notes.some((n) => n.startsWith('freshness: NOT configured')), result.notes.join('\n'));
-});
-
 test('asset parity fails on a source asset with no mirror counterpart, and honours a full waiver', async () => {
   const files = {
     'web/brand/wordmark.svg': '<svg/>',
@@ -310,4 +306,177 @@ test('check K: a source image the mirror renders as text is a failure', async ()
   const passing = await gate(asImage);
   assert.equal(passing.failures.find((x) => x.check === 'names:header'), undefined, JSON.stringify(passing.failures));
   assert.ok(passing.notes.some((n) => n.includes('1 control(s) and 1 image(s) agree')), passing.notes.join('\n'));
+});
+
+// --- 0.11.0: gaps that let a restructured screen drift with a green gate -------------------
+const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+
+async function writeRepoFiles(dir, files) {
+  for (const [rel, body] of Object.entries(files)) {
+    const p = path.join(dir, rel);
+    await fs.mkdir(path.dirname(p), { recursive: true });
+    await fs.writeFile(p, typeof body === 'string' ? body : JSON.stringify(body));
+  }
+}
+
+test('i18n: a source key with no mirror counterpart fails unless listed with a reason', async () => {
+  const files = {
+    'en.ts': "const en = {\n\tgreeting: 'Hello',\n\tsettings_sfx: 'Sound effects',\n\tauth_web_sso: 'SSO',\n\tauth_web_magic: 'Magic link',\n};",
+    'app_en.arb': { greeting: 'Hello' },
+  };
+  const failing = await i18nGate({ sourceFile: 'en.ts', mirrorFile: 'app_en.arb' }, files);
+  const f = failing.failures.find((x) => x.check === 'i18n-source-only');
+  assert.ok(f, JSON.stringify(failing.failures));
+  assert.deepEqual(f.items, ['auth_web_magic', 'auth_web_sso', 'settings_sfx']);
+
+  const listed = await i18nGate(
+    { sourceFile: 'en.ts', mirrorFile: 'app_en.arb', sourceOnly: { 'auth_web_*': 'web-only sign-in', settings_sfx: '' } },
+    files,
+  );
+  const g = listed.failures.find((x) => x.check === 'i18n-source-only');
+  // A listing with no reason is not a decision, so settings_sfx still fails.
+  assert.ok(g, JSON.stringify(listed.failures));
+  assert.deepEqual(g.items, ['settings_sfx']);
+});
+
+test('route waivers need an owner and removeWhen, and a tracker must have an open item', async () => {
+  const base = { manifest: 'manifest.json', source: { routes: { list: ['/about', '/settings'] } } };
+  const full = { reason: 'web-first', date: '2026-11-05', owner: 'mobile', removeWhen: 'mobile mirrors it' };
+  const setup = async (waivers, extra = {}) => {
+    const dir = await fixture({ ...base, waivers: 'waivers.json' });
+    await writeRepoFiles(dir, { 'waivers.json': { routes: waivers }, ...extra });
+    return gate(dir);
+  };
+
+  const bare = await setup({ '/settings': { reason: 'web-first', date: '2026-11-05' }, '/about': full });
+  const missing = bare.failures.find((x) => x.check === 'coverage-waivers');
+  assert.ok(missing, JSON.stringify(bare.failures));
+  assert.deepEqual(missing.items, ['/settings: missing owner, removeWhen']);
+  assert.ok(bare.failures.some((x) => x.check === 'coverage-ratchet' && x.items.includes('/settings')), JSON.stringify(bare.failures));
+
+  const todo = '## Auth shell\n- [x] web done\n- ON HOLD mobile\n## Settings mirror\n- [ ] mobile sections\n';
+  const closed = await setup({ '/settings': { ...full, tracker: 'todo.md#Auth shell' }, '/about': { ...full, tracker: 'todo.md#Settings mirror' } }, { 'todo.md': todo });
+  const t = closed.failures.find((x) => x.check === 'coverage-waivers');
+  assert.ok(t, JSON.stringify(closed.failures));
+  assert.deepEqual(t.items, ['/settings: tracker todo.md#Auth shell has no unchecked "- [ ]" item']);
+
+  const gone = await setup({ '/settings': { ...full, tracker: 'todo.md#Nope' }, '/about': full }, { 'todo.md': todo });
+  assert.ok(gone.failures.some((x) => x.check === 'coverage-waivers' && x.items[0].includes('no heading "Nope"')), JSON.stringify(gone.failures));
+
+  // One gap per waiver: text that names another route is flagged.
+  const bundled = await setup({
+    '/about': { ...full, reason: 'shell is web-first; /settings sections also wait until mirrored' },
+    '/settings': full,
+  });
+  assert.equal(bundled.failures.find((x) => x.check === 'coverage-waivers'), undefined, JSON.stringify(bundled.failures));
+  assert.ok(bundled.notes.some((n) => n.startsWith('waiver warning: /about') && n.includes('/settings')), bundled.notes.join('\n'));
+  // Bare words are prose, not a second gap: "settings" alone does not warn.
+  const prose = await setup({ '/about': { ...full, reason: 'web-first; settings link styling differs' }, '/settings': full });
+  assert.ok(!prose.notes.some((n) => n.startsWith('waiver warning')), prose.notes.join('\n'));
+});
+
+test('tracker parsing ignores fenced code, keeps "#" in headings, and rejects a directory', async () => {
+  const base = { manifest: 'manifest.json', source: { routes: { list: ['/settings'] } }, waivers: 'waivers.json' };
+  const full = { reason: 'web-first', date: '2026-11-05', owner: 'mobile', removeWhen: 'mobile mirrors it' };
+  const run1 = async (tracker, todo) => {
+    const dir = await fixture(base);
+    await writeRepoFiles(dir, { 'waivers.json': { routes: { '/settings': { ...full, tracker } } }, 'todo.md': todo });
+    await fs.mkdir(path.join(dir, 'tasks'), { recursive: true });
+    return gate(dir);
+  };
+  const fencedComment = '## Issue #12\r\n```sh\r\n# run the capture\r\n```\r\n- [ ] mobile sections\r\n';
+  const ok = await run1('todo.md#Issue #12', fencedComment);
+  assert.equal(ok.failures.find((x) => x.check === 'coverage-waivers'), undefined, JSON.stringify(ok.failures));
+
+  const fencedBox = '## Settings\n- [x] done\n```md\n- [ ] template line\n```\n';
+  const closed = await run1('todo.md#Settings', fencedBox);
+  assert.ok(closed.failures.some((x) => x.check === 'coverage-waivers'), JSON.stringify(closed.failures));
+
+  const dirTracker = await run1('tasks#Settings', '');
+  assert.ok(dirTracker.failures.some((x) => x.check === 'coverage-waivers' && /does not resolve/.test(x.items[0])), JSON.stringify(dirTracker.failures));
+});
+
+test('freshness and assets fail when unconfigured, unless opted out with a reason', async () => {
+  const unset = await gate(await fixture({ manifest: 'manifest.json' }));
+  const checks = unset.failures.map((x) => x.check);
+  assert.ok(checks.includes('freshness-not-configured'), checks.join(', '));
+  assert.ok(checks.includes('assets-not-configured'), checks.join(', '));
+
+  const optedOut = await gate(
+    await fixture({ manifest: 'manifest.json', freshness: { optOut: 'captures rebuilt in CI on every merge' }, assets: { optOut: 'no image assets' } }),
+  );
+  const after = optedOut.failures.map((x) => x.check);
+  assert.ok(!after.includes('freshness-not-configured') && !after.includes('assets-not-configured'), after.join(', '));
+  assert.ok(optedOut.notes.some((n) => n.startsWith('freshness: opted out — captures rebuilt in CI')), optedOut.notes.join('\n'));
+  assert.ok(optedOut.notes.some((n) => n.startsWith('assets: opted out — no image assets')), optedOut.notes.join('\n'));
+});
+
+test('accepted findings are pinned to the source capture and lapse when it changes', async () => {
+  const finding = { category: 'copy-mismatch', severity: 'low', summary: 'x', evidence: 'y' };
+  const setup = async (accepted, sourcePng) => {
+    const dir = await fixture(
+      { manifest: 'manifest.json', acceptedFindings: 'accepted.json' },
+      {
+        'web/settings.png': sourcePng,
+        'mobile/settings.png': 'm',
+        'findings.json': { results: [{ id: 'settings', reviewedAt: new Date().toISOString(), findings: [finding] }] },
+      },
+      { 'web/settings.png': 5, 'mobile/settings.png': 5 },
+    );
+    await writeRepoFiles(dir, { 'accepted.json': { accepted } });
+    return gate(dir);
+  };
+
+  const legacy = await setup({ settings: ['copy-mismatch'] }, 'old');
+  const unpinned = legacy.failures.find((x) => x.check === 'accepted-findings-unpinned');
+  assert.ok(unpinned, JSON.stringify(legacy.failures));
+  assert.deepEqual(unpinned.items, [`settings: sourceSha256 ${sha256('old')}`]);
+
+  const pinned = { settings: { categories: ['copy-mismatch'], sourceSha256: sha256('old') } };
+  const same = await setup(pinned, 'old');
+  const sameChecks = same.failures.map((x) => x.check);
+  assert.ok(!sameChecks.includes('visual-parity-ratchet') && !sameChecks.includes('accepted-findings-lapsed'), JSON.stringify(same.failures));
+
+  const restructured = await setup(pinned, 'new');
+  const lapsed = restructured.failures.find((x) => x.check === 'accepted-findings-lapsed');
+  assert.ok(lapsed, JSON.stringify(restructured.failures));
+  assert.deepEqual(lapsed.items, [`settings: source capture is now ${sha256('new')}`]);
+  assert.ok(restructured.failures.some((x) => x.check === 'visual-parity-ratchet'), JSON.stringify(restructured.failures));
+  // The legacy form fails once but is still honoured, so it does not also re-fire the ratchet.
+  assert.ok(!legacy.failures.some((x) => x.check === 'visual-parity-ratchet'), JSON.stringify(legacy.failures));
+});
+
+test('api: an endpoint neither client requested fails as a stale manifest entry', async () => {
+  const dir = await fixture(
+    { manifest: 'manifest.json' },
+    { 'api/settings-root-user.json': { 'GET /api/me': 1 }, 'api/settings-root-user.mobile.json': { consumed: ['GET /api/me'] } },
+  );
+  await writeRepoFiles(dir, { 'manifest.json': { captures: [{ id: 'settings-root-user', api: ['GET /api/me', 'GET /api/usage'] }] } });
+  const result = await gate(dir);
+  const f = result.failures.find((x) => x.check === 'api-parity:settings-root-user');
+  assert.ok(f, JSON.stringify(result.failures));
+  assert.match(f.message, /requested by NEITHER client/);
+
+  // Asymmetric: each client skipped a different endpoint. Neither is a stale declaration.
+  const asym = await fixture(
+    { manifest: 'manifest.json' },
+    { 'api/s.json': { 'GET /a': 1 }, 'api/s.mobile.json': { consumed: ['GET /b'] } },
+  );
+  await writeRepoFiles(asym, { 'manifest.json': { captures: [{ id: 's', api: ['GET /a', 'GET /b'] }] } });
+  const msgs = (await gate(asym)).failures.filter((x) => x.check === 'api-parity:s').map((x) => x.message);
+  assert.equal(msgs.length, 2, msgs.join('\n'));
+  assert.ok(msgs.every((m) => !/NEITHER/.test(m)), msgs.join('\n'));
+});
+
+test('freshness and assets fail when a configured path resolves to nothing', async () => {
+  const result = await gate(
+    await fixture({
+      manifest: 'manifest.json',
+      freshness: { paths: ['web/src/lib-typo'] },
+      assets: { pairs: [{ name: 'brand', source: 'web/brand-typo', mirror: 'mobile/assets/brand' }] },
+    }),
+  );
+  const checks = result.failures.map((x) => x.check);
+  assert.ok(checks.includes('freshness-unresolved'), checks.join(', '));
+  assert.ok(checks.includes('assets-unresolved:brand'), checks.join(', '));
 });

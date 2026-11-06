@@ -74,30 +74,42 @@ export function runApi(cfg, root) {
     const webMissing = [...declared].filter((d) => !web.has(d));
     const mobMissing = [...declared].filter((d) => !mobile.has(d));
 
-    if (mobMissing.length && !webMissing.length) {
+    // Bucket by who skipped what: only the intersection is a stale declaration, and a
+    // one-sided gap must not hide behind it.
+    const neither = webMissing.filter((d) => mobMissing.includes(d));
+    const onlyMob = mobMissing.filter((d) => !neither.includes(d));
+    const onlyWeb = webMissing.filter((d) => !neither.includes(d));
+
+    if (onlyMob.length) {
       failures.push({
         id: `api-parity:${c.id}`,
         msg:
-          `The ${mirror.label} did not request ${JSON.stringify(mobMissing)} on "${c.id}" while the ${source.label} did. ` +
+          `The ${mirror.label} did not request ${JSON.stringify(onlyMob)} on "${c.id}" while the ${source.label} did. ` +
           `The two clients built this screen from different data — invisible to every ` +
           `pixel, semantics and geometry check. Either the mirror is missing a fetch, or ` +
           `the manifest over-declares and should be corrected.`,
       });
-    } else if (webMissing.length && !mobMissing.length) {
+    }
+    if (onlyWeb.length) {
       failures.push({
         id: `api-parity:${c.id}`,
         msg:
-          `The ${source.label} did not request ${JSON.stringify(webMissing)} on "${c.id}" while the ${mirror.label} did. ` +
+          `The ${source.label} did not request ${JSON.stringify(onlyWeb)} on "${c.id}" while the ${mirror.label} did. ` +
           `The source of truth is the one skipping a declared endpoint — check the manifest ` +
           `before assuming the client is wrong.`,
       });
-    } else if (webMissing.length && mobMissing.length) {
+    }
+    if (neither.length) {
       // Both missing means the DECLARATION is wrong, not the clients. Saying "both clients
-      // are broken" here would send someone hunting a bug that does not exist.
-      notes.push(
-        `api: ${c.id} — declared ${JSON.stringify(webMissing)} requested by NEITHER client; ` +
-          `the manifest entry is stale, not the clients`
-      );
+      // are broken" here would send someone hunting a bug that does not exist. It still
+      // fails: a stale entry means the capture no longer exercises what it claims to.
+      failures.push({
+        id: `api-parity:${c.id}`,
+        msg:
+          `declared ${JSON.stringify(neither)} requested by NEITHER client on "${c.id}". The ` +
+          `manifest entry is stale, not the clients — the capture no longer shows the screen state ` +
+          `it claims to. Re-seed that state, or correct the manifest's api list.`,
+      });
     }
   }
 

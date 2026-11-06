@@ -18,6 +18,9 @@
 //   freshness.paths      source-client folders whose commits change what a capture shows
 //                        (routes, components, brand and design assets). Any commit to them
 //                        newer than the captures fails `captures-stale`, listing the commits.
+//   freshness.optOut     a reason this project does not need the check. With neither paths
+//                        nor optOut the check FAILS (`freshness-not-configured`); a path that
+//                        does not exist fails `freshness-unresolved`.
 //   capture.sourceFiles  optional, per manifest entry: the same check for one screen, so a
 //                        change to that screen's files flags that screen by name.
 //
@@ -87,12 +90,30 @@ export function runFreshness(cfg, root) {
   const notes = [];
   const failures = [];
   const paths = cfg.freshness?.paths ?? [];
+  // Unconfigured is a failure, not a note: an info line reads as green, and this check is the
+  // only one that knows a capture is older than the UI it claims to show. Observed 2026-11-07:
+  // captures 3 months old, "freshness: NOT configured" printed, gate green.
+  const optOut = typeof cfg.freshness?.optOut === 'string' ? cfg.freshness.optOut.trim() : '';
   if (!paths.length) {
-    notes.push(
-      'freshness: NOT configured — captures older than the source UI they show go undetected. ' +
-        'Set freshness.paths to the source client\'s UI folders (routes, components, brand assets).',
-    );
+    if (optOut) notes.push(`freshness: opted out — ${optOut}`);
+    else
+      failures.push({
+        id: 'freshness-not-configured',
+        msg:
+          'freshness is not configured, so captures older than the source UI they show go undetected. ' +
+          'Set freshness.paths to the source client\'s UI folders (routes, components, brand assets), ' +
+          'or set freshness.optOut to the reason this project does not need it.',
+      });
     return { notes, failures };
+  }
+  // A configured path that resolves to nothing disables the check as surely as no config.
+  const unresolved = paths.filter((p) => !existsSync(resolve(root, p)));
+  if (unresolved.length) {
+    failures.push({
+      id: 'freshness-unresolved',
+      msg: `${unresolved.length} freshness.paths entr(ies) do not exist, so commits to them are never seen. Fix the path or remove it.`,
+      items: unresolved,
+    });
   }
   const out = resolve(root, process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const { source, mirror } = columns(cfg);

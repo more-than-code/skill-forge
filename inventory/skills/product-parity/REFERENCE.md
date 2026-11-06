@@ -80,9 +80,9 @@ not a pass.
 
 | Check | Question | Turned on by | Scope |
 |---|---|---|---|
-| A coverage ratchet | does every source route have a capture or a dated waiver? | `source.routes`, `manifest`, `waivers` | project |
+| A coverage ratchet | does every source route have a capture or a complete waiver? | `source.routes`, `manifest`, `waivers` | project |
 | B regeneration | does every mirror i18n key exist in the generated artifact? | `i18n` | project |
-| C copy drift | do shared i18n keys match the source client? | `i18n` | project |
+| C copy drift | do shared i18n keys match, and does every source key exist on the mirror? | `i18n` | project |
 | — locale coverage | does every mirror locale carry every base-locale key? | `i18n` with `mirrorLocaleFiles` or `dart-map` | project |
 | D design tokens | do both clients declare the canonical tokens? | `design` | project |
 | E a11y ratchet | do new interactive controls lack an accessible name? | mirror semantics dumps | per capture |
@@ -93,15 +93,34 @@ not a pass.
 | J API parity | did both clients request the endpoints the manifest declares? | manifest `api` arrays | per capture |
 | K control names | does the set of control names agree within a region? | `names` | per region |
 | L run attribution | was every artifact written by the run that claims it? | `.run.json` | per run |
-| M freshness | are the captures newer than the last source commit to the UI they show? | `freshness.paths`; manifest `sourceFiles` | per run / per capture |
-| N asset parity | does every image in a source asset folder have a mirror counterpart? | `assets.pairs` | project |
+| M freshness | are the captures newer than the last source commit to the UI they show? | **always**: `freshness.paths`, or `freshness.optOut` with a reason; manifest `sourceFiles` | per run / per capture |
+| N asset parity | does every image in a source asset folder have a mirror counterpart? | **always**: `assets.pairs`, or `assets.optOut` with a reason | project |
 
 ### A — coverage ratchet
 
 Route discovery covers file-router frameworks via `source.routes` `{dir, filename}` —
 SvelteKit `+page.svelte`, Next.js `app` + `page.tsx`, and similar — with
 `"list": [...]` as the escape hatch for anything else. Every discovered route needs a
-manifest entry or a dated waiver; a new source route with neither fails the build.
+manifest entry or a waiver; a new source route with neither fails the build.
+
+```jsonc
+// waivers.json — one gap per waiver, keyed by the route it waives
+{ "routes": {
+  "/billing": { "reason": "web-only checkout", "date": "YYYY-MM-DD", "owner": "…",
+                "removeWhen": "mobile ships in-app purchase",
+                "tracker": "tasks/todo.md#Mobile billing" }      // optional
+} }
+```
+
+Waivers for routes still uncaptured are graded; one for a route now captured or gone is
+listed in a note to remove. A graded waiver missing `reason`, `date`, `owner` or
+`removeWhen` fails `coverage-waivers` and waives nothing. A `tracker` is `path#Heading`
+(split at the first `#`, heading matched literally, not as a GitHub slug) and that
+heading's section must hold at least one unchecked `- [ ]` item outside code fences. The
+gate cannot tell an unchecked item that is on hold from one in progress: keep the item for
+*this* gap under its own heading, so a hold on another task does not hold it too. A
+waiver whose `reason` or `removeWhen` names another route by its full path (`/settings`)
+or a capture by its id prints a `waiver warning:` note — give that gap its own waiver.
 
 ### B, C — i18n, and locale coverage
 
@@ -116,10 +135,14 @@ manifest entry or a dated waiver; a new source route with neither fails the buil
   //   "mirrorFile": "mobile/lib/l10n/generated/app_localizations.dart",
   //   "mirrorFormat": "dart-map", "mirrorVariable": "_localizedValues",
   "baseLocale": "en",
-  "coverageBaseline": "scripts/parity/i18n-coverage-baseline.json"           // optional ratchet
+  "coverageBaseline": "scripts/parity/i18n-coverage-baseline.json",          // optional ratchet
+  "sourceOnly": { "auth_web_*": "web-only SSO screens" }                     // key or "prefix*" → reason
 }
 ```
 
+- **Every source key needs a mirror key** (`i18n-source-only`), unless `sourceOnly` lists
+  it — exact key or `"prefix*"` — with a reason. A source-only key is usually a source UI
+  the mirror has not built.
 - **Values are parsed, not regex-matched**: keys and values on separate lines, single,
   double and triple quotes, `+` and adjacent-literal concatenation. A value that is still
   not a plain string literal (an interpolated template, a call) fails `i18n-unparsed` by
@@ -165,6 +188,25 @@ per capture and may only shrink; a new one fails the build.
 
 F fails only on a `(capture, category)` pair absent from `acceptedFindings`. Accepted
 pairs are reported on every run as accepted debt, not resolved.
+
+```jsonc
+// accepted-findings.json
+{ "accepted": {
+  "settings-root": { "categories": ["copy-mismatch"], "sourceSha256": "<sha256 of web/settings-root.png>" }
+} }
+```
+
+Each acceptance is pinned to the sha256 of the **source** capture it was reviewed against.
+When the source screen changes, the acceptance lapses (`accepted-findings-lapsed`) and its
+findings return to the ratchet — a restructured screen is never covered by an acceptance of
+the old one. The finding text is not hashed: the vision model words the same finding
+differently on every run. The legacy form `"<capture>": ["<category>", …]` fails
+`accepted-findings-unpinned`, which prints the current hash to pin after a re-review; until
+then its categories are still honoured, so the ratchet does not fire twice.
+
+**Source captures must be byte-stable** for this to work: frozen clock, no animation or
+caret, fixed viewport and fonts, seeded data, one capture host. Capture one screen twice and
+compare hashes; if they differ, fix the capture before pinning anything to it.
 
 G refuses to grade a run it cannot trust:
 
@@ -227,6 +269,8 @@ Declare each capture's endpoints in the manifest (`"api": ["GET /api/chats"]`). 
 declared endpoints are asserted; query strings are ignored. Waive a capture with
 `api.waivers: [{ "capture": "<id>" }]`. The mirror side records what the client asked its
 **fixture bag** for, not a live call — weaker than the source side, and the output says so.
+A declared endpoint that **neither** client requested fails too: the manifest entry is
+stale, so the capture no longer shows the state it claims to.
 
 ### K — control names
 
@@ -269,7 +313,8 @@ concurrent writes are undetectable.
 The capture time is the **older** column's newest PNG. Any commit to `paths` newer than it
 fails `captures-stale`, listing up to 10 commits; a manifest entry's `sourceFiles` does the
 same for that screen alone (`captures-stale-screens`). Commits only — uncommitted edits do
-not count. Unconfigured, the gate prints that freshness is **not** checked.
+not count. A path that does not exist fails `freshness-unresolved`. Unconfigured, it fails `freshness-not-configured`; a project that really does
+not need it sets `"optOut": "<reason>"`, which the gate prints on every run.
 
 ### N — asset parity
 
@@ -290,7 +335,9 @@ Images (`svg png jpg jpeg webp gif ico avif`, recursively) are matched by normal
 lower case, `-`/`_`/spaces folded, extension and `@2x`/`@3x` ignored — `wordmark.svg`
 matches `wordmark.png`. A source image with no counterpart fails `asset-parity:<name>`
 unless waived; a waiver missing any field fails `asset-parity:waivers`. Mirror-only assets
-are counted in a note, not failed.
+are counted in a note, not failed. A pair whose source folder does not exist fails
+`assets-unresolved:<name>`. Unconfigured, it fails `assets-not-configured` unless
+`assets.optOut` gives a reason.
 
 ## Review backends
 

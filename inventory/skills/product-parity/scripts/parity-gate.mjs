@@ -5,14 +5,18 @@
 //   node <skill>/scripts/parity-gate.mjs --config parity.config.json
 // It searches for ./parity.config.json then ./scripts/parity/parity.config.json.
 //
-// Checks (all skipped gracefully when not configured):
-//   A  coverage ratchet — every source-client route needs a capture or dated waiver
+// Checks (skipped gracefully when not configured — except M and N, which FAIL unconfigured
+// unless `freshness.optOut` / `assets.optOut` gives a reason):
+//   A  coverage ratchet — every source-client route needs a capture or a waiver with reason,
+//                         date, owner, removeWhen (and an open item behind any tracker)
 //   B  regeneration     — every mirror i18n key must exist in the generated artifact
 //   C  copy drift       — shared i18n keys must match the source client; every value must
-//                         parse, and every mirror locale must carry every base-locale key
+//                         parse, every mirror locale must carry every base-locale key, and
+//                         every source key needs a mirror key (or an i18n.sourceOnly reason)
 //   D  design tokens    — clients conform to the canonical design system (both, symmetric)
 //   E  a11y ratchet     — interactive controls with no accessible name (may only shrink)
-//   F  visual ratchet   — LLM findings not present in the accepted baseline
+//   F  visual ratchet   — LLM findings not present in the accepted baseline; acceptances are
+//                         pinned to the source capture's sha256 and lapse when it changes
 //   G  capture validity — duplicate captures, stale review, skewed columns.
 //                         G exists because F is only as honest as its inputs: a
 //                         stale review, or two manifest entries that rendered the
@@ -135,6 +139,76 @@ function templateMatcher(template) {
   return (route) => re.test(route);
 }
 
+// One gap per waiver, and a waiver is only as alive as its tracker. Observed 2026-11-07: a
+// shell waiver's prose also covered a Settings restructure; its tracker's mobile item was on
+// hold for an unrelated reason, so the Settings gap went on hold with it, invisibly.
+// Returns Map<route, problem> for waivers that must not count; text naming another route or
+// capture is only a warning note, because prose matching is fuzzy.
+const WAIVER_FIELDS = ['reason', 'date', 'owner', 'removeWhen'];
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const text = (x) => (typeof x === 'string' ? x.trim() : '');
+
+// `path#Heading`, split at the FIRST `#` so a heading may contain `#` ("Issue #12").
+// Headings and checkboxes inside fenced code blocks are ignored: todo files carry fenced
+// shell snippets whose `# comment` lines would otherwise end the section early.
+function trackerProblem(tracker) {
+  const at = String(tracker).indexOf('#');
+  const file = at < 0 ? String(tracker) : String(tracker).slice(0, at);
+  const heading = at < 0 ? '' : String(tracker).slice(at + 1).trim();
+  const p = abs(file);
+  if (!heading || !existsSync(p) || !statSync(p).isFile()) return `tracker ${tracker} does not resolve (use "path#Heading")`;
+  let fenced = false;
+  const lines = readFileSync(p, 'utf8')
+    .split(/\r?\n/)
+    .map((l) => {
+      if (/^\s*(```|~~~)/.test(l)) {
+        fenced = !fenced;
+        return '';
+      }
+      return fenced ? '' : l;
+    });
+  const level = (l) => (/^#{1,6}\s/.test(l) ? l.match(/^#+/)[0].length : 0);
+  const title = (l) => l.replace(/^#+\s*/, '').replace(/\s+#+\s*$/, '').trim();
+  const start = lines.findIndex((l) => level(l) && title(l) === heading);
+  if (start < 0) return `tracker ${tracker}: ${file} has no heading "${heading}" (matched literally)`;
+  const end = lines.findIndex((l, n) => n > start && level(l) && level(l) <= level(lines[start]));
+  const section = lines.slice(start + 1, end < 0 ? undefined : end);
+  return section.some((l) => /^\s*([-*+]|\d+\.) \[ \]/.test(l)) ? null : `tracker ${tracker} has no unchecked "- [ ]" item`;
+}
+
+// Only waivers that are in force — routes still uncaptured — are graded. Warnings name
+// another route only by its full path ("/settings"), or a capture by its id: matching bare
+// words like "login" or "new" in prose would fire on every honest waiver.
+function waiverProblems(byRoute, routes, captureIds) {
+  const problems = new Map();
+  for (const [route, w] of Object.entries(byRoute)) {
+    const missing = WAIVER_FIELDS.filter((k) => !text(w?.[k]));
+    if (missing.length) {
+      problems.set(route, `${route}: missing ${missing.join(', ')}`);
+      continue;
+    }
+    const t = w.tracker ? trackerProblem(w.tracker) : null;
+    if (t) {
+      problems.set(route, `${route}: ${t}`);
+      continue;
+    }
+    const prose = `${w.reason} ${w.removeWhen}`;
+    const related = (o) => o === route || route.startsWith(o.replace(/\/?$/, '/')) || o.startsWith(route.replace(/\/?$/, '/'));
+    const named = [
+      ...routes.filter((o) => o !== '/' && !related(o) && new RegExp(`(^|[^\\w/-])${escapeRe(o)}([^\\w/-]|$)`).test(prose)),
+      ...captureIds.filter((id) => id && new RegExp(`(^|[^\\w-])${escapeRe(id)}([^\\w-]|$)`).test(prose)),
+    ];
+    if (named.length) {
+      notes.push(
+        `waiver warning: ${route} — its text names ${named.join(', ')}. One gap per waiver: give that ` +
+          `gap its own waiver or capture, so it does not inherit this waiver's tracker and removal.`,
+      );
+    }
+  }
+  return problems;
+}
+
 function checkCoverage() {
   if (!cfg.source) {
     notes.push('coverage: no `source` configured, check skipped');
@@ -147,7 +221,7 @@ function checkCoverage() {
   }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const waiversPath = abs(cfg.waivers ?? 'scripts/parity/waivers.json');
-  const waivers = existsSync(waiversPath) ? JSON.parse(readFileSync(waiversPath, 'utf8')) : { routes: {} };
+  const waivers = (existsSync(waiversPath) ? JSON.parse(readFileSync(waiversPath, 'utf8')) : null) ?? { routes: {} };
 
   const routes = discoverRoutes(cfg.source);
   if (!routes.length) {
@@ -156,11 +230,28 @@ function checkCoverage() {
   const captured = manifest.captures.map((c) => c.source?.route ?? c[COLS.source.id]?.route).filter(Boolean);
 
   const uncovered = routes.filter((t) => !captured.some(templateMatcher(t)));
+  const routeWaivers = waivers?.routes && typeof waivers.routes === 'object' ? waivers.routes : {};
+  const stale = Object.keys(routeWaivers).filter((r) => !uncovered.includes(r));
+  if (stale.length) {
+    notes.push(`coverage: ${stale.length} waiver(s) for routes that are captured or gone — remove them: ${stale.join(', ')}`);
+  }
+  const inForce = Object.fromEntries(Object.entries(routeWaivers).filter(([r]) => uncovered.includes(r)));
+  const badWaivers = waiverProblems(inForce, routes, manifest.captures.map((c) => c.id));
+  if (badWaivers.size) {
+    failures.push({
+      check: 'coverage-waivers',
+      message:
+        `${badWaivers.size} route waiver(s) are not decisions yet, so they waive nothing. A waiver needs ` +
+        `a reason, date, owner and removeWhen; a tracker, when given, must point at a heading that ` +
+        `still has an unchecked "- [ ]" item — a waiver whose tracker is closed hides the gap with it.`,
+      items: [...badWaivers.values()],
+    });
+  }
+
   const unwaived = [];
   let waived = 0;
   for (const r of uncovered) {
-    const w = waivers.routes?.[r];
-    if (w?.reason && w?.date) waived++;
+    if (inForce[r] && !badWaivers.has(r)) waived++;
     else unwaived.push(r);
   }
   notes.push(`coverage: ${routes.length - uncovered.length}/${routes.length} routes captured, ${waived} waived`);
@@ -171,7 +262,7 @@ function checkCoverage() {
       message:
         `${unwaived.length} source route(s) have no parity capture and no waiver. An uncaptured screen ` +
         `reads as silence, and silence is indistinguishable from success — add a manifest entry, or a ` +
-        `dated waiver (reason + date + owner) in ${path.relative(ROOT, waiversPath)}.`,
+        `waiver (reason, date, owner, removeWhen) in ${path.relative(ROOT, waiversPath)}.`,
       items: unwaived,
     });
   }
@@ -292,6 +383,34 @@ function checkI18n() {
       check: 'i18n-copy-drift',
       message: `${drift.length} shared i18n key(s) differ from the source client (source of truth).`,
       items: drift.slice(0, 20).map((k) => `${k}: source=${JSON.stringify(src.values[k])} mirror=${JSON.stringify(mir.values[k])}`),
+    });
+  }
+
+  // A source key the mirror lacks is the cheapest evidence of a source UI the mirror never
+  // built. Comparing shared keys alone cannot see it. Observed 2026-11-07: a web Settings
+  // restructure added 8 keys; the gate printed "637 shared keys compared" and stayed green
+  // for 2 days. A listed key needs a reason, or the list is a silence switch.
+  const so = i.sourceOnly ?? {};
+  if (typeof so !== 'object' || Array.isArray(so)) {
+    failures.push({ check: 'i18n-config', message: 'i18n.sourceOnly must be an object: { "<key or prefix*>": "<reason>" }.' });
+  }
+  const listed = Object.entries(typeof so === 'object' && !Array.isArray(so) ? so : {}).filter(
+    ([p, reason]) => p !== '*' && text(reason),
+  );
+  const isListed = (k) => listed.some(([p]) => (p.endsWith('*') ? k.startsWith(p.slice(0, -1)) : k === p));
+  const sourceOnly = Object.keys(src.values).filter((k) => !(k in mir.values) && !mir.unparsed.includes(k));
+  const unlisted = sourceOnly.filter((k) => !isListed(k)).sort();
+  if (sourceOnly.length > unlisted.length) {
+    notes.push(`i18n: ${sourceOnly.length - unlisted.length} source-only key(s) listed in i18n.sourceOnly`);
+  }
+  if (unlisted.length) {
+    failures.push({
+      check: 'i18n-source-only',
+      message:
+        `${unlisted.length} source i18n key(s) have no mirror counterpart — usually a source UI the mirror ` +
+        `does not show yet. Port the string with the UI, or list the key (or a "prefix*") in ` +
+        `i18n.sourceOnly with a reason.`,
+      items: unlisted.slice(0, 40),
     });
   }
 
@@ -530,7 +649,7 @@ function checkVisual() {
     return;
   }
   const findings = JSON.parse(readFileSync(findingsPath, 'utf8'));
-  const accepted = (existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {}).accepted ?? {};
+  const accepted = ((existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : null) ?? {}).accepted ?? {};
 
   // Accepted debt must stay VISIBLE. The ratchet only fails on novel findings, so an
   // accepted gap is silent forever after — the gate goes green and "accepted" quietly
@@ -539,13 +658,57 @@ function checkVisual() {
   //
   // This is a report line, not a failure: accepting is legitimate. Being unable to see
   // what you accepted is not.
-  const acceptedPairs = Object.values(accepted).reduce(
-    (n, cats) => n + (Array.isArray(cats) ? cats.length : 0),
-    0
-  );
+  // An acceptance is pinned to the SOURCE capture it was reviewed against. Keyed on
+  // (capture, category) alone, it accepted every future finding of that category on that
+  // screen: observed 2026-11-07, a copy-mismatch accepted in August silently covered a full
+  // Settings restructure in November. Pinning to the source PNG's sha256 makes it lapse the
+  // moment the source screen changes; the finding text is not hashed, because the vision
+  // model words the same finding differently on every run.
+  const sourceSha = (id) => {
+    const p = path.join(out, COLS.source.id, `${id}.png`);
+    return existsSync(p) ? createHash('sha256').update(readFileSync(p)).digest('hex') : null;
+  };
+  const unpinned = [];
+  const lapsed = [];
+  const honoured = {};
+  for (const [id, entry] of Object.entries(accepted)) {
+    const now = sourceSha(id);
+    if (Array.isArray(entry)) {
+      unpinned.push(`${id}: sourceSha256 ${now ?? '(no source capture)'}`);
+      honoured[id] = entry;
+    } else if (entry?.sourceSha256 && entry.sourceSha256 === now) {
+      honoured[id] = Array.isArray(entry.categories) ? entry.categories : [];
+    } else {
+      lapsed.push(`${id}: source capture is now ${now ?? 'missing'}`);
+    }
+  }
+  if (unpinned.length) {
+    failures.push({
+      check: 'accepted-findings-unpinned',
+      message:
+        `${unpinned.length} accepted-findings entr(ies) are not pinned to a source capture, so they ` +
+        `accept every future finding of their category on that screen. Re-review each capture, then ` +
+        `write it as { "categories": [...], "sourceSha256": "<hash below>" } in ${path.relative(ROOT, baselinePath)}.`,
+      items: unpinned,
+    });
+  }
+  if (lapsed.length) {
+    failures.push({
+      check: 'accepted-findings-lapsed',
+      message:
+        `${lapsed.length} acceptance(s) lapsed: the source capture's bytes changed since they were ` +
+        `reviewed, so their findings are back in the ratchet below. Usually the screen changed; if it ` +
+        `did not, the capture is not deterministic (clock, animation, fonts, live data) — capture twice ` +
+        `and compare hashes before trusting either. Re-review; re-accept with the new sourceSha256 only ` +
+        `what is still a deliberate gap.`,
+      items: lapsed,
+    });
+  }
+
+  const acceptedPairs = Object.values(honoured).reduce((n, cats) => n + cats.length, 0);
   if (acceptedPairs > 0) {
     notes.push(
-      `visual review: ${acceptedPairs} accepted finding(s) across ${Object.keys(accepted).length} capture(s) ` +
+      `visual review: ${acceptedPairs} accepted finding(s) across ${Object.keys(honoured).length} capture(s) ` +
         `— accepted debt, not resolved. Each should have an owner and a tracker entry.`
     );
   }
@@ -663,7 +826,7 @@ function checkVisual() {
   const novel = [];
   let total = 0;
   for (const r of findings.results ?? []) {
-    const known = new Set(accepted[r.id] ?? []);
+    const known = new Set(honoured[r.id] ?? []);
     for (const f of r.findings ?? []) {
       total++;
       if (!known.has(f.category)) novel.push(`${r.id} [${f.severity} ${f.category}] ${f.summary}`);

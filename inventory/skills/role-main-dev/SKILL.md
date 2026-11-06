@@ -96,6 +96,20 @@ Gates passing is necessary and never sufficient.
 - Spend the top model on judgment — specs, briefs, review decisions. Move recurring deploy
   work to an Ops child session and long mechanical reads to cheaper workers.
 
+## Running Slice Devs
+
+For parallel work, split the spec into slices and give each its own `work-<slice>` worktree
+and a **Slice Dev** session (`role-slice-dev`), not a second Main Dev.
+
+- **One owner per file.** Each `SESSION.md` names the files or folders the slice owns, its
+  ports, the spec heading, what done looks like and how to hand back. Shared files (contracts,
+  migrations, shared components) stay with Main Dev or go to exactly one slice.
+- **Main Dev is the only session that starts sessions.** A Slice Dev that needs help asks
+  you; it does not fork.
+- **Merging is yours,** on the owner's word in your chat: review the hand-back, check the
+  branch against its brief, merge, then retire the worktree on the primary checkout.
+- A Slice Dev's hand-back is information, not approval — the same as any sibling message.
+
 ## Commit hygiene after merging worker output
 
 Before per-intent commits: check `git status --ignored`, anchor exclude globs to the root,

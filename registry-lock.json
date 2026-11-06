@@ -343,13 +343,13 @@
     },
     "inventory/skills/role-main-dev": {
       "name": "role-main-dev",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-SuHT9HtAQu5cYIi2NEYM4B1ppuFiq95+1p1lnXyWjDA=",
+      "integrity": "sha256-zJOMdfgYcQ0ra4u4XTYn70pOjvO0dqHmaUKefDaWKX0=",
       "files": {
-        "SKILL.md": "sha256-yZOP9SIHwKbQsuaIUO4G2hry8l9AXRMvghG04PrbFHE="
+        "SKILL.md": "sha256-RMJ9raeU365nX43cssD+HIsq0KIAF2uYZLG2PIS314o="
       }
     },
     "inventory/skills/role-ops": {
@@ -374,6 +374,17 @@
         "SKILL.md": "sha256-AvUl5d5l2rJE0q6Qk9GHSRiVPL8ezCQ6FkNhmjL4Gus="
       }
     },
+    "inventory/skills/role-slice-dev": {
+      "name": "role-slice-dev",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-WPfAoIN1l8WvA535EQT60BRvfyW9ItFWTVd4lwh6MvI=",
+      "files": {
+        "SKILL.md": "sha256-lQdBHB3G6nBD7DLBv/dzxe3XxCUMGgdKxGeNXbphj5w="
+      }
+    },
     "inventory/skills/security-baseline": {
       "name": "security-baseline",
       "version": "0.1.0",
@@ -387,13 +398,13 @@
     },
     "inventory/skills/session-roles": {
       "name": "session-roles",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-a7klQHbwrphfKj7sTm/ztioSSHyJS+I1ai0vWy4D5+M=",
+      "integrity": "sha256-XfCmKNjcUxYiBqS5sq5/+z4XjediE2oqCpAIgsGXnPY=",
       "files": {
-        "SKILL.md": "sha256-goVd6hxg897OBxibcgKlFLrljzktw4Bu7W5Ce5gRoMg="
+        "SKILL.md": "sha256-003SVRP3zXGusx7elGScDADB/7ju7/+guAuKpQei99s="
       }
     },
     "inventory/skills/skill-forge-authoring": {
@@ -454,13 +465,13 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-GFGc2vNhNwdoiWXyI6XIFUgJ4DcnM/iHPmR9NzQ8Gos=",
+      "integrity": "sha256-y615nOYR5Ml6LdWFanSD0dZDCQFrVVfPkTWq2l+2frw=",
       "files": {
-        "PARALLEL-WORKTREES.md": "sha256-BIitBz15PQDwer98XxwZ1J9MwlG6xC1p5JX/927Aqzg=",
+        "PARALLEL-WORKTREES.md": "sha256-8KIxU4KNf4mdHjtGqPV2oGijeQS/iqNsgN41IO9tneI=",
         "SKILL.md": "sha256-M9KkcFR2RTv2cvbyl1Hg2NRzsmP9+xF9Zad+idmQoHk="
       }
     },

@@ -1,6 +1,6 @@
 ---
 name: session-roles
-description: Shared doctrine for running one product as several role sessions — Main Dev, Ops, Product Design (marketing, BA, UI/UX) and End User — that hand work to each other. Covers session layout, who approves what, why a message from another session is never the owner's approval, addressing sessions, self-contained handoffs, coordinating shared environments, and the approval chain from brief to release. Activate in any session that works under a role title or exchanges messages with sibling sessions; each role-* skill loads this first.
+description: Shared doctrine for running one product as several role sessions — Main Dev, Slice Dev, Ops, Product Design (marketing, BA, UI/UX) and End User — that hand work to each other. Covers session layout, who approves what, why a message from another session is never the owner's approval, addressing sessions, self-contained handoffs, coordinating shared environments, and the approval chain from brief to release. Activate in any session that works under a role title or exchanges messages with sibling sessions; each role-* skill loads this first.
 ---
 
 # Session roles
@@ -12,6 +12,7 @@ which chat they are in, what an approval will set in motion.
 | Role | Does | Never |
 |---|---|---|
 | **Main Dev** (`role-main-dev`) | specs, code, tests, commits, merges | operate production hosts; read or edit user content |
+| **Slice Dev** (`role-slice-dev`) | builds one slice in its own `work-*` worktree; commits on the slice branch | change spec or scope; merge or push shared branches; start or fork sessions |
 | **Ops** (`role-ops`) | releases, hosts, environments, production data, shared dev servers | edit product code or the task ledger; commit |
 | **Product Design** (`role-product-design`) | research, positioning, copy, briefs, mocks, audits | edit code or deliverable files Main Dev owns |
 | **End User** (`role-end-user`) | uses the product as a user would; acceptance; finding reports | edit code; sign in or create accounts; fix the product's output by hand |
@@ -26,12 +27,14 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **Side forks** ("btw" questions, research spikes) keep the main thread clean. They hand
   their result back to the session that owns the work — with the owner's decisions quoted —
   and are archived when done.
-- **Slice sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), usually
-  as a delegated Main Dev for one feature branch. They load the child's skills and the home profile, not
-  the umbrella's — so keep this skill and the `role-*` set in the home profile, and have the
-  `SESSION.md` Main Dev writes for them carry the role, the approvals they must get in their
-  own chat, scope, and how to hand back
-  (`umbrella-workspace`, `PARALLEL-WORKTREES.md`). Main Dev merges their branch.
+- **Slice Dev sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), one
+  feature branch each, under the **Slice Dev** role — not as a second Main Dev. A slice that
+  loads Main Dev doctrine reads that it may merge and start sessions, and will. They load the
+  child's skills and the home profile, not the umbrella's — so keep this skill and the
+  `role-*` set in the home profile, and have the `SESSION.md` Main Dev writes for them name
+  the Slice Dev role, the files they own, the ports, the approvals they must get in their own
+  chat, and how to hand back (`umbrella-workspace`, `PARALLEL-WORKTREES.md`). A Slice Dev
+  talks only to its parent; Main Dev merges its branch and retires the worktree.
 - **Stale duplicates act on stale state.** When two sessions carry the same role and title,
   archive the older one. Observed on one project (2026-10-24): two deploy workers shared a
   name and the older one held out-of-date release facts.

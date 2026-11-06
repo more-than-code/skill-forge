@@ -95,7 +95,7 @@ A lock note says who; `SESSION.md` says how. It is the brief the session is told
 
 Written fresh by Main Dev for each slice. It carries **only what git cannot**: the worktree path, branch, primary checkout and sibling worktrees all come from `git worktree list`, so do not repeat them — a copied value goes stale, a git answer does not.
 
-- **Role** — which role this session plays (usually a delegated Main Dev for one slice).
+- **Role** — which role this session plays (Slice Dev, `role-slice-dev`, for one slice — not a second Main Dev).
 - **Approvals** — what needs the owner's yes **in this session's own chat** (commit, migration, push). A relayed approval from the starting session does not count (`session-roles`).
 - **Scope** — the paths it may edit, and the paths that are off-limits.
 - **Runtime** — its own ports and the absolute path of its own database file.

@@ -171,8 +171,8 @@ run.sh [--mirror-only]
 ## Geometry invariants (check H — shared chrome only)
 
 Wired into `parity-gate.mjs` when `geometry.invariants` is present; also runnable
-standalone via `parity-geometry.mjs`. See `SKILL.md` §8 for the full declaration
-format and the defect class this catches.
+standalone via `parity-geometry.mjs`. See `REFERENCE.md` (check H) for the full declaration
+format and `SKILL.md` §10 for the defect class this catches.
 
 **What belongs in the set** (under ~5 total — do not grow past that):
 

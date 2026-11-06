@@ -6,7 +6,7 @@ A capture is one screenshot of one static state. Everything reached by *doing* s
 invisible to the harness: dropdowns, context menus, sheets, confirmation dialogs, the result
 of a tap that fires an API call, empty-vs-populated states that depend on interaction.
 
-That is not a small slice. Measured in `tutored` on 2026-08-16, with 29 captures and a
+That is not a small slice. Measured on one project on 2026-08-16, with 29 captures and a
 green-except-ratchet gate:
 
 - the chat message context menu could not be asserted at all — it exists only after a
@@ -63,7 +63,7 @@ each client to implement a different feature.
    BOTH clients. A prep applied on one side only makes the two columns photograph different
    screens — the columns stop being comparable, and every finding afterwards is an artefact.
    This is worse than the duplicate captures the harness already fails on, because it looks
-   like signal. (Rejected exactly this in `tutored` on 2026-08-16: a mobile-only drawer tap
+   like signal. (Rejected exactly this on one project on 2026-08-16: a mobile-only drawer tap
    would have passed `duplicate-captures` by making the two sides incomparable.)
 2. **An unknown step is a hard failure**, never a skip. A silently skipped prep produces a
    capture of the wrong state that still clears the byte floor — indistinguishable from

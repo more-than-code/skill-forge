@@ -13,15 +13,16 @@
 // ----------------
 //   declared  — the manifest's `api` array for the capture (what the screen is SUPPOSED
 //               to need)
-//   web       — keys in parity-out/api/<id>.json, recorded by the web capture
-//   mobile    — `consumed` in parity-out/api/<id>.mobile.json, recorded by the mirror
+//   source    — keys in <out>/api/<id>.json, recorded by the source capture
+//   mirror    — `consumed` in <out>/api/<id>.<mirror column>.json (default `mobile`),
+//               recorded by the mirror
 //
 // HONEST LIMIT — READ BEFORE TRUSTING THIS
 // ----------------------------------------
-// The mobile record is what the client ASKED THE FIXTURE BAG FOR, not proof that a network
+// The mirror record is what the client ASKED THE FIXTURE BAG FOR, not proof that a network
 // call happened: the mirror harness is fed a bag rather than hitting a server. That still
 // makes the comparable claim — "this screen wanted GET /api/chats" — but it is weaker than
-// the web side, and this check says so in its own output rather than letting the reader
+// the source side, and this check says so in its own output rather than letting the reader
 // assume symmetry. If the mirror ever makes live calls, record those instead and delete
 // this paragraph.
 //
@@ -30,6 +31,7 @@
 // pagination defaults that are not a parity concern.
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
+import { columns } from './parity-columns.mjs';
 
 const stripQuery = (k) => String(k).split('?')[0].trim();
 const setOf = (arr) => new Set(arr.map(stripQuery).filter(Boolean));
@@ -43,6 +45,7 @@ export function runApi(cfg, root) {
 
   const captures = JSON.parse(readFileSync(manifestPath, 'utf8')).captures ?? [];
   const waived = new Set(cfg.api?.waivers?.map((w) => w.capture) ?? []);
+  const { source, mirror } = columns(cfg);
 
   let compared = 0;
   let mirrorMissing = 0;
@@ -52,7 +55,7 @@ export function runApi(cfg, root) {
     if (!declared.size || waived.has(c.id)) continue;
 
     const webPath = join(outDir, 'api', `${c.id}.json`);
-    const mobPath = join(outDir, 'api', `${c.id}.mobile.json`);
+    const mobPath = join(outDir, 'api', `${c.id}.${mirror.id}.json`);
     if (!existsSync(webPath)) continue;
 
     if (!existsSync(mobPath)) {
@@ -75,7 +78,7 @@ export function runApi(cfg, root) {
       failures.push({
         id: `api-parity:${c.id}`,
         msg:
-          `Mobile did not request ${JSON.stringify(mobMissing)} on "${c.id}" while web did. ` +
+          `The ${mirror.label} did not request ${JSON.stringify(mobMissing)} on "${c.id}" while the ${source.label} did. ` +
           `The two clients built this screen from different data — invisible to every ` +
           `pixel, semantics and geometry check. Either the mirror is missing a fetch, or ` +
           `the manifest over-declares and should be corrected.`,
@@ -84,7 +87,7 @@ export function runApi(cfg, root) {
       failures.push({
         id: `api-parity:${c.id}`,
         msg:
-          `Web did not request ${JSON.stringify(webMissing)} on "${c.id}" while mobile did. ` +
+          `The ${source.label} did not request ${JSON.stringify(webMissing)} on "${c.id}" while the ${mirror.label} did. ` +
           `The source of truth is the one skipping a declared endpoint — check the manifest ` +
           `before assuming the client is wrong.`,
       });
@@ -102,7 +105,7 @@ export function runApi(cfg, root) {
     notes.push(
       `api: ${compared} capture(s) compared` +
         (mirrorMissing ? `, ${mirrorMissing} with no mirror record` : '') +
-        ` — mobile side records what the client ASKED THE FIXTURE BAG for, not a live call`
+        ` — the mirror side records what the client ASKED THE FIXTURE BAG for, not a live call`
     );
   }
   return { notes, failures };

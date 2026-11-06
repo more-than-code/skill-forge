@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Tier 3 — LLM visual comparison of each parity pair.
 //
-// Sends the webapp capture and the mobile capture for each manifest entry to a
+// Sends the source capture and the mirror capture for each manifest entry to a
 // local coding-agent CLI (vision-capable) and asks for STRUCTURED findings,
 // judged against the parity bar and the known-artifact table. Writes
 // parity-out/findings.json.
@@ -13,8 +13,8 @@
 // baseline in scripts/parity/accepted-findings.json.
 //
 // Backends: LOCAL coding-agent CLIs ONLY — grok | claude | codex.
-// The remote OpenAI chat/completions path was removed: app LLM cost defaults
-// (gpt-5.6-luna) are a poor fit for left/right screenshot judgement, and
+// The remote OpenAI chat/completions path was removed: an app's own LLM defaults
+// are a poor fit for left/right screenshot judgement, and
 // parity review must not share production API keys or depend on paid vision
 // APIs. Measured 2026-07-31: gpt-4.1-mini inverted left/right and was
 // non-deterministic at temperature 0; keep judgement on agent CLIs with file
@@ -29,6 +29,7 @@ import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { columns } from './parity-columns.mjs';
 
 // Portable: resolve everything from a parity.config.json in the consuming repo, not from
 // this file's location — it lives in the vendored skill directory, which is nowhere near
@@ -43,6 +44,9 @@ const CONFIG_PATH = findConfig();
 const CFG = CONFIG_PATH ? JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) : {};
 const ROOT = CONFIG_PATH ? path.resolve(path.dirname(CONFIG_PATH), CFG.root ?? '.') : process.cwd();
 const OUT = process.env.PARITY_OUT ?? path.resolve(ROOT, CFG.out ?? 'parity-out');
+const COLS = columns(CFG);
+const SRC = COLS.source.label;
+const MIR = COLS.mirror.label;
 const MANIFEST = process.env.PARITY_MANIFEST ?? path.resolve(ROOT, CFG.manifest ?? 'scripts/parity/parity-manifest.json');
 
 const ALLOWED_BACKENDS = new Set(['grok', 'claude', 'codex']);
@@ -57,8 +61,8 @@ function loadEnvFile(p) {
   }
   return out;
 }
-// Consumer-declared, never a hardcoded repo path: the previous value pointed at
-// ttd-backend/.env, which exists in exactly one workspace. No API keys are required —
+// Consumer-declared, never a hardcoded repo path: the previous value pointed at one
+// product's backend .env, which exists in exactly one workspace. No API keys are required —
 // this is for non-secret overrides only.
 const env = { ...(CFG.review?.envFile ? loadEnvFile(path.resolve(ROOT, CFG.review.envFile)) : {}), ...process.env };
 
@@ -119,7 +123,7 @@ const FINDINGS_SCHEMA = {
  *   · caused by the PRODUCT's own stubs or features → repo, declared in config.
  *
  * This function exists because the second kind was hardcoded here and cost a P1. The rule
- * read "the sticker catalog shows fewer stickers on the RIGHT" — Tutored product knowledge,
+ * read "the sticker catalog shows fewer stickers on the RIGHT" — one product's knowledge,
  * living in a skill other repos vendor. The model generalised it to any sticker difference
  * and stayed silent while the source client replaced its composer sticker button with a
  * different control. Nothing failed, because a suppression working as designed and a
@@ -182,10 +186,10 @@ function renderArtifacts(cfg) {
 
 const SYSTEM = `You compare two screenshots of the SAME screen from two clients of one product.
 
-LEFT = webapp. This is the SOURCE OF TRUTH.
-RIGHT = Flutter mobile app. This MIRRORS the webapp.
+LEFT = ${SRC}. This is the SOURCE OF TRUTH.
+RIGHT = ${MIR}. This MIRRORS the ${SRC}.
 
-Report only ways the mobile app FAILS TO MIRROR the webapp.
+Report only ways the ${MIR} FAILS TO MIRROR the ${SRC}.
 
 IN SCOPE (report these):
 - jobs the user can do on one client but not the other
@@ -199,13 +203,13 @@ OUT OF SCOPE (never report these — they are explicitly allowed to differ):
 - layout, spacing, alignment, ordering, type scale, font size, colour
 - pixel-level differences of any kind
 - platform-native conventions: back arrow vs hamburger, native pickers,
-  a System/Light/Dark theme control that only mobile has
+  a System/Light/Dark theme control that only one client has
 - scroll position: the two captures may show different parts of a long screen.
   If content is merely below the fold, that is NOT a finding.
 - different underlying DATA (different chat messages, different list items).
   The captures may be taken moments apart against a live database.
 
-KNOWN RENDERING ARTIFACTS OF THE MOBILE CAPTURE HARNESS — NEVER report these as findings.
+KNOWN RENDERING ARTIFACTS OF THE MIRROR'S HEADLESS CAPTURE HARNESS — NEVER report these as findings.
 Each rule is limited to what it names. Do NOT generalise a rule to other screens, other
 controls, or the opposite direction:
 - CJK (Japanese/Chinese) text renders as filled black boxes on the RIGHT only.
@@ -245,15 +249,15 @@ const SYSTEM_COMPOSED = SYSTEM.replace(
     : '(no product-specific artifacts declared for this repo)',
 );
 
-function inventoryPrompt(webPath, mobPath, userText) {
+function inventoryPrompt(sourcePath, mirrorPath, userText) {
   return [
     SYSTEM_COMPOSED,
     '',
     userText,
     '',
     'Read these two image files with your image-reading / Read tool:',
-    `IMAGE 1 OF 2 — THE WEBAPP (source of truth): ${webPath}`,
-    `IMAGE 2 OF 2 — THE MOBILE APP (the mirror being checked): ${mobPath}`,
+    `IMAGE 1 OF 2 — THE ${SRC.toUpperCase()} (source of truth): ${sourcePath}`,
+    `IMAGE 2 OF 2 — THE ${MIR.toUpperCase()} (the mirror being checked): ${mirrorPath}`,
     '',
     'METHOD — follow it in order, do not skip straight to findings:',
     '  1. Open IMAGE 1. Write out an inventory of EVERY user-visible element:',
@@ -268,8 +272,8 @@ function inventoryPrompt(webPath, mobPath, userText) {
     '  5. Report what survives.',
     'A low-recall review is a failure: an inventory item you never listed cannot be',
     'compared. Be exhaustive in steps 1-2 and conservative only in step 4.',
-    'If it exists in IMAGE 2 but not IMAGE 1, it is mobile-only — NOT a finding',
-    'unless it contradicts the webapp.',
+    'If it exists in IMAGE 2 but not IMAGE 1, it is mirror-only — NOT a finding',
+    `unless it contradicts the ${SRC}.`,
     'Do not read any other file. Do not edit files. Do not run shell commands.',
   ].join('\n');
 }
@@ -303,8 +307,8 @@ function extractFindingsPayload(raw) {
   return null;
 }
 
-async function reviewViaGrok(webPath, mobPath, userText) {
-  const prompt = inventoryPrompt(webPath, mobPath, userText);
+async function reviewViaGrok(sourcePath, mirrorPath, userText) {
+  const prompt = inventoryPrompt(sourcePath, mirrorPath, userText);
   const args = [
     '-p', prompt,
     '--cwd', ROOT,
@@ -325,8 +329,8 @@ async function reviewViaGrok(webPath, mobPath, userText) {
   return out;
 }
 
-async function reviewViaClaude(webPath, mobPath, userText) {
-  const prompt = inventoryPrompt(webPath, mobPath, userText);
+async function reviewViaClaude(sourcePath, mirrorPath, userText) {
+  const prompt = inventoryPrompt(sourcePath, mirrorPath, userText);
   // Read-only: allow Read only so Claude can open the PNGs; no Bash/Edit/Write.
   const args = [
     '-p', prompt,
@@ -346,8 +350,8 @@ async function reviewViaClaude(webPath, mobPath, userText) {
   return out;
 }
 
-async function reviewViaCodex(webPath, mobPath, userText) {
-  const prompt = inventoryPrompt(webPath, mobPath, userText);
+async function reviewViaCodex(sourcePath, mirrorPath, userText) {
+  const prompt = inventoryPrompt(sourcePath, mirrorPath, userText);
   const tmp = mkdtempSync(path.join(tmpdir(), 'parity-review-'));
   const schemaPath = path.join(tmp, 'findings.schema.json');
   const outPath = path.join(tmp, 'last-message.txt');
@@ -359,8 +363,8 @@ async function reviewViaCodex(webPath, mobPath, userText) {
       '--sandbox', 'read-only',
       '--output-schema', schemaPath,
       '-o', outPath,
-      '-i', webPath,
-      '-i', mobPath,
+      '-i', sourcePath,
+      '-i', mirrorPath,
       prompt,
     ];
     await execFileAsync('codex', args, {
@@ -383,8 +387,8 @@ async function reviewViaCodex(webPath, mobPath, userText) {
 }
 
 async function reviewOne(capture) {
-  const web = path.join(OUT, 'web', `${capture.id}.png`);
-  const mob = path.join(OUT, 'mobile', `${capture.id}.png`);
+  const web = path.join(OUT, COLS.source.id, `${capture.id}.png`);
+  const mob = path.join(OUT, COLS.mirror.id, `${capture.id}.png`);
   if (!existsSync(web) || !existsSync(mob)) {
     return { id: capture.id, skipped: 'missing capture', findings: [] };
   }
@@ -392,13 +396,13 @@ async function reviewOne(capture) {
   const cl = capture.checklist ?? {};
   const userText = [
     `Screen: ${capture.id}`,
-    `Webapp route: ${capture.web?.route}   Mobile route: ${capture.mobile?.route}`,
+    `${SRC} route: ${capture[COLS.source.id]?.route}   ${MIR} route: ${capture[COLS.mirror.id]?.route}`,
     cl.jobs?.length ? `Jobs this screen must support: ${cl.jobs.join('; ')}` : '',
     cl.actions?.length ? `Primary actions: ${cl.actions.join('; ')}` : '',
     cl.states?.length ? `States captured: ${cl.states.join('; ')}` : '',
     cl.openQuestion ? `Open question to answer: ${cl.openQuestion}` : '',
     '',
-    'LEFT image = webapp (source of truth). RIGHT image = mobile mirror.',
+    `LEFT image = ${SRC} (source of truth). RIGHT image = ${MIR} (mirror).`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -448,7 +452,7 @@ async function main() {
         `PARITY_REVIEW_BACKEND=${BACKEND} is not allowed.`,
         `Allowed values (local coding-agent CLIs only): ${[...ALLOWED_BACKENDS].join(', ')}.`,
         'The remote OpenAI chat/completions path was removed — do not set openai or an API model.',
-        'App LLM defaults (gpt-5.6-luna) are for product traffic, not parity vision review.',
+        "An app's own LLM defaults are for product traffic, not parity vision review.",
       ].join('\n')
     );
     process.exit(2);

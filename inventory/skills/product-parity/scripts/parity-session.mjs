@@ -13,7 +13,7 @@
 // fresh and looks consistent. The board then compares two agents rather than two clients,
 // and reports it with total confidence.
 //
-// Observed 2026-08-17 in `tutored`: a second session re-ran the reviewer mid-analysis. Its
+// Observed 2026-08-17 on one project: a second session re-ran the reviewer mid-analysis. Its
 // findings replaced the first session's between two reads of the same file. The changing
 // results were attributed to model non-determinism and written up as a measured property
 // of the reviewer — a conclusion drawn from contaminated state, by a harness whose entire
@@ -32,6 +32,7 @@
 // Usage: node parity-session.mjs [--config parity.config.json]
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
+import { columns } from './parity-columns.mjs';
 
 const GRACE_MS = 5000; // filesystem timestamp granularity and the gap between stages
 
@@ -76,7 +77,8 @@ export function runSession(cfg, root) {
   }
 
   const strays = [];
-  for (const col of ['web', 'mobile']) {
+  const { source, mirror } = columns(cfg);
+  for (const col of [source.id, mirror.id]) {
     const dir = join(out, col);
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.png'))) {

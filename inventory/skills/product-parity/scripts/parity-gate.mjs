@@ -16,23 +16,28 @@
 //                         G exists because F is only as honest as its inputs: a
 //                         stale review, or two manifest entries that rendered the
 //                         same screen, both make F report a confident PASS.
-//   J  api parity       — both clients requested the DECLARED endpoints for the screen.
-//                         A screen can be pixel-perfect and built from different data.
+//   H  geometry         — shared-chrome alignment invariants measured on captured
+//                         PNGs, compared across clients. Catches implicit framework
+//                         defaults (e.g. Flutter IconButton 48×48 tap target) that
+//                         no token check and no vision reviewer can see.
 //   I  interactive       — declared affordances resolve to real, activatable controls in
 //                         the captured accessibility tree. The only check that sees
 //                         BEHAVIOUR: a dead icon and a live button are pixel-identical,
 //                         and an affordance broken on both clients passes parity by
-//                         definition. Mobile-only today (web writes no semantics).
+//                         definition. Reads the mirror's dump only.
+//   J  api parity       — both clients requested the DECLARED endpoints for the screen.
+//                         A screen can be pixel-perfect and built from different data.
 //   K  control names     — the SET of activatable control names agrees across clients,
 //                         within a declared region of shared chrome. The only check that
 //                         sees an icon-only affordance swap, which the vision reviewer
 //                         reports only intermittently because iconography is out of its
 //                         declared scope. Regions are mandatory: unscoped, the diff is
 //                         dominated by content the two clients legitimately differ on.
-//   H  geometry         — shared-chrome alignment invariants measured on captured
-//                         PNGs, compared across clients. Catches implicit framework
-//                         defaults (e.g. Flutter IconButton 48×48 tap target) that
-//                         no token check and no vision reviewer can see.
+//   L  run attribution  — every artifact was written by the run that claims it (.run.json).
+//                         The only check that sees a CONCURRENT writer.
+//
+// Columns: `source.column` / `source.name` and `mirror.column` / `mirror.name` in the config
+// (see parity-columns.mjs). Defaults: web / webapp and mobile / Flutter mobile app.
 //
 // Exit: 0 pass · 1 fail · 2 misconfigured
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -43,6 +48,7 @@ import { runInteractive } from './parity-interactive.mjs';
 import { runNames } from './parity-names.mjs';
 import { runSession } from './parity-session.mjs';
 import { runApi } from './parity-api.mjs';
+import { columns } from './parity-columns.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (n) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : null);
@@ -70,6 +76,7 @@ if (!configPath) {
 const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
 const ROOT = path.resolve(path.dirname(configPath), cfg.root ?? '.');
 const abs = (p) => path.resolve(ROOT, p);
+const COLS = columns(cfg);
 
 const failures = [];
 const notes = [];
@@ -136,7 +143,7 @@ function checkCoverage() {
   if (!routes.length) {
     notes.push('coverage: no routes discovered — check source.routes config');
   }
-  const captured = manifest.captures.map((c) => c.source?.route ?? c.web?.route).filter(Boolean);
+  const captured = manifest.captures.map((c) => c.source?.route ?? c[COLS.source.id]?.route).filter(Boolean);
 
   const uncovered = routes.filter((t) => !captured.some(templateMatcher(t)));
   const unwaived = [];
@@ -262,7 +269,11 @@ function checkUnlabelled() {
   const worse = [];
   let totalUnlabelled = 0;
   let totalTappable = 0;
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+  // The mirror's dumps only. A source dump (`<capture>.<source column>.json`, written for
+  // checks I and K) names nodes `name`, not `label`, so counting it here would report every
+  // source control as unlabelled.
+  const sourceSuffix = `.${COLS.source.id}.json`;
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.json') && !f.endsWith(sourceSuffix))) {
     const d = JSON.parse(readFileSync(path.join(dir, f), 'utf8'));
     const tappable = (d.nodes ?? []).filter((n) => n.tappable);
     const unlabelled = tappable.filter((n) => !String(n.label ?? '').trim());
@@ -288,7 +299,7 @@ function checkUnlabelled() {
 
 
 // ---------------------------------------------------------------------------
-// F. Design-token conformance (tier 0 — deterministic, no model)
+// D. Design-token conformance (tier 0 — deterministic, no model)
 // ---------------------------------------------------------------------------
 // The design system is upstream of BOTH clients, so this check is symmetric:
 // the source client is as checkable as the mirror. That matters — a bug in the
@@ -415,7 +426,7 @@ function checkDesignTokens() {
 }
 
 // ---------------------------------------------------------------------------
-// D. Visual-comparison ratchet
+// F. Visual-comparison ratchet
 // ---------------------------------------------------------------------------
 // The reviewer is a vision model: its raw output varies between runs and cannot
 // itself gate a build, because a flaky blocker gets disabled — which is worse
@@ -455,7 +466,7 @@ function checkVisual() {
   // — then every difference on the OTHER side reads as a real gap. Observed
   // 2026-08-03: four practice web captures were byte-identical and produced 22 of
   // 51 findings. Cheap to detect, and impossible to notice by eye on a board.
-  for (const dir of ['web', 'mirror', 'mobile']) {
+  for (const dir of [COLS.source.id, COLS.mirror.id]) {
     const d = path.join(out, dir);
     if (!existsSync(d)) continue;
     const byHash = new Map();
@@ -477,8 +488,8 @@ function checkVisual() {
   }
 
   // Freshness. A ratchet over a stale review is worse than no ratchet: it reports
-  // "0 not in baseline" and reads exactly like a pass. Observed 2026-08-03 in the
-  // tutored workspace — findings were 2 days old, one capture column had been
+  // "0 not in baseline" and reads exactly like a pass. Observed 2026-08-03 on one
+  // project — findings were 2 days old, one capture column had been
   // re-run and the other had not, and the gate went green on the day tokens,
   // theme, chat components and i18n all changed.
   const columnMtime = (dir) => {
@@ -488,9 +499,9 @@ function checkVisual() {
       .filter((f) => f.endsWith('.png'))
       .reduce((max, f) => Math.max(max, statSync(path.join(d, f)).mtimeMs), 0);
   };
-  const webAt = columnMtime('web');
-  const mobileAt = columnMtime('mobile');
-  const newestCapture = Math.max(webAt, mobileAt);
+  const sourceAt = columnMtime(COLS.source.id);
+  const mirrorAt = columnMtime(COLS.mirror.id);
+  const newestCapture = Math.max(sourceAt, mirrorAt);
   const findingsAt = statSync(findingsPath).mtimeMs;
   const mins = (ms) => Math.round(ms / 60000);
 
@@ -519,7 +530,7 @@ function checkVisual() {
         const p = path.join(out, col, `${r.id}.png`);
         return existsSync(p) ? statSync(p).mtimeMs : 0;
       };
-      const capAt = Math.max(pngAt('web'), pngAt('mobile'));
+      const capAt = Math.max(pngAt(COLS.source.id), pngAt(COLS.mirror.id));
       if (capAt && at < capAt) stale.push(`${r.id}: reviewed ${mins(capAt - at)} min before its newest capture`);
     }
     if (stale.length) {
@@ -546,14 +557,17 @@ function checkVisual() {
   // Both columns must come from one pipeline run, or every pair is comparing a
   // screen against a different build of its counterpart.
   const SKEW_LIMIT_MS = 60 * 60 * 1000;
-  if (webAt && mobileAt && Math.abs(webAt - mobileAt) > SKEW_LIMIT_MS) {
+  if (sourceAt && mirrorAt && Math.abs(sourceAt - mirrorAt) > SKEW_LIMIT_MS) {
     failures.push({
       check: 'capture-columns-skewed',
       message:
-        `web and mobile captures are ${mins(Math.abs(webAt - mobileAt))} min apart — they are not from ` +
-        `the same run, so each pair compares two different builds. Re-run the full pipeline ` +
-        `(run.sh without --mobile-only).`,
-      items: [`web ${new Date(webAt).toISOString()}`, `mobile ${new Date(mobileAt).toISOString()}`]
+        `${COLS.source.label} and ${COLS.mirror.label} captures are ${mins(Math.abs(sourceAt - mirrorAt))} min ` +
+        `apart — they are not from the same run, so each pair compares two different builds. Re-run ` +
+        `the full pipeline so both columns come from one run.`,
+      items: [
+        `${COLS.source.id} ${new Date(sourceAt).toISOString()}`,
+        `${COLS.mirror.id} ${new Date(mirrorAt).toISOString()}`,
+      ]
     });
   }
 
@@ -597,7 +611,7 @@ function checkVisual() {
 // ---------------------------------------------------------------------------
 // I. Interactive affordances (deterministic — no model)
 // ---------------------------------------------------------------------------
-// No-op when cfg.interactive is absent. Mobile-only, and every note says so: a check
+// No-op when cfg.interactive is absent. Mirror-only, and every note says so: a check
 // that overstates its coverage is worse than no check.
 // ---------------------------------------------------------------------------
 // J. API parity (deterministic — no model)

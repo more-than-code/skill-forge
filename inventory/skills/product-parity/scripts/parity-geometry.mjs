@@ -7,7 +7,7 @@
 // is noisy. Neither can see an *implicit framework default with no counterpart in the
 // source client* — and that is a whole class of mirroring defect.
 //
-// Measured 2026-08-10 in `tutored`: Flutter's IconButton silently enforces a 48x48
+// Measured 2026-08-10 on one project: Flutter's IconButton silently enforces a 48x48
 // minimum tap target (MaterialTapTargetSize.padded). The web button is content-sized at
 // ~36px. Both rows bottom-align, so the taller sibling set the row height and pushed the
 // composer placeholder 6.7pt below the icon row — on every screen, for weeks. No token
@@ -37,6 +37,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import zlib from 'node:zlib';
+import { columns } from './parity-columns.mjs';
 
 // --- minimal PNG reader (no dependencies) -----------------------------------
 // Deliberately dependency-free: the harness must run in a bare checkout and on CI
@@ -134,6 +135,7 @@ export function runGeometry(cfg, root) {
   // Tolerance in fractions of image height. Default ≈ 1pt on a 844pt-tall capture.
   const tol = cfg.geometry?.toleranceFraction ?? 0.0015;
   const waived = new Set(cfg.geometry?.waivers?.map((w) => w.invariant) ?? []);
+  const { source, mirror } = columns(cfg);
 
   for (const inv of invariants) {
     if (waived.has(inv.name)) {
@@ -142,7 +144,7 @@ export function runGeometry(cfg, root) {
     }
     const spreads = {};
     let missing = false;
-    for (const side of ['web', 'mobile']) {
+    for (const side of [source.id, mirror.id]) {
       const png = join(outDir, side, `${inv.capture}.png`);
       if (!existsSync(png)) {
         notes.push(`geometry: ${inv.name} skipped — no ${side} capture (${inv.capture})`);
@@ -166,7 +168,9 @@ export function runGeometry(cfg, root) {
     }
     if (missing) continue;
 
-    const delta = Math.abs(spreads.web.spread - spreads.mobile.spread);
+    const s = spreads[source.id];
+    const m = spreads[mirror.id];
+    const delta = Math.abs(s.spread - m.spread);
     const fmt = (s) => s.centres.map((x) => `${x.rname}=${(x.c * 100).toFixed(2)}%`).join(' ');
     if (delta > tol) {
       failures.push({
@@ -175,14 +179,14 @@ export function runGeometry(cfg, root) {
           `Alignment invariant "${inv.name}" differs between clients on ${inv.capture}. ` +
           `The regions that share a vertical centre on one client do not on the other — ` +
           `the class of defect no token check and no screenshot reviewer can see.\n` +
-          `      web    spread ${(spreads.web.spread * 100).toFixed(3)}%  ${fmt(spreads.web)}\n` +
-          `      mobile spread ${(spreads.mobile.spread * 100).toFixed(3)}%  ${fmt(spreads.mobile)}\n` +
+          `      ${source.id} spread ${(s.spread * 100).toFixed(3)}%  ${fmt(s)}\n` +
+          `      ${mirror.id} spread ${(m.spread * 100).toFixed(3)}%  ${fmt(m)}\n` +
           `      delta ${(delta * 100).toFixed(3)}% (tolerance ${(tol * 100).toFixed(3)}%)`,
       });
     } else {
       notes.push(
-        `geometry: ${inv.name} ok — spread web ${(spreads.web.spread * 100).toFixed(3)}% / ` +
-          `mobile ${(spreads.mobile.spread * 100).toFixed(3)}%`
+        `geometry: ${inv.name} ok — spread ${source.id} ${(s.spread * 100).toFixed(3)}% / ` +
+          `${mirror.id} ${(m.spread * 100).toFixed(3)}%`
       );
     }
   }

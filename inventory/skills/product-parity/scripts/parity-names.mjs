@@ -38,6 +38,7 @@
 // Usage: node parity-names.mjs [--config parity.config.json] [--json]
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
+import { columns } from './parity-columns.mjs';
 
 const norm = (s) =>
   String(s ?? '')
@@ -72,6 +73,7 @@ export function runNames(cfg, root) {
   const semDir = join(outDir, 'semantics');
   const accepted = cfg.names?.accepted ?? {};
   const waived = new Set((cfg.names?.waivers ?? []).map((w) => w.region));
+  const { source } = columns(cfg);
 
   for (const region of regions) {
     if (waived.has(region.name)) {
@@ -79,7 +81,7 @@ export function runNames(cfg, root) {
       notes.push(`names: ${region.name} WAIVED — ${w.reason}`);
       continue;
     }
-    const webFile = join(semDir, `${region.capture}.web.json`);
+    const webFile = join(semDir, `${region.capture}.${source.id}.json`);
     const mobFile = join(semDir, `${region.capture}.json`);
 
     // Degrade to a NOTE, never a failure. Repos vendor this skill without a source-side

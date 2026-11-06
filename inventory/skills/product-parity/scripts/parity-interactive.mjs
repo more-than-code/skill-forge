@@ -11,7 +11,7 @@
 //   · and parity only asks "does mobile match web", never "is either one right", so an
 //     affordance broken on BOTH clients passes by definition.
 //
-// Observed 2026-08-16 in `tutored`: a pronunciation play control rendered perfectly and
+// Observed 2026-08-16 on one project: a pronunciation play control rendered perfectly and
 // did nothing. Every gate was green. Appearance was specified, so appearance was gated;
 // behaviour was not specified, so nothing gated it.
 //
@@ -22,13 +22,14 @@
 // (or explicitly tappable). That is the one machine-checkable half of an interaction
 // spec, and it is the half that catches a decorative icon standing in for a button.
 //
-// SCOPE — MOBILE ONLY, AND SAID OUT LOUD
+// SCOPE — MIRROR ONLY, AND SAID OUT LOUD
 // --------------------------------------
-// Only the Flutter harness writes semantics today; the web capture writes none. So this
-// is a WITHIN-CLIENT assertion, not a parity comparison, and it reports that in every
-// note it emits. Do not let it read as cross-client coverage — a check that overstates
-// what it verified is worse than no check. When the web capture grows an equivalent
-// accessibility dump, compare the two sides here and update this comment.
+// This asserts against the mirror's dump (`semantics/<capture>.json`). The source dump
+// (`semantics/<capture>.<source column>.json`), when present, is read only to tell a
+// missing control from a capture that never renders it. So this is a WITHIN-CLIENT
+// assertion, not a parity comparison, and it reports that in every note it emits. Do not
+// let it read as cross-client coverage — a check that overstates what it verified is
+// worse than no check. Check K is the cross-client comparison of control names.
 //
 // SCOPE DISCIPLINE
 // ----------------
@@ -40,6 +41,7 @@
 // Usage: node parity-interactive.mjs [--config parity.config.json] [--json]
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
+import { columns } from './parity-columns.mjs';
 
 /**
  * Nodes whose label matches. Matching is on `labelContains` (substring) rather than
@@ -67,9 +69,10 @@ export function runInteractive(cfg, root) {
   const outDir = resolve(root, process.env.PARITY_OUT ?? cfg.out ?? 'parity-out');
   const semDir = join(outDir, 'semantics');
   const waived = new Set(cfg.interactive?.waivers?.map((w) => w.affordance) ?? []);
+  const { source, mirror } = columns(cfg);
 
   if (!existsSync(semDir)) {
-    notes.push('interactive: no semantics/ dump — check skipped (run the mobile capture first)');
+    notes.push(`interactive: no semantics/ dump — check skipped (run the ${mirror.label} capture first)`);
     return { notes, failures };
   }
 
@@ -99,7 +102,7 @@ export function runInteractive(cfg, root) {
       // text said "gone, renamed, or off-screen" and the reader picked the wrong one.
       //
       // When the source dump exists, use it to tell them apart.
-      const webFile = join(semDir, `${a.capture}.web.json`);
+      const webFile = join(semDir, `${a.capture}.${source.id}.json`);
       let sourceHas = null;
       if (existsSync(webFile)) {
         const wn = JSON.parse(readFileSync(webFile, 'utf8')).nodes ?? [];
@@ -120,7 +123,7 @@ export function runInteractive(cfg, root) {
               ? `"${a.labelContains}" is rendered by the SOURCE client on ${a.capture} but no node ` +
                 `carries that name on the mirror. Either the control is missing, or it exists with no ` +
                 `accessible name — both are real defects, and the second is invisible to assistive tech.`
-              : `No node labelled "${a.labelContains}" in ${a.capture} (mobile), and there is no source ` +
+              : `No node labelled "${a.labelContains}" in ${a.capture} (${mirror.label}), and there is no source ` +
                 `semantics dump to compare against, so this cannot be diagnosed further. The affordance ` +
                 `is gone, renamed, or not rendered by this capture. Emit a source dump to tell them apart.`,
       });
@@ -132,7 +135,7 @@ export function runInteractive(cfg, root) {
       failures.push({
         id: `interactive:${a.name}`,
         msg:
-          `"${a.labelContains}" exists on ${a.capture} (mobile) but is NOT exposed as a control ` +
+          `"${a.labelContains}" exists on ${a.capture} (${mirror.label}) but is NOT exposed as a control ` +
           `— role=${JSON.stringify(hits.map((n) => n.role))}, tappable=${JSON.stringify(hits.map((n) => n.tappable))}. ` +
           `It renders and cannot be activated: exactly the defect no screenshot comparison can see. ` +
           (a.spec ? `Spec: ${a.spec}` : ''),
@@ -141,7 +144,7 @@ export function runInteractive(cfg, root) {
     }
     notes.push(
       `interactive: ${a.name} ok — ${activatable.length}/${hits.length} matching node(s) ` +
-        `activatable on ${a.capture} (MOBILE ONLY; web writes no semantics)`
+        `activatable on ${a.capture} (${mirror.label} only — this check does not read the source dump)`
     );
   }
   return { notes, failures };

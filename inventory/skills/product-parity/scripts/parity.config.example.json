@@ -3,6 +3,8 @@
   "root": ".",
   "source": {
     "name": "webapp",
+    "column": "web",
+    "$columnNote": "name is what people and the reviewer read; column is the output directory and manifest key. Defaults: webapp / web for the source, Flutter mobile app / mobile for the mirror.",
     "root": "web",
     "routes": {
       "dir": "src/routes",
@@ -11,7 +13,8 @@
     }
   },
   "mirror": {
-    "name": "mobile",
+    "name": "Flutter mobile app",
+    "column": "mobile",
     "root": "mobile"
   },
   "manifest": "scripts/parity/parity-manifest.json",
@@ -27,8 +30,7 @@
     "generatedFile": "mobile/lib/l10n/generated/app_localizations.dart"
   },
   "review": {
-    "backend": "grok",
-    "model": "gpt-4.1",
+    "$backend": "Chosen by PARITY_REVIEW_BACKEND=grok|claude|codex (default grok), not by this file.",
     "envFile": "backend/.env",
     "$artifacts": "Product-specific suppression rules. The skill inlines artifacts caused by the CAPTURE TECHNIQUE (test-runner fonts, undecoded images); anything caused by YOUR product's stubs or features belongs here, because the skill cannot know what you stubbed. Omit the list on a new harness — you learn it from the board — and the reviewer will say so on every run. Every field below is REQUIRED and validated before any capture is reviewed.",
     "artifacts": [

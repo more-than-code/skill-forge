@@ -13,78 +13,15 @@ evidence that structurally cannot see the gaps it claims to have checked.
 **Parity is a product property, not a visual one.** A screenshot pair proves two
 surfaces look alike; it cannot distinguish a live control from a dead icon, and it
 never asks whether either client is *right*. Treat look as one lens among several
-(below), not as the definition of the job.
+(§3), not as the definition of the job.
 
-## Work one screen and one lens at a time
+Companion files in this directory — load the one the task needs:
 
-The gate reports every failure across every capture at once. That is right for *reporting*
-and wrong for *working*: a 13-finding ratchet plus a coverage failure plus an a11y count is
-not a task, it is a weather report. Sweeping across all of it produces half-fixes in ten
-places and a diff nobody can review.
-
-**Pick one capture and one lens. Finish it. Re-run. Then pick the next.**
-
-A lens is one question about one screen — **except the two that are not**:
-
-| Lens | Question | Evidence | Scope |
-|---|---|---|---|
-| Coverage | is this screen captured at all, on both clients? | manifest entry + two PNGs | per-capture |
-| Look | do the pixels agree? | visual review finding for THIS capture | per-capture |
-| Geometry | do declared regions share a centre on both? | check H | per-capture |
-| Interaction | are the affordances real, activatable controls? | check I + semantics dump | per-capture |
-| Data / API | did both clients request the declared endpoints? | check J + api bags | per-capture |
-| Tokens | do both clients use canon values? | check D | **project-wide** |
-| Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
-
-**A project-wide lens cannot answer a per-screen question, and a screen is never "done"
-on its say-so.** Check D compares token *declarations* across the whole app; checks B/C
-compare the *values of shared keys*. Neither knows which screen you are working on, so
-"chat canvas × tokens" is not a task that exists.
-
-The failure this causes has a name — **call-site choice**. Both clients can define every
-key identically and still pick the wrong one in a given place. Measured 2026-08-17: the
-mirror's single-chat menu rendered `chat_archive_action` ("Archive") where the source
-client rendered `chat_archive_one_action` ("Archive chat") — the mirror using the *bulk*
-string for a *single-item* action. Check C passed, correctly: both keys exist on both
-clients with identical values. The vision reviewer had both labels in front of it across
-two runs and reported nothing. It was found by reading the two call sites.
-
-This is the same shape as the icon-only gap below: **a lens whose scope does not match the
-question being asked.** When you catch one, ask which lens *should* have owned it, and
-whether that lens can be scoped to the thing that varies.
-
-One more scope hole worth knowing: check C excludes multi-line source entries from the
-drift comparison and says so in its output (`N source entries not single-line, excluded`).
-That count is strings sitting outside the check while it reads as green. Read the number;
-do not let it become invisible.
-
-Why this ordering discipline matters, from a real session:
-
-- Fixing "the composer looks wrong" turned out to need FIVE separate lenses — geometry
-  (a framework tap-target default), interaction (an unnamed control), coverage (no capture
-  reached the typed state), look, and finally data. Attacked as one problem it produced
-  three wrong diagnoses in a row. Attacked one lens at a time, each step was decidable.
-- A single capture's fix routinely INVALIDATES other captures (re-capturing the mirror
-  skews the columns, which fails freshness). Finishing one screen and re-running keeps that
-  visible instead of burying it under the next change.
-
-**Definition of done for one screen×lens:** the specific check passes, you ran it yourself
-and pasted the output, and nothing that previously passed now fails. If a fix requires a
-second lens, that is a second pass — write the finding down and come back to it.
-
-Do NOT batch a rename, a token change and a capture change into one commit because they
-were all discovered in the same run. Commit per intent.
-
-## Dynamic states (menus, popups, actions, API calls)
-
-A capture is one static state, so anything reached by *doing* something — dropdowns,
-context menus, sheets, the result of a tap that fires an API call — is invisible to every
-check in this harness. The mechanism that closes it is `prep`: named steps performed
-between ready and the screenshot, implemented by BOTH harnesses under the same name.
-
-Read **DYNAMIC-STATES.md** before adding a step, a dynamic capture, or an API assertion.
-The rule that matters most: a `prep` implemented on one client only makes the two columns
-photograph different screens, which is worse than no capture at all.
+- **`REFERENCE.md`** — the bundled gate: every script, checks A–L, their config blocks and
+  the files they read. Load it to configure the harness or trace a gate failure.
+- **`DYNAMIC-STATES.md`** — capturing menus, sheets and API-driven states with `prep` steps.
+- **`RECIPES.md`** — implementation recipes: manifest shape, source and mirror capture,
+  data handoff, board generator, runner.
 
 ## 1. The core principle
 
@@ -99,7 +36,7 @@ from each client, side by side, from identical data**.
 If someone proposes closing a parity milestone on a code audit, that is the
 smell. Ask what rendered output was compared.
 
-### This board answers ONE of three questions — know which
+### This board answers ONE of several questions — know which
 
 Conflating these is how a client's bug becomes the specification.
 
@@ -130,12 +67,12 @@ whether two images look the same (noisy, gets switched off).
 ```
 one fixed data world (shared seeded DB / fixed backend state)
         │
-        ├─► [1] source client capture  ──► out/web/<id>.png
+        ├─► [1] source client capture  ──► out/<source>/<id>.png
         │        └── + record the API bodies it rendered from ──► out/api/<id>.json
         │                                                              │
         │                                              [2] data handoff
         │                                                              ▼
-        └─► [3] mirror client capture (headless) ────────────► out/mobile/<id>.png
+        └─► [3] mirror client capture (headless) ────────────► out/<mirror>/<id>.png
                                                                        │
                                           [4] pair into a board ───────┴──► board.html
                                                                        │
@@ -150,7 +87,86 @@ checklist of jobs/actions/states. Adding a screen must be **one manifest entry
 and nothing else** — the moment it requires harness code, the loop stops being
 run.
 
-## 3. Hard rules
+**Either client can be the source.** The config's `source` and `mirror` blocks name the
+two columns (`REFERENCE.md`, "The two columns"); the defaults are a web source and a
+Flutter mirror. Name them correctly: the reviewer is told which image is the source of
+truth from those names.
+
+## 3. Work one screen and one lens at a time
+
+The gate reports every failure across every capture at once. That is right for *reporting*
+and wrong for *working*: a 13-finding ratchet plus a coverage failure plus an a11y count is
+not a task, it is a weather report. Sweeping across all of it produces half-fixes in ten
+places and a diff nobody can review.
+
+**Pick one capture and one lens. Finish it. Re-run. Then pick the next.**
+
+A lens is one question about one screen — **except the ones that are not**:
+
+| Lens | Question | Evidence | Scope |
+|---|---|---|---|
+| Coverage | is this screen captured at all, on both clients? | manifest entry + two PNGs (check A) | per-capture |
+| Look | do the pixels agree? | visual review finding for THIS capture (check F) | per-capture |
+| Geometry | do declared regions share a centre on both? | check H | per-capture |
+| Interaction | are the affordances real, activatable controls? | check I + semantics dump | per-capture |
+| Control names | do both clients expose the same controls in shared chrome? | check K | per-region |
+| Data / API | did both clients request the declared endpoints? | check J + api bags | per-capture |
+| Tokens | do both clients use canon values? | check D | **project-wide** |
+| Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
+| Run validity | can this run's artifacts be trusted at all? | checks G, L | **per-run** |
+
+**A project-wide lens cannot answer a per-screen question, and a screen is never "done"
+on its say-so.** Check D compares token *declarations* across the whole app; checks B/C
+compare the *values of shared keys*. Neither knows which screen you are working on, so
+"chat canvas × tokens" is not a task that exists. The per-run lens is a precondition, not
+a task: if G or L fails, nothing else in that run means anything yet.
+
+The failure this causes has a name — **call-site choice**. Both clients can define every
+key identically and still pick the wrong one in a given place. Measured 2026-08-17: the
+mirror's single-chat menu rendered `chat_archive_action` ("Archive") where the source
+client rendered `chat_archive_one_action` ("Archive chat") — the mirror using the *bulk*
+string for a *single-item* action. Check C passed, correctly: both keys exist on both
+clients with identical values. The vision reviewer had both labels in front of it across
+two runs and reported nothing. It was found by reading the two call sites.
+
+This is the same shape as the icon-only gap (§6): **a lens whose scope does not match the
+question being asked.** When you catch one, ask which lens *should* have owned it, and
+whether that lens can be scoped to the thing that varies.
+
+One more scope hole worth knowing: check C excludes multi-line source entries from the
+drift comparison and says so in its output (`N source entries not single-line, excluded`).
+That count is strings sitting outside the check while it reads as green. Read the number;
+do not let it become invisible.
+
+Why this ordering discipline matters, from a real session:
+
+- Fixing "the composer looks wrong" turned out to need FIVE separate lenses — geometry
+  (a framework tap-target default), interaction (an unnamed control), coverage (no capture
+  reached the typed state), look, and finally data. Attacked as one problem it produced
+  three wrong diagnoses in a row. Attacked one lens at a time, each step was decidable.
+- A single capture's fix routinely INVALIDATES other captures (re-capturing the mirror
+  skews the columns, which fails freshness). Finishing one screen and re-running keeps that
+  visible instead of burying it under the next change.
+
+**Definition of done for one screen×lens:** the specific check passes, you ran it yourself
+and pasted the output, and nothing that previously passed now fails. If a fix requires a
+second lens, that is a second pass — write the finding down and come back to it.
+
+Do NOT batch a rename, a token change and a capture change into one commit because they
+were all discovered in the same run. Commit per intent.
+
+## 4. Dynamic states (menus, popups, actions, API calls)
+
+A capture is one static state, so anything reached by *doing* something — dropdowns,
+context menus, sheets, the result of a tap that fires an API call — is invisible to every
+check in this harness. The mechanism that closes it is `prep`: named steps performed
+between ready and the screenshot, implemented by BOTH harnesses under the same name.
+
+Read **`DYNAMIC-STATES.md`** before adding a step, a dynamic capture, or an API assertion.
+The rule that matters most: a `prep` implemented on one client only makes the two columns
+photograph different screens, which is worse than no capture at all.
+
+## 5. Hard rules
 
 ### Never pixel-diff a parity bar that excludes pixel parity
 Most mirroring efforts explicitly allow layout, spacing, and type-scale to
@@ -237,7 +253,7 @@ This is not hypothetical: it was found only because `capture-columns-skewed` fir
 after an unrelated `flutter test`, 4107 minutes of skew that nothing else would have
 surfaced.
 
-## 4. False positives are more convincing than real findings
+## 6. False positives are more convincing than real findings
 
 A parity board manufactures failures that look exactly like bugs. **Maintain an
 explicit artifact table** in the plan doc and check every finding against it
@@ -279,12 +295,14 @@ checked against reality when it is phrased as a topic rather than an observation
 
 Write them as: *this capture, this element, this direction.* Then add the counter-clause
 explicitly — "a sticker **button** present on one client and not the other, on any screen,
-IS a finding" — because the model will otherwise fill the gap by generalising.
+IS a finding" — because the model will otherwise fill the gap by generalising. The
+reviewer enforces that shape: every `review.artifacts` entry needs `captures`, `element`,
+`direction`, `cause`, `counterClause`, `owner`, `addedOn` and `removeWhen`.
 
 **Audit the suppression list whenever a real gap is found and the reviewer missed it.** That
 is the only signal you get; there is no failing test for a false negative.
 
-### Icon-only affordances are invisible to this review by design
+### Icon-only affordances are invisible to the vision review by design
 
 The prompt puts iconography and layout out of scope — correctly, since a mirroring client is
 allowed to differ there. The consequence is that **swapping one icon-only control for another
@@ -297,31 +315,29 @@ icon-only control for a different one, the mirror kept the old one — was repor
 vision reviewer in a small minority of repeated runs on identical, correctly paired, fully
 legible captures, while a control-name diff found it every time. The prompt was rewritten
 twice in between, ending with the relevant suppression scoped away from that capture *and* an
-explicit clause saying such a difference IS a finding. Detection did not improve.
+explicit clause saying such a difference IS a finding. Detection did not improve. The
+reviewer is comparing two unlabelled glyphs; being told what to report does not help it
+see them. Its one hit described the source glyph as a "paper-plane send" when it is a
+rocket — it was guessing.
 
 That is one observation on one product, and it is here to explain a MECHANISM, not to serve
-as a benchmark: **run your own sensitivity test** (§9) rather than citing a number from
-someone else's project. Keep the run-by-run record in the repo that produced it, where it can
-be re-measured and where its conditions are known.
+as a benchmark: **run your own sensitivity test** (`REFERENCE.md`, "Review backends")
+rather than citing a number from someone else's project.
 
-The reviewer is comparing two unlabelled glyphs; being told what to report does not help it
-see them. Its one hit
-described the source glyph as a "paper-plane send" when it is a rocket — it was guessing.
-
-The check that closes it is a **control-name set diff**: dump the accessibility tree on
-*both* clients and compare the sets of accessible names. Until the source client emits one,
-this class is uncovered — say so when reporting coverage rather than letting a green review
-imply otherwise.
+The check that closes it is **check K, the control-name set diff**: both clients dump their
+accessibility tree and the gate compares the sets of accessible names. It needs a semantics
+dump from **both** clients; until the source client emits one, this class is uncovered — say
+so when reporting coverage rather than letting a green review imply otherwise.
 
 **Scope it geometrically or it will be switched off.** A whole-screen diff drowns: measured
 on the same capture, the source client yielded 91 interactive nodes against the mirror's 17,
 because a full-page capture includes the entire scrollback while the mirror captures a
 viewport. Raw diff = 25 differences, ~3 real. Filtering by role (91 → 19) and by name length
 does not fix it, because the survivors are *content* — the two clients legitimately show
-different messages. Compare within a declared region (the composer strip, a header), the way
-check H does, and require BOTH clients to emit painted, viewport-relative coordinates. A
-dump that reports layout position instead will put pinned chrome outside the viewport and
-the region will match nothing.
+different messages. Check K therefore compares only within declared regions of shared
+chrome, and requires BOTH clients to emit painted, viewport-relative coordinates. A dump
+that reports layout position instead will put pinned chrome outside the viewport and the
+region will match nothing — the check refuses to grade such a dump.
 
 ### A second writer corrupts the board silently, and looks like model variance
 
@@ -351,7 +367,8 @@ Two things follow, and the first matters more:
    directory is not a small risk to manage — it invalidates the results, and you cannot tell
    afterwards which findings were yours.
 2. **Stamp the run and check attribution** — the artifacts must belong to the run that claims
-   to have produced them (check L). This is the backstop for when isolation is skipped.
+   to have produced them (check L, from the pipeline's `.run.json`). This is the backstop for
+   when isolation is skipped.
 
 And when a fix appears to have landed, **verify which branch it is on** before recording it.
 A capture renders the working tree, not the mainline.
@@ -362,32 +379,27 @@ If two manifest entries render **the same screen on one side** — no seeded
 session, a redirect, a shared empty state — then every difference on the *other*
 side reads as a gap, and the reviewer will report each one confidently. This is
 the highest-yield false-positive source found so far: on 2026-08-03 four
-byte-identical web captures produced **22 of 51 findings**.
+byte-identical source captures produced **22 of 51 findings**.
 
-Check it before adjudicating anything:
-
-```bash
-md5 -q parity-out/web/*.png | sort | uniq -c | sort -rn | head
-```
-
-`parity-gate.mjs` now does this automatically (`duplicate-captures:<column>`).
-The fix is to seed the state those routes need, or waive them — **never** accept
-their findings into the baseline, which would bake a fixture defect into the
-ratchet permanently.
+The gate checks this before anything else is graded (`duplicate-captures:<column>`). The
+fix is to seed the state those routes need, or waive them — **never** accept their
+findings into the baseline, which would bake a fixture defect into the ratchet
+permanently.
 
 Note the asymmetry when you see it: duplicates on the *source* column mean one
 screen is being compared against several distinct mirror screens; duplicates on
 the *mirror* column often mean the mirror genuinely fails to distinguish two
 states (e.g. guest vs signed-in home) — that one may be a real finding.
 
-## 5. Coverage is the ceiling
+## 7. Coverage is the ceiling
 
 **A screen absent from the manifest reads as silence, and silence is
 indistinguishable from success.** This is the single most likely way a parity
 board misleads.
 
 Rules:
-- **Never report "N/N green" without stating what is not captured.**
+- **Never report "N/N green" without stating what is not captured** — and which checks
+  the gate skipped. A skipped check is printed as a note, not a failure.
 - Audit the manifest against the source client's full route list before trusting any parity claim.
 - Empty/default states are not coverage of the populated screen. A route captured only in its empty state has not been compared.
 - The screens most likely to be missing are the ones whose dependencies are hardest to fake — which are usually the most important screens (the primary conversation/feed/editor view).
@@ -402,7 +414,7 @@ entities you pointed it at. If every item in a catalog must satisfy a property,
 write a test that **enumerates the catalog** — that is cheaper and stronger than
 N more captures.
 
-## 6. Before judging by eye, verify what is running
+## 8. Before judging by eye, verify what is running
 
 Reports of "the UI is wrong" are frequently stale builds. Hot reload does not
 re-run lazily-initialised top-level state, so newly added fields read as null on
@@ -417,16 +429,16 @@ Related: an edit to a source data file (`.arb`, `.json`, locale module) that
 feeds a **generated** artifact has no runtime effect until regeneration. Verify
 the generated file, not just the source.
 
-## 7. Workflow
+## 9. Workflow
 
 1. **Inventory** the source client's routes; list them against the manifest. Name the uncovered ones explicitly.
 2. **Pilot** 3–4 screens end to end before scaling. Confirm the board surfaces a gap you already know about — if it cannot reproduce a known gap, the format is wrong.
-3. **Scale** by adding manifest entries. Watch for empty renders on newly added screens (see §3).
-4. **Review** each pair against its checklist, filtering through the artifact table (§4).
+3. **Scale** by adding manifest entries. Watch for empty renders on newly added screens (§5).
+4. **Review** each pair against its checklist (§11), filtering through the artifact table (§6).
 5. **Record** gaps in the tracker with the evidence, and artifacts in the plan doc so they are never re-litigated.
 6. **Fix** in a separate pass, with the harness frozen. Re-run and diff the captures to prove closure — not "I wrote the code".
 
-### 7.1 The board measures; it does not close
+### 9.1 The board measures; it does not close
 
 A screenshot pipeline is a **ratchet**: it answers "did the gap grow?" It never answers
 "who is shrinking it?" Projects run it for weeks, keep it green, and find the gap
@@ -444,12 +456,12 @@ capability diff (source, file:line both sides)
 **Capability gaps produce no pixels.** A dropped part, an unhandled variant, a field read
 under the wrong name — each renders as *nothing*, and nothing looks like clean design.
 The board shows a tidy screen and the reviewer reports no finding. Measured 2026-08-08
-in `tutored`: a controller consuming only two of its stream's part types silently
+on one project: a controller consuming only two of its stream's part types silently
 dropped every in-chat card. Weeks of visual review never mentioned it; one source diff
 found it in an hour. **If the mirror is far behind, diff the source. Do not add
 screenshots.**
 
-### 7.2 Read the source of truth — never derive from the mirror
+### 9.2 Read the source of truth — never derive from the mirror
 
 When implementing a mirrored value, read it from the **source client**. Never copy the
 value already sitting in the target: you will propagate its errors and make them look
@@ -465,7 +477,7 @@ This is the same instinct as trusting a reviewer's finding text, and the same in
 that lets one client's bug become the specification. **The mirror is never evidence
 about the source.**
 
-### 7.3 Say how you verified
+### 9.3 Say how you verified
 
 Every completion claim names its evidence in one line. "Analyzer clean, not run on
 device" is a fine thing to say; "fixed" when you mean "compiles" is not.
@@ -476,18 +488,20 @@ for a *current* card. For UI work the definition of done is **seen on the real
 surface**: build, launch, screenshot. Twice in one session a fix was reported from
 analyzer output alone and did not hold up on device.
 
-### 7.4 Reviewer output is a lead list, never a finding list
+### 9.4 Reviewer output is a lead list, never a finding list
 
 Adjudicate every visual finding against source before writing code. On a 13-finding run
 (2026-08-08): 6 confirmed, 4 false, 3 inverted — **more than half wrong**, and one would
 have deleted a correct feature from the mirror. The same model, given the same findings
-as a *source-reading* task, correctly identified its own earlier inversions.
+as a *source-reading* task, correctly identified its own earlier inversions. Inversion is
+not peculiar to one backend: every backend tried has at some point reported a control as
+missing on the mirror when only the mirror had it.
 
 Accepting a finding into the baseline is a decision that needs an owner and a tracker
 entry. Otherwise the baseline becomes where gaps go to be forgotten: the gate goes
 green, and "accepted" quietly reads as "resolved".
 
-### 7.5 Route findings to a queue a human actually works
+### 9.5 Route findings to a queue a human actually works
 
 Adjudication that happens by reading `findings.json` happens rarely, and a decision nobody
 makes is a decision to ship the gap. Findings need a durable queue with both captures
@@ -504,33 +518,28 @@ where the queue lives:
 
 **The arrow back matters more than the queue.** An adjudication you have made twice is a
 deterministic check you have not written yet — that is how the composer misalignment became
-check H and stopped needing a human forever. Every lens in the table above earns unattended
-status one check at a time, by being right repeatedly, never by a decision that the
-harness is now trustworthy.
+check H and stopped needing a human forever. Every lens in §3 earns unattended status one
+check at a time, by being right repeatedly, never by a decision that the harness is now
+trustworthy.
 
-## 8. Enforcement — the part that actually prevents recurrence
+## 10. Enforcement — the part that actually prevents recurrence
 
 A one-off audit, however good, decays from the moment it is taken. The source
 client keeps shipping; the mirror does not. **If the comparison is not a gate, it
 is a snapshot, and you will be re-running this exercise in three months.**
 
-Design the loop so drift *fails something*.
+Design the loop so drift *fails something*. The bundled gate (`REFERENCE.md`) implements
+everything below; this section is why each check exists and how to keep it honest.
 
 ### Tier 1 — cheap, no browser, run on every change
 
 These need no capture infrastructure and catch a large share of drift:
 
-- **Coverage ratchet.** Enumerate the source client's routes and assert every one has a manifest entry (or an explicit, dated waiver). **A new source route with no manifest entry fails the build.** This is the single highest-value gate — it converts the "silence looks like success" failure into a hard error at the moment the gap is created.
-- **Copy drift.** Diff every shared i18n key between source and mirror; fail on divergence. Compare the *generated* artifact, not only the source file.
-- **Catalog invariants.** Enumerate catalogs and assert every entry carries the fields the UI reads (see §5).
-- **Capture validity (check G).** The ratchet is only as honest as its inputs, so the gate refuses to grade a run it cannot trust:
-  - `duplicate-captures` — distinct manifest entries produced byte-identical images in one column (§4).
-  - `visual-review-stale` — `findings.json` predates the newest capture, so the ratchet would grade a review of images that no longer exist.
-  - `capture-columns-skewed` — the two columns are more than an hour apart, i.e. not from one run; each pair compares two different builds. The classic cause is running the mirror-only half and reading the board as a result.
-
-  **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
-
-- **Geometry / alignment invariants (check H).** Named regions on the captured PNGs that should share a vertical centre are measured on **both** clients; the gate fails when the *spread* between those centres differs across clients by more than a tolerance. This is the check for **implicit framework defaults with no counterpart in the source client** — a class of defect no token comparison and no vision reviewer can see.
+- **Coverage ratchet (A).** Enumerate the source client's routes and assert every one has a manifest entry (or an explicit, dated waiver). **A new source route with no manifest entry fails the build.** This is the single highest-value gate — it converts the "silence looks like success" failure into a hard error at the moment the gap is created.
+- **Copy drift (B, C).** Diff every shared i18n key between source and mirror; fail on divergence. Compare the *generated* artifact, not only the source file.
+- **Catalog invariants.** Enumerate catalogs and assert every entry carries the fields the UI reads (§7). Not part of the gate — write it as a test in the repo.
+- **Capture validity (G) and run attribution (L).** The ratchet is only as honest as its inputs, so the gate refuses to grade a run it cannot trust: duplicate captures, a review older than its captures, columns from different runs, artifacts written outside the run's stamped window. **A ratchet over stale inputs is worse than no ratchet: it prints the word PASS.** This was found the hard way — a gate reported *"47 findings, 0 not in baseline"* while grading a two-day-old review, on a day when tokens, theme, chat components and i18n had all changed.
+- **Geometry / alignment invariants (H).** Named regions on the captured PNGs that should share a vertical centre are measured on **both** clients; the gate fails when the *spread* between those centres differs across clients by more than a tolerance. This is the check for **implicit framework defaults with no counterpart in the source client** — a class of defect no token comparison and no vision reviewer can see.
 
   Observed 2026-08-10: Flutter's `IconButton` silently enforces a 48×48 tap target (`MaterialTapTargetSize.padded`) where the web button is content-sized at ~36px. Both rows bottom-align, so the taller sibling set the row height and pushed the composer placeholder ~6.7pt below the icon row — on every screen, for weeks. No token was wrong, no string differed. Five reasoned fixes missed it; the vision reviewer never mentioned it once. Check H failed at 0.652% spread delta pre-fix and passed at 0.060% post-fix.
 
@@ -538,36 +547,7 @@ These need no capture infrastructure and catch a large share of drift:
 
   **Cross-client comparison, not absolute offsets.** Asserting an absolute "correct" offset would make the script the arbiter of good design. Comparing the two keeps the source client the source of truth.
 
-  Omit the whole `geometry` block (or leave `invariants` empty) and the check is a silent no-op — other repos vendor this skill without declaring any. Missing capture PNGs degrade to a *note*, not a failure.
-
-  Configure it with a `geometry` block (regions are **fractions** of image width/height so differing scales and DPRs still compare):
-
-```jsonc
-"geometry": {
-  // SHARED CHROME ONLY — composer / page header / canvas header / list row.
-  // Keep under ~5 entries. Do NOT add per-screen invariants.
-  "inkThreshold": 170,           // optional; default 170 (pixels darker than this count as ink)
-  "toleranceFraction": 0.0015,   // optional; default ≈ 1pt on an 844pt-tall capture
-  "waivers": [],                 // optional: [{ "invariant": "name", "reason": "..." }]
-  "invariants": [
-    {
-      "name": "chat-composer-row",
-      "capture": "chat-conversation",
-      // Regions that must share a vertical centre on BOTH clients.
-      "regions": {
-        "leading-icon":  { "x1": 0.05, "x2": 0.14, "y1": 0.93, "y2": 1.0 },
-        "placeholder":   { "x1": 0.16, "x2": 0.42, "y1": 0.93, "y2": 1.0 },
-        "trailing-icon": { "x1": 0.84, "x2": 0.94, "y1": 0.93, "y2": 1.0 }
-      }
-    }
-    // Add further shared-chrome entries only when you have measured both
-    // columns and the regions are stable — e.g. page-header-row,
-    // canvas-header-row, list-row-leading. Do not invent coordinates.
-  ]
-}
-```
-
-  Standalone (same logic the gate calls): `node <skill>/scripts/parity-geometry.mjs --config parity.config.json`.
+- **Behaviour (I, K) and data (J).** Declared affordances must be activatable controls (I); the controls named in a shared-chrome region must agree across clients (K); both clients must request the endpoints a screen declares (J). These are the only checks that see what a screen *does* and what it is *built from* — a dead icon, a swapped icon-only control and a skipped fetch are all pixel-identical to the correct screen. Declare few of each, for the same reason as H.
 
 ### Design-system conformance (check D) — when there is a canon
 
@@ -582,28 +562,8 @@ reported *the mirror* as wrong. A design system fixes this by being upstream of
 **both** clients, which is why check D is **symmetric — the source client is
 checked too, and fails the same way.**
 
-Configure it with a `design` block:
-
-```jsonc
-"design": {
-  "dir": "path/to/design",          // committed snapshot pulled FROM the design tool
-  "clients": [
-    { "name": "webapp", "tokensFile": "src/app.css",             "format": "css"  },
-    { "name": "mobile", "tokensFile": "lib/core/theme/tokens.dart", "format": "dart" }
-  ]
-}
-```
-
-- `dir/tokens/*.css` is the canon. Treat it as **read-only in the repo** — edit it in
-  the design tool and re-pull, or the next pull silently reverts you.
-- **One snapshot, one path.** A per-client copy drifts and no check would catch it.
-- `format: "css"` compares names **and values**. `format: "dart"` compares **names
-  only** — values are converted (oklch → sRGB, rem → logical px), so value equality
-  is meaningless there and asserting it would produce pure noise.
-- The CSS parser handles wrapped multi-line declarations. It did not always: a
-  line-anchored regex reported a wrapped `--font-sans` as **missing** rather than
-  **drifted** — "never defined it" instead of "defined it differently", the opposite
-  diagnosis, on the one token a human was actively arguing about.
+Keep the canon as one committed, read-only snapshot pulled from the design tool
+(`REFERENCE.md`, check D, has the config and the per-format rules).
 
 **What check D cannot see.** It reads declarations, never pixels. A client can
 define all N canonical tokens perfectly and still apply the wrong one in the wrong
@@ -611,7 +571,7 @@ place. That residue is the visual-conformance axis in §1, and check D is not it
 
 ### Tier 2 — full board, on PR or nightly
 
-- Regenerate captures and fail on any that render empty (content assertions, §3).
+- Regenerate captures and fail on any that render empty (content assertions, §5).
 - Publish the board as a build artifact so review is one click, not a local setup.
 
 ### Definition of done for a mirrored feature
@@ -656,39 +616,10 @@ one command. Every step that requires editing harness code is a step where
 someone skips it. Budget for that ergonomics work explicitly — it is what
 separates a living gate from an abandoned script.
 
-## 9. Bundled tooling (ships with this skill)
-
-The scripts are **companion files of this skill**, not per-project code, so every
-repo gets them via `skf sync` instead of copying a harness around:
-
-| File | Role |
-|---|---|
-| `scripts/parity-gate.mjs` | The gate — coverage ratchet (A), i18n regeneration (B), copy drift (C), design-token conformance (D, symmetric — the source client is checked too), a11y ratchet (E), visual ratchet (F), capture validity (G), geometry / alignment invariants (H). No browser, no simulator, ~1s, exit 1 on failure. |
-| `scripts/parity-geometry.mjs` | Check H implementation — measures named regions on capture PNGs and compares vertical-centre spread across clients. Invoked by the gate; also runnable standalone. |
-| `scripts/parity-review.mjs` | The LLM visual comparison — emits structured findings to `<out>/findings.json`. |
-| `scripts/parity.config.example.json` | Config template. |
-
-Both are dependency-free Node and **config-driven** — nothing about a framework,
-directory layout, or language is hardcoded. Drop a `parity.config.json` at the
-repo root and run:
-
-```bash
-SKILL_DIR=<the directory this SKILL.md was loaded from>
-node "$SKILL_DIR/scripts/parity-gate.mjs"
-node "$SKILL_DIR/scripts/parity-review.mjs"
-```
-
-**Resolve `SKILL_DIR` from where the skill actually landed** — do not hardcode it.
-`skf sync` vendors this skill into whichever profile declared it — a repo, an
-umbrella, or `$HOME` — and the path differs in each case. Writing any one of them
-into a runbook breaks the harness the day the skill moves between profiles.
-
-Route discovery covers file-router frameworks via `{dir, filename}` — SvelteKit
-`+page.svelte`, Next.js `app` + `page.tsx`, and similar — with `"list": [...]`
-as the escape hatch for anything else. The i18n block is optional; omit it and
-those checks skip cleanly.
-
 ### Who owns what — the test, not the list
+
+The gate and reviewer ship with this skill and reach every repo via `skf sync`; see
+`REFERENCE.md` for how to run them without hardcoding where the skill landed.
 
 **The skill owns what stays true when you point the harness at a different product.
 The repo owns everything else.**
@@ -728,39 +659,7 @@ So the tooling validates the *shape* of every declared rule and says loudly when
 declared; judging whether the list is complete stays with the human. The event that should
 trigger that audit is not a date: it is **a human finding a gap the reviewer missed.**
 
-### Review backends are not interchangeable
-
-`parity-review.mjs` supports **local coding-agent CLIs only** — `grok`, `claude`,
-`codex`. The remote `chat/completions` path was removed deliberately: parity
-review should not share the product's API keys, depend on a paid vision API, or
-reuse the app's model defaults for left/right screenshot judgement.
-
-Measured on one real project, 2026-07-31, same captures:
-
-| Backend | At-parity pair | Deliberately gapped capture (6 known gaps) |
-|---|---|---|
-| `gpt-4.1-mini` (retired) | inverted left/right; **different findings on two identical temp-0 runs** | unusable |
-| `gpt-4.1` (retired) | 0 findings (twice) | **4 of 6** |
-| `grok-cli` | 0 findings | **1 of 6** |
-
-**Correction, 2026-08-03 — inversion is not peculiar to the small model.** On a
-fresh 28-pair run, `grok` reported "theme picker on web is missing on mobile" for
-a screen where the web client has **no theme control at all** and the mobile one
-has it, marked in code as a sanctioned native-only delta the prompt explicitly
-excludes. So the earlier "0 findings on an at-parity pair" was luck of the
-sample, not precision. **Every finding must be verified against source before it
-is acted on**, whatever the backend.
-
-Practical consequence: agent CLIs rarely cry wolf, but they will miss real gaps
-*and* occasionally invert. For a load-bearing parity claim run more than one
-backend and take the **union** — never reintroduce a remote API backend to buy
-recall.
-
-**Validate whichever you pick the same way**: run it against a pair you know is at
-parity (expect silence) and against a known-gapped capture (expect the gaps). A
-reviewer that has not been sensitivity-tested is an unknown, not a gate.
-
-## 10. Review checklist per pair
+## 11. Review checklist per pair
 
 - [ ] Same **jobs** available on both
 - [ ] Same **primary actions** and confirmations
@@ -771,7 +670,7 @@ reviewer that has not been sensitivity-tested is an unknown, not a gate.
 - [ ] Differences checked against the artifact table before logging
 - [ ] Layout/spacing divergence **ignored** unless the bar says otherwise
 
-## 11. Delegating this work
+## 12. Delegating this work
 
 Split by what the sandbox can run: headless component/golden capture is usually
 sandbox-safe; browser automation frequently is not. Have the delegate author the

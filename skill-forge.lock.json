@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.4.0",
-    "commit": "bb7acf3087f157be60b0a33f322c14c52bd701ad",
-    "lockIntegrity": "sha256-8BIFU3ovC3oey8K6g4Vb6ZsqSRwjt48Cpa/hNHfGPqM="
+    "commit": "122a742bc2a17253ddce6aeba309425a653acf8a",
+    "lockIntegrity": "sha256-va6NludqcfqaBPhW1U2EQbYmxP2X2q68GHUQEnRvH8Y="
   },
   "skills": {
     "api-contracts": {

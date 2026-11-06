@@ -78,7 +78,12 @@ const execFileAsync = promisify(execFile);
 // were both invisible that way, and every pair simply errored.
 async function runBackend(cmd, args, opts) {
   try {
-    return await execFileAsync(cmd, args, { maxBuffer: 64 * 1024 * 1024, timeout: 300_000, ...opts });
+    const run = execFileAsync(cmd, args, { maxBuffer: 64 * 1024 * 1024, timeout: 300_000, ...opts });
+    // Close stdin: execFile hands the child an open pipe, and codex reads a piped stdin to
+    // EOF before it starts ("Reading additional input from stdin…"), so it hung until the
+    // timeout on every pair.
+    run.child.stdin?.end();
+    return await run;
   } catch (err) {
     const why =
       String(err.stderr ?? '')
@@ -374,15 +379,17 @@ async function reviewViaCodex(sourcePath, mirrorPath, userText) {
     // --skip-git-repo-check: the config root is often an umbrella folder that is not a git
     // repo, and codex refuses to run there without it. Safe here: the run is read-only and
     // reads only the two attached images.
+    // The prompt goes BEFORE the images: `-i` takes several values, so a prompt after them
+    // is read as a third image path and codex falls back to reading the prompt from stdin.
     const args = [
       'exec',
       '--skip-git-repo-check',
       '--sandbox', 'read-only',
       '--output-schema', schemaPath,
       '-o', outPath,
+      prompt,
       '-i', sourcePath,
       '-i', mirrorPath,
-      prompt,
     ];
     await runBackend('codex', args, { cwd: ROOT });
     if (!existsSync(outPath)) throw new Error('codex wrote no last-message file');

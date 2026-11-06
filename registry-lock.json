@@ -295,11 +295,11 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-j1xUCTpOS5VaWjsm/6qzzkXGmTLsHJ53Z70bBdbtXTE=",
+      "integrity": "sha256-XyPT1AcOo6tOPYyf8WPNNZdx+dqBIJsdonwpIKY4Txo=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-5F7BVO2i0d4MZk9z2k0nfdZB8TLsqYbW25hMdHZxIL8=",
         "RECIPES.md": "sha256-rVRTeXh0E8cPmFVOmbHcPAiWPAsd0u4yjMygCjd+Vag=",
@@ -312,7 +312,7 @@
         "scripts/parity-geometry.mjs": "sha256-BOQfHW7/5mvOoILYKccskDpD2E8YyEhw6JbnrPP3Kas=",
         "scripts/parity-interactive.mjs": "sha256-gCY6DUmAJorMiD4b1Jb1kKzkRiWTXD6l8l61/S7B6cU=",
         "scripts/parity-names.mjs": "sha256-DyNT0VzIprP0RFvj2E3fpauBtvVWiC3Ho5KTfwuO1zA=",
-        "scripts/parity-review.mjs": "sha256-ZBLOxqisukMcUuoGH8vtNKm9pALRtvYxoA0qauDcFak=",
+        "scripts/parity-review.mjs": "sha256-BK4q1uf+BcTuaRan9nUQV/5xToLeiqnIiSqghI/TJ9o=",
         "scripts/parity-session.mjs": "sha256-xr00LC5jGM0sNnZxccyflVJ5QIv4hXYbgmuKZV5I0Gc=",
         "scripts/parity-strings.mjs": "sha256-Mipw1gQG64QwtSGTG4IjLrbT1NTy+bjk+jbyaYgUp90=",
         "scripts/parity.config.example.json": "sha256-E/zJUGRKi9MN2LoKMN9QHmj/UJltK/9up9yvv66KKXs=",

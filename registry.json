@@ -320,7 +320,7 @@
     {
       "type": "skill",
       "name": "product-parity",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,

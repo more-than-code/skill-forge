@@ -534,17 +534,42 @@ async function review(dir, bin, backend) {
   return JSON.parse(await fs.readFile(path.join(dir, 'parity-out', 'findings.json'), 'utf8'));
 }
 
-test('codex backend runs from a config root that is not a git repository', async () => {
-  // Like codex 0.166: refuses outside a git repo unless --skip-git-repo-check is passed.
-  const { dir, bin } = await reviewFixture({
-    codex: [
-      'case " $* " in *" --skip-git-repo-check "*) ;; *)',
-      '  echo "Not inside a trusted directory and --skip-git-repo-check was not specified." >&2; exit 1;;',
-      'esac',
-      'while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done',
-      `echo '{"findings":[]}' > "$out"`,
-    ].join('\n'),
-  });
+// A fake codex 0.167 that behaves like the real one where it matters:
+// - refuses a non-git cwd without --skip-git-repo-check;
+// - `-i` takes several values, so a positional after the images is read as an image, and
+//   with no prompt left codex reads the prompt from stdin;
+// - whenever stdin is a pipe it reads it to EOF before starting ("Reading additional input").
+// A stdin left open is reported after 2 s instead of hanging for the 300 s timeout.
+const FAKE_CODEX = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (!args.includes('--skip-git-repo-check')) {
+  console.error('Not inside a trusted directory and --skip-git-repo-check was not specified.');
+  process.exit(1);
+}
+const takesValue = new Set(['--sandbox', '--output-schema', '-o']);
+let prompt = null, out = null, inImages = false;
+for (let i = 1; i < args.length; i++) {
+  const a = args[i];
+  if (a === '-i') { inImages = true; continue; }
+  if (a.startsWith('-')) { inImages = false; if (takesValue.has(a)) { if (a === '-o') out = args[i + 1]; i++; } continue; }
+  if (inImages) continue;
+  prompt = a;
+}
+const timer = setTimeout(() => {
+  console.error(prompt ? 'Reading additional input from stdin...' : 'Reading prompt from stdin...');
+  process.exit(1);
+}, 2000);
+process.stdin.resume();
+process.stdin.on('end', () => {
+  clearTimeout(timer);
+  if (!prompt) { console.error('no prompt'); process.exit(1); }
+  require('fs').writeFileSync(out, JSON.stringify({ findings: [] }));
+});
+`;
+
+test('codex backend: prompt is not swallowed by -i, stdin is closed, non-git root works', async () => {
+  const { dir, bin } = await reviewFixture({});
+  await fs.writeFile(path.join(bin, 'codex'), FAKE_CODEX, { mode: 0o755 });
   const result = (await review(dir, bin, 'codex')).results[0];
   assert.equal(result.error, undefined, result.error);
 });

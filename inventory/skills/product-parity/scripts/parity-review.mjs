@@ -72,6 +72,23 @@ const env = { ...(CFG.review?.envFile ? loadEnvFile(path.resolve(ROOT, CFG.revie
 const BACKEND = (env.PARITY_REVIEW_BACKEND || 'grok').toLowerCase();
 const execFileAsync = promisify(execFile);
 
+// Runs a backend CLI. On failure, the error names the CLI, its exit code and the first
+// non-empty stderr line. The default "Command failed: <argv>" puts the whole prompt in the
+// 200-character error and cuts off the cause: "Not signed in" and codex's git-repo refusal
+// were both invisible that way, and every pair simply errored.
+async function runBackend(cmd, args, opts) {
+  try {
+    return await execFileAsync(cmd, args, { maxBuffer: 64 * 1024 * 1024, timeout: 300_000, ...opts });
+  } catch (err) {
+    const why =
+      String(err.stderr ?? '')
+        .split('\n')
+        .map((l) => l.trim())
+        .find(Boolean) ?? (err.killed ? 'timed out' : err.code === 'ENOENT' ? 'not installed or not on PATH' : 'no stderr');
+    throw new Error(`${cmd} exited ${err.code ?? err.signal ?? '?'}: ${why}`);
+  }
+}
+
 const argv = process.argv.slice(2);
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
 // Agent CLIs are heavier than a single HTTP call — default concurrency 1.
@@ -322,10 +339,7 @@ async function reviewViaGrok(sourcePath, mirrorPath, userText) {
     '--output-format', 'json',
     '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
   ];
-  const { stdout } = await execFileAsync('grok', args, {
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 300_000,
-  });
+  const { stdout } = await runBackend('grok', args);
   const envelope = JSON.parse(stdout);
   const out = extractFindingsPayload(envelope);
   if (!out) throw new Error('grok returned no findings payload');
@@ -342,11 +356,7 @@ async function reviewViaClaude(sourcePath, mirrorPath, userText) {
     '--permission-mode', 'auto',
     '--allowedTools', 'Read',
   ];
-  const { stdout } = await execFileAsync('claude', args, {
-    cwd: ROOT,
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 300_000,
-  });
+  const { stdout } = await runBackend('claude', args, { cwd: ROOT });
   const envelope = JSON.parse(stdout);
   const out = extractFindingsPayload(envelope);
   if (!out) throw new Error('claude returned no findings payload');
@@ -361,8 +371,12 @@ async function reviewViaCodex(sourcePath, mirrorPath, userText) {
   writeFileSync(schemaPath, JSON.stringify(FINDINGS_SCHEMA));
   try {
     // -i attaches images; --sandbox read-only; schema constrains final message.
+    // --skip-git-repo-check: the config root is often an umbrella folder that is not a git
+    // repo, and codex refuses to run there without it. Safe here: the run is read-only and
+    // reads only the two attached images.
     const args = [
       'exec',
+      '--skip-git-repo-check',
       '--sandbox', 'read-only',
       '--output-schema', schemaPath,
       '-o', outPath,
@@ -370,11 +384,7 @@ async function reviewViaCodex(sourcePath, mirrorPath, userText) {
       '-i', mirrorPath,
       prompt,
     ];
-    await execFileAsync('codex', args, {
-      cwd: ROOT,
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: 300_000,
-    });
+    await runBackend('codex', args, { cwd: ROOT });
     if (!existsSync(outPath)) throw new Error('codex wrote no last-message file');
     const raw = readFileSync(outPath, 'utf8');
     const out = extractFindingsPayload(raw);

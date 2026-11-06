@@ -369,6 +369,11 @@ are counted in a note, not failed. A pair whose source folder does not exist fai
 was removed deliberately: parity review should not share the product's API keys, depend on
 a paid vision API, or reuse the app's model defaults for left/right screenshot judgement.
 
+Each backend runs read-only in the config root, which may be an umbrella folder that is not
+a git repository (`codex` is passed `--skip-git-repo-check` for that reason). The CLI must be
+installed and signed in. When one fails, the pair's `error` reads
+`<cli> exited <code>: <first stderr line>`, for example `grok exited 1: Error: Not signed in`.
+
 Backends differ in recall and every one of them has **inverted** left and right at least
 once — reported a control as missing on the mirror when only the mirror had it. So:
 

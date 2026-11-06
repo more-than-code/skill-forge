@@ -512,3 +512,46 @@ test('api bags: only the documented marker may stand in for a body, and never on
   assert.deepEqual(read.items, ['home: GET /api/app-build (status 200)']);
   assert.ok(result.notes.some((n) => n.startsWith('api bags: 3 marker(s) across 1 capture(s)')), result.notes.join('\n'));
 });
+
+// --- 0.12.1: reviewer backends outside a git repo, and the reason a backend failed ----------
+const REVIEW = path.join(SCRIPTS, 'parity-review.mjs');
+
+// A config root that is NOT a git repo, one capture pair, and a bin dir of fake agent CLIs.
+async function reviewFixture(fakes) {
+  const dir = await fixture({ manifest: 'manifest.json' }, { 'web/home.png': 'a', 'mobile/home.png': 'b' });
+  await fs.writeFile(path.join(dir, 'manifest.json'), JSON.stringify({ captures: [{ id: 'home' }] }));
+  const bin = path.join(dir, 'bin');
+  await fs.mkdir(bin);
+  for (const [name, body] of Object.entries(fakes)) {
+    await fs.writeFile(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  }
+  return { dir, bin };
+}
+
+async function review(dir, bin, backend) {
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, PARITY_REVIEW_BACKEND: backend };
+  await run(process.execPath, [REVIEW], { cwd: dir, env }).catch(() => {});
+  return JSON.parse(await fs.readFile(path.join(dir, 'parity-out', 'findings.json'), 'utf8'));
+}
+
+test('codex backend runs from a config root that is not a git repository', async () => {
+  // Like codex 0.166: refuses outside a git repo unless --skip-git-repo-check is passed.
+  const { dir, bin } = await reviewFixture({
+    codex: [
+      'case " $* " in *" --skip-git-repo-check "*) ;; *)',
+      '  echo "Not inside a trusted directory and --skip-git-repo-check was not specified." >&2; exit 1;;',
+      'esac',
+      'while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done',
+      `echo '{"findings":[]}' > "$out"`,
+    ].join('\n'),
+  });
+  const result = (await review(dir, bin, 'codex')).results[0];
+  assert.equal(result.error, undefined, result.error);
+});
+
+test('a failing backend reports its own first stderr line, not just the argv', async () => {
+  const { dir, bin } = await reviewFixture({ grok: 'echo "" >&2; echo "Error: Not signed in. Run grok login." >&2; exit 1' });
+  const result = (await review(dir, bin, 'grok')).results[0];
+  assert.match(result.error, /grok exited 1: Error: Not signed in/);
+  assert.doesNotMatch(result.error, /Command failed/);
+});

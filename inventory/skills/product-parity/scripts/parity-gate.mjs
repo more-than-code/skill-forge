@@ -46,6 +46,12 @@
 //   N  asset parity     — every image in a declared source asset folder has a mirror
 //                         counterpart. The only check that sees images: a logo and the same
 //                         word as text satisfy every text check.
+//   O  inventory        — every API call (or streamed tool handler, or any declared set)
+//                         in the source client's CODE has a mirror counterpart. The only check
+//                         that needs no capture: it sees features nobody thought to capture.
+//                         FAILS unconfigured unless `inventory.optOut` gives a reason.
+//   P  required states  — each declared interaction state (an empty search, a panel a tool
+//                         result opens) has a capture. A populated-only route hides them.
 //
 // Columns: `source.column` / `source.name` and `mirror.column` / `mirror.name` in the config
 // (see parity-columns.mjs). Defaults: web / webapp and mobile / Flutter mobile app.
@@ -61,6 +67,7 @@ import { runSession } from './parity-session.mjs';
 import { runApi } from './parity-api.mjs';
 import { runFreshness } from './parity-freshness.mjs';
 import { runAssets } from './parity-assets.mjs';
+import { runInventory } from './parity-inventory.mjs';
 import { columns } from './parity-columns.mjs';
 import { readTable, readLocaleMap } from './parity-strings.mjs';
 
@@ -901,6 +908,59 @@ function checkFreshness() {
   for (const f of fFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
 }
 
+function checkInventory() {
+  const { notes: iNotes, failures: iFailures } = runInventory(cfg, ROOT);
+  for (const n of iNotes) notes.push(n);
+  for (const f of iFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
+// P. A state behind a user action — an empty search with its fallback, a panel a streamed tool
+// result opens — appears in no capture unless someone produces it with a `prep` step. Observed
+// 2026-11-07: two whole features lived only in such states and the gate passed both. The
+// route had captures, so coverage (A) was satisfied; the states had none.
+function checkStates() {
+  const required = cfg.states?.required;
+  if (required === undefined) return;
+  if (!Array.isArray(required)) {
+    failures.push({ check: 'state-coverage', message: 'states.required must be a list of { route, state, reason }.' });
+    return;
+  }
+  if (!required.length) return;
+  const manifestPath = abs(cfg.manifest ?? 'scripts/parity/parity-manifest.json');
+  const listed = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')).captures : [];
+  const captures = Array.isArray(listed) ? listed : [];
+  const missing = [];
+  const unprepped = [];
+  for (const r of required) {
+    if (!r?.route || !r?.state || typeof r.reason !== 'string' || !r.reason.trim()) {
+      missing.push(`${r?.route ?? '?'} — ${r?.state ?? '?'}: needs route, state and a reason`);
+      continue;
+    }
+    const matches = templateMatcher(r.route);
+    const found = captures.filter(
+      (c) => c?.state === r.state && matches(String(c.source?.route ?? c[COLS.source.id]?.route ?? '').replace(/(.)\/$/, '$1')),
+    );
+    if (!found.length) missing.push(`${r.route} — ${r.state}`);
+    else if (!found.some((c) => Array.isArray(c.prep) && c.prep.length)) unprepped.push(`${r.route} — ${r.state}`);
+  }
+  notes.push(`states: ${required.length - missing.length}/${required.length} required interaction state(s) captured`);
+  if (unprepped.length) {
+    notes.push(
+      `states: ${unprepped.join(', ')} — labelled, but no capture has a prep step. Unless fixture data produces ` +
+        `the state, the capture shows the default screen under the state's name.`,
+    );
+  }
+  if (missing.length) {
+    failures.push({
+      check: 'state-coverage',
+      message:
+        `${missing.length} required interaction state(s) have no capture, so no check has ever seen them. ` +
+        `Add a manifest entry with that "state" and a prep step that produces it (DYNAMIC-STATES.md).`,
+      items: missing,
+    });
+  }
+}
+
 function checkAssets() {
   const { notes: aNotes, failures: aFailures } = runAssets(cfg, ROOT);
   for (const n of aNotes) notes.push(n);
@@ -926,6 +986,8 @@ checkNames();
 checkApi();
 checkFreshness();
 checkAssets();
+checkInventory();
+checkStates();
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ok: failures.length === 0, config: configPath, notes, failures }, null, 2));

@@ -95,6 +95,8 @@ not a pass.
 | L run attribution | was every artifact written by the run that claims it? | `.run.json` | per run |
 | M freshness | are the captures newer than the last source commit to the UI they show? | **always**: `freshness.paths`, or `freshness.optOut` with a reason; manifest `sourceFiles` | per run / per capture |
 | N asset parity | does every image in a source asset folder have a mirror counterpart? | **always**: `assets.pairs`, or `assets.optOut` with a reason | project |
+| O inventory | does every API call (or tool handler, or other declared set) in the source's code exist in the mirror's? | **always**: `inventory.sets`, or `inventory.optOut` with a reason | project |
+| P required states | does each declared interaction state have a capture? | `states.required` | per route |
 
 ### A — coverage ratchet
 
@@ -362,6 +364,67 @@ are counted in a note, not failed. A pair whose source folder does not exist fai
 `assets-unresolved:<name>`. Unconfigured, it fails `assets-not-configured` unless
 `assets.optOut` gives a reason.
 
+### O — inventory parity
+
+```jsonc
+"inventory": {
+  "sets": [
+    { "name": "endpoints", "normalize": "endpoint",
+      "source": { "dirs": ["web/src"], "extensions": [".ts", ".svelte"],
+                  "patterns": ["fetch\\(\\s*[`'\"](?<path>/api/[^`'\"]+)[`'\"](?:\\s*,\\s*\\{(?:[^{}]|\\{[^{}]*\\})*?method:\\s*['\"](?<method>[A-Za-z]+)['\"])?"] },
+      "mirror": { "dirs": ["mobile/lib"], "extensions": [".dart"],
+                  "patterns": ["_dio\\.(?<method>get|post|put|patch|delete)(?:<[^>]*>)?\\(\\s*['\"](?<path>/api/[^'\"]+)['\"]"] },
+      "waivers": [ { "item": "POST /api/billing/portal", "reason": "web-only checkout", "owner": "…",
+                     "addedOn": "YYYY-MM-DD", "removeWhen": "mobile ships in-app purchase" } ] },
+    { "name": "stream-tools",
+      "source": { "dirs": ["web/src"], "extensions": [".svelte"], "patterns": ["case\\s+'tool-(?<item>[a-z_]+)'"] },
+      "mirror": { "dirs": ["mobile/lib"], "extensions": [".dart"], "patterns": ["'(?<item>[a-z_]+)'\\s*=>"] } }
+  ]
+}
+```
+
+A static scan of both clients' code, with no capture involved — so it sees features that
+no capture shows. Each pattern is a JavaScript regex; named groups `method` + `path` make an
+item `"METHOD /path"`, `item` makes the item itself. `normalize: "endpoint"` folds path
+parameters (`${x}`, `$x`, `{x}`, a whole-segment `:x`, digit segments, and the trailing `/`
+that `'/api/x/' + id` leaves → `:param`) and drops the query, including one built by
+interpolation (`/search${qs}`), so `/api/courses/${course.id}` and `/api/courses/$courseId`
+are the same endpoint. Waiver items are normalised the same way.
+
+- **Every pattern must match at least once**, on either side: a dead pattern silently
+  shrinks the set it feeds, so it fails `inventory-unresolved:<set>`.
+- **A call whose pattern found no method counts as GET**, and the note says how many did —
+  a POST hidden behind a pattern that missed its method would otherwise pass as a GET.
+- **Whole-line comments are skipped**; nothing else is. Use `exclude` (regexes on the path
+  relative to the config root, e.g. `"\\.test\\.ts$"`) for tests, mocks and generated code.
+  `node_modules`, `.git`, `.dart_tool`, `.svelte-kit` and `.next` are skipped unless
+  `skipDirs` replaces the list. Symlinks are not followed.
+- The note lists files scanned per side, mirror-only items, and waivers no longer needed.
+
+A source item with no mirror counterpart fails `inventory:<set>` unless waived with
+`item`, `reason`, `owner`, `addedOn` and `removeWhen`; mirror-only items are listed in a
+note. A missing folder, a bad pattern, or source patterns that match nothing fail
+`inventory-unresolved:<set>` — a set that compares nothing would pass any mirror.
+Unconfigured, it fails `inventory-not-configured` unless `inventory.optOut` gives a reason.
+A scan is text, not a parse: write the patterns for your API layer, and check the note's
+counts against what you expect.
+
+### P — required interaction states
+
+```jsonc
+"states": { "required": [
+  { "route": "/dictionary", "state": "empty-search", "reason": "\"Ask AI\" fallback shows only on no match" }
+] }
+// manifest: { "id": "dictionary-empty", "web": { "route": "/dictionary" }, "state": "empty-search",
+//             "prep": ["type-text:zzzz"], … }
+```
+
+Each entry needs a manifest capture whose source route matches and whose `state` equals it,
+or the gate fails `state-coverage`. A matching capture with no `prep` step is noted: unless
+fixture data produces the state, it shows the default screen under the state's name. Coverage (A) is satisfied by any capture of the route;
+this is the check that a state behind a user action was captured too. Produce it with a
+`prep` step (`DYNAMIC-STATES.md`).
+
 ## Review backends
 
 `parity-review.mjs` supports **local coding-agent CLIs only** — `grok`, `claude`, `codex`
@@ -378,6 +441,9 @@ Backends differ in recall and every one of them has **inverted** left and right 
 once — reported a control as missing on the mirror when only the mirror had it. So:
 
 - Verify every finding against source before acting on it, whatever the backend.
+- **Zero findings is not proof either.** Spot-check the two screenshots behind every clean
+  result. Observed 2026-11-07: a re-review called a pair clean that had an invisible
+  selected chip and a profile screen of nothing but "—" placeholders.
 - For a load-bearing parity claim, run more than one backend and take the **union**.
 - **Sensitivity-test whichever you pick**: run it on a pair you know is at parity (expect
   silence) and on a capture with known, deliberate gaps (expect the gaps). A reviewer that

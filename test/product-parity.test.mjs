@@ -580,3 +580,189 @@ test('a failing backend reports its own first stderr line, not just the argv', a
   assert.match(result.error, /grok exited 1: Error: Not signed in/);
   assert.doesNotMatch(result.error, /Command failed/);
 });
+
+// --- 0.13.0: inventory parity (O) and required interaction states (P) ----------------------
+const ENDPOINT_SET = {
+  name: 'endpoints',
+  normalize: 'endpoint',
+  source: {
+    dirs: ['web/src'],
+    extensions: ['.ts'],
+    patterns: ["fetch\\(\\s*[`'\"](?<path>/api/[^`'\"]+)[`'\"](?:\\s*,\\s*\\{(?:[^{}]|\\{[^{}]*\\})*?method:\\s*['\"](?<method>[A-Za-z]+)['\"])?"],
+  },
+  mirror: {
+    dirs: ['mobile/lib'],
+    extensions: ['.dart'],
+    patterns: ["_dio\\.(?<method>get|post|put|patch|delete)(?:<[^>]*>)?\\(\\s*['\"](?<path>/api/[^'\"]+)['\"]"],
+  },
+};
+const ENDPOINT_FILES = {
+  'web/src/api.ts': [
+    "fetch('/api/dictionary', { method: 'POST', body })",
+    'fetch(`/api/dictionary/lookup?prefer_ai=1&q=${q}`)',
+    'fetch(`/api/courses/${course.id}`)',
+    'fetch(`/api/courses/12/enrollments`)',
+  ].join('\n'),
+  'mobile/lib/api.dart': [
+    "_dio.get('/api/courses/$courseId')",
+    "_dio.get('/api/courses/${c.id}/enrollments')",
+    "_dio.get('/api/me')",
+  ].join('\n'),
+};
+
+async function inventoryGate(inventory, files, extra = {}) {
+  const dir = await fixture({ manifest: 'manifest.json', inventory, ...extra });
+  await writeRepoFiles(dir, files);
+  return gate(dir);
+}
+
+test('inventory: a source endpoint the mirror never calls fails, unless waived', async () => {
+  const failing = await inventoryGate({ sets: [ENDPOINT_SET] }, ENDPOINT_FILES);
+  const f = failing.failures.find((x) => x.check === 'inventory:endpoints');
+  assert.ok(f, JSON.stringify(failing.failures));
+  // ${course.id}, $courseId, ${c.id} and 12 all normalise to :param; the query is dropped.
+  assert.deepEqual(f.items, ['GET /api/dictionary/lookup', 'POST /api/dictionary']);
+  assert.ok(failing.notes.some((n) => n.includes('1 mirror-only') && n.includes('GET /api/me')), failing.notes.join('\n'));
+
+  const waiver = { item: 'POST /api/dictionary', reason: 'r', owner: 'o', addedOn: '2026-11-07', removeWhen: 'D2a ships' };
+  const waived = await inventoryGate({ sets: [{ ...ENDPOINT_SET, waivers: [waiver] }] }, ENDPOINT_FILES);
+  assert.deepEqual(waived.failures.find((x) => x.check === 'inventory:endpoints').items, ['GET /api/dictionary/lookup']);
+});
+
+test('inventory: a streamed tool the mirror has no handler for fails', async () => {
+  const tools = {
+    name: 'stream-tools',
+    source: { dirs: ['web/src'], extensions: ['.svelte'], patterns: ["case\\s+'tool-(?<item>[a-z_]+)'"] },
+    mirror: { dirs: ['mobile/lib'], extensions: ['.dart'], patterns: ["'(?<item>[a-z_]+)'\\s*=>"] },
+  };
+  const result = await inventoryGate({ sets: [tools] }, {
+    'web/src/Chat.svelte': "switch (part.type) {\n  case 'tool-lookup_dictionary':\n  case 'tool-search':\n}",
+    'mobile/lib/tools.dart': "final card = switch (name) {\n  'search' => SearchCard(),\n  _ => GenericToolCard(name),\n};",
+  });
+  const f = result.failures.find((x) => x.check === 'inventory:stream-tools');
+  assert.ok(f, JSON.stringify(result.failures));
+  assert.deepEqual(f.items, ['lookup_dictionary']);
+});
+
+test('inventory: unconfigured fails unless opted out; a set that matches nothing fails', async () => {
+  const unset = await gate(await fixture({ manifest: 'manifest.json' }));
+  assert.ok(unset.failures.some((x) => x.check === 'inventory-not-configured'), JSON.stringify(unset.failures));
+  const out = await gate(await fixture({ manifest: 'manifest.json', inventory: { optOut: 'single client' } }));
+  assert.ok(!out.failures.some((x) => x.check.startsWith('inventory')), JSON.stringify(out.failures));
+  assert.ok(out.notes.some((n) => n.startsWith('inventory: opted out — single client')), out.notes.join('\n'));
+
+  const typo = await inventoryGate({ sets: [{ ...ENDPOINT_SET, source: { ...ENDPOINT_SET.source, dirs: ['web/srcc'] } }] }, ENDPOINT_FILES);
+  assert.ok(typo.failures.some((x) => x.check === 'inventory-unresolved:endpoints'), JSON.stringify(typo.failures));
+  const noMatch = await inventoryGate({ sets: [ENDPOINT_SET] }, { 'web/src/api.ts': 'nothing here', 'mobile/lib/api.dart': '' });
+  assert.ok(noMatch.failures.some((x) => x.check === 'inventory-unresolved:endpoints'), JSON.stringify(noMatch.failures));
+});
+
+test('states: a required interaction state with no capture fails', async () => {
+  const required = [{ route: '/dictionary', state: 'empty-search', reason: '"Ask AI" fallback only shows on no match' }];
+  const setup = async (captures) => {
+    const dir = await fixture({ manifest: 'manifest.json', states: { required } });
+    await writeRepoFiles(dir, { 'manifest.json': { captures } });
+    return gate(dir);
+  };
+  const populatedOnly = await setup([{ id: 'dict-list', web: { route: '/dictionary' }, state: 'populated' }]);
+  const f = populatedOnly.failures.find((x) => x.check === 'state-coverage');
+  assert.ok(f, JSON.stringify(populatedOnly.failures));
+  assert.deepEqual(f.items, ['/dictionary — empty-search']);
+
+  const covered = await setup([
+    { id: 'dict-list', web: { route: '/dictionary' }, state: 'populated' },
+    { id: 'dict-empty', web: { route: '/dictionary' }, state: 'empty-search', prep: ['type-text:zzzz'] },
+  ]);
+  assert.equal(covered.failures.find((x) => x.check === 'state-coverage'), undefined, JSON.stringify(covered.failures));
+});
+
+// --- 0.13.0 review round: normalisation, scan robustness, waivers, state edge cases ---------
+const { normalizeEndpoint, runInventory } = await import(path.join(SCRIPTS, 'parity-inventory.mjs'));
+
+test('normalizeEndpoint: one endpoint, one spelling — and different endpoints stay apart', () => {
+  const same = [
+    ['GET', '/api/courses/${course.id}'],
+    ['get', '/api/courses/$courseId'],
+    ['GET', '/api/courses/{id}'],
+    ['GET', '/api/courses/:id'],
+    ['GET', '/api/courses/12'],
+    ['GET', '/api/courses/'], // '/api/courses/' + id
+  ];
+  for (const [m, p] of same) assert.equal(normalizeEndpoint(m, p), 'GET /api/courses/:param', p);
+  assert.equal(normalizeEndpoint('GET', '/api/search?q=${q}'), 'GET /api/search');
+  assert.equal(normalizeEndpoint('GET', '/api/search${qs}'), 'GET /api/search');
+  assert.equal(normalizeEndpoint('GET', "/api/items${id ? "), 'GET /api/items');
+  assert.equal(normalizeEndpoint('GET', '/api/files/${a}-${b}'), 'GET /api/files/:param-:param');
+  assert.equal(normalizeEndpoint('GET', '/api/x/$id.json'), 'GET /api/x/:param.json');
+  assert.notEqual(normalizeEndpoint('POST', '/api/v1/users:batchGet'), normalizeEndpoint('POST', '/api/v1/users:batchCreate'));
+  assert.notEqual(normalizeEndpoint('GET', '/api/courses'), normalizeEndpoint('GET', '/api/courses/'));
+});
+
+async function scanRepo(files) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'parity-inv-'));
+  tempDirs.push(dir);
+  await writeRepoFiles(dir, files);
+  return dir;
+}
+const set = (over = {}) => ({
+  name: 's',
+  source: { dirs: ['src'], extensions: ['.ts'], patterns: ["api\\('(?<item>[a-z]+)'"] },
+  mirror: { dirs: ['lib'], extensions: ['.dart'], patterns: ["api\\('(?<item>[a-z]+)'"] },
+  ...over,
+});
+
+test('inventory scan: symlinks are not followed, comments do not count, one broken set does not stop the rest', async () => {
+  const root = await scanRepo({ 'src/a.ts': "api('one'); api('two')", 'lib/a.dart': "api('one')\n// api('two')" });
+  await fs.symlink(path.join(root, 'nowhere'), path.join(root, 'src', 'dangling'));
+  await fs.symlink(root, path.join(root, 'lib', 'loop'));
+  const { failures, notes } = runInventory({ inventory: { sets: [set(), set({ name: 'broken', normalize: 'endpoints' })] } }, root);
+  assert.deepEqual(failures.find((f) => f.id === 'inventory:s')?.items, ['two']);
+  assert.ok(failures.some((f) => f.id === 'inventory-unresolved:broken'), JSON.stringify(failures));
+  assert.ok(notes.some((n) => n.includes('in 1 file(s)')), notes.join('\n'));
+});
+
+test('inventory scan: a dead pattern, a bad regex and bad shapes are unresolved, not a crash', async () => {
+  const root = await scanRepo({ 'src/a.ts': "api('one')", 'lib/a.dart': "api('one')" });
+  const dead = set({ source: { ...set().source, patterns: [...set().source.patterns, "axios\\('(?<item>x)'"] } });
+  const cases = [dead, set({ source: { ...set().source, patterns: ['('] } }), set({ source: { ...set().source, dirs: 'src' } })];
+  for (const c of cases) {
+    const { failures } = runInventory({ inventory: { sets: [c] } }, root);
+    assert.ok(failures.some((f) => f.id === 'inventory-unresolved:s'), JSON.stringify(failures));
+  }
+  assert.ok(runInventory({ inventory: { sets: {} } }, root).failures.some((f) => f.id === 'inventory-not-configured'));
+});
+
+test('inventory waivers: incomplete ones waive nothing, stale ones are listed, endpoint waivers normalise', async () => {
+  const root = await scanRepo({ 'src/a.ts': "get('/api/x/${id}')", 'lib/a.dart': "get('/api/y')" });
+  const ep = {
+    name: 'e',
+    normalize: 'endpoint',
+    source: { dirs: ['src'], extensions: ['.ts'], patterns: ["(?<method>get)\\('(?<path>[^']+)'"] },
+    mirror: { dirs: ['lib'], extensions: ['.dart'], patterns: ["(?<method>get)\\('(?<path>[^']+)'"] },
+  };
+  const full = { reason: 'r', owner: 'o', addedOn: '2026-11-07', removeWhen: 'w' };
+  const r = runInventory({ inventory: { sets: [{ ...ep, waivers: [{ item: 'GET /api/x/{id}', ...full }, { item: 'GET /api/gone', ...full }, { item: 'GET /api/z' }] }] } }, root);
+  assert.equal(r.failures.find((f) => f.id === 'inventory:e'), undefined, JSON.stringify(r.failures));
+  assert.ok(r.failures.some((f) => f.id === 'inventory:e:waivers'), JSON.stringify(r.failures));
+  assert.ok(r.notes.some((n) => n.includes('no longer needed') && n.includes('GET /api/gone')), r.notes.join('\n'));
+});
+
+test('states: route templates match, a reason is required, and a state with no prep is noted', async () => {
+  const setup = async (required, captures) => {
+    const dir = await fixture({ manifest: 'manifest.json', states: { required } });
+    await writeRepoFiles(dir, { 'manifest.json': { captures } });
+    return gate(dir);
+  };
+  const ok = await setup(
+    [{ route: '/courses/[id]', state: 'empty', reason: 'no lessons yet' }],
+    [{ id: 'c', source: { route: '/courses/42/' }, state: 'empty' }],
+  );
+  assert.equal(ok.failures.find((x) => x.check === 'state-coverage'), undefined, JSON.stringify(ok.failures));
+  assert.ok(ok.notes.includes('states: 1/1 required interaction state(s) captured'), ok.notes.join('\n'));
+  assert.ok(ok.notes.some((n) => n.includes('no capture has a prep step')), ok.notes.join('\n'));
+
+  const noReason = await setup([{ route: '/x', state: 'empty' }], [{ id: 'x', web: { route: '/x' }, state: 'empty', prep: ['a'] }]);
+  assert.ok(noReason.failures.find((x) => x.check === 'state-coverage')?.items[0].includes('needs route, state and a reason'));
+  const wrongRoute = await setup([{ route: '/x', state: 'empty', reason: 'r' }], [{ id: 'y', web: { route: '/y' }, state: 'empty' }]);
+  assert.deepEqual(wrongRoute.failures.find((x) => x.check === 'state-coverage')?.items, ['/x — empty']);
+});

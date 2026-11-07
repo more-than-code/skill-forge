@@ -75,7 +75,12 @@ each client to implement a different feature.
    REPLACES the surface: after `open-message-menu` the opener is gone from the tree, so an
    affordance declared on the opener fails on the very capture that proves the menu works.
    Assert a menu ITEM.
-5. **Settle before shooting.** A half-open menu differs run to run; a capture that is
+5. **A populated capture is not coverage of the route.** An empty search, its fallback
+   action, a panel a streamed tool result opens: each is a state of its own, and a feature
+   that lives only there is invisible until it is captured. Observed 2026-11-07: two such
+   features were missing on the mirror and the gate passed both. Declare the states that
+   matter in `states.required` (check P) so a missing capture fails.
+6. **Settle before shooting.** A half-open menu differs run to run; a capture that is
    non-deterministic will be "fixed" by widening a tolerance, and the tolerance is what gets
    remembered.
 

@@ -102,5 +102,73 @@
         }
       }
     ]
+  },
+  "inventory": {
+    "$comment": "Check O. REQUIRED: a static scan of both clients' code, so it sees features no capture shows. Without sets the gate fails, unless \"optOut\": \"<reason>\" is set. Patterns are JS regexes: named groups method+path, or item.",
+    "sets": [
+      {
+        "name": "endpoints",
+        "normalize": "endpoint",
+        "source": {
+          "dirs": [
+            "web/src"
+          ],
+          "extensions": [
+            ".ts",
+            ".svelte"
+          ],
+          "patterns": [
+            "fetch\\(\\s*[`'\"](?<path>/api/[^`'\"]+)[`'\"](?:\\s*,\\s*\\{(?:[^{}]|\\{[^{}]*\\})*?method:\\s*['\"](?<method>[A-Za-z]+)['\"])?"
+          ]
+        },
+        "mirror": {
+          "dirs": [
+            "mobile/lib"
+          ],
+          "extensions": [
+            ".dart"
+          ],
+          "patterns": [
+            "_dio\\.(?<method>get|post|put|patch|delete)(?:<[^>]*>)?\\(\\s*['\"](?<path>/api/[^'\"]+)['\"]"
+          ]
+        },
+        "waivers": []
+      },
+      {
+        "name": "stream-tools",
+        "source": {
+          "dirs": [
+            "web/src"
+          ],
+          "extensions": [
+            ".svelte"
+          ],
+          "patterns": [
+            "case\\s+'tool-(?<item>[a-z_]+)'"
+          ]
+        },
+        "mirror": {
+          "dirs": [
+            "mobile/lib"
+          ],
+          "extensions": [
+            ".dart"
+          ],
+          "patterns": [
+            "'(?<item>[a-z_]+)'\\s*=>"
+          ]
+        }
+      }
+    ]
+  },
+  "states": {
+    "$comment": "Check P. Interaction states that need their own capture (manifest entry with the same \"state\", produced by a prep step).",
+    "required": [
+      {
+        "route": "/dictionary",
+        "state": "empty-search",
+        "reason": "the \"Ask AI\" fallback shows only when a search finds nothing"
+      }
+    ]
   }
 }

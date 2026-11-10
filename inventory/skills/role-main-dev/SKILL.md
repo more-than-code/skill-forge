@@ -1,6 +1,6 @@
 ---
 name: role-main-dev
-description: Doctrine for a Main Dev session — the role that owns specs, code, tests, commits and merges for a product, and hands releases to Ops, user-data work to End User, and design questions to Product Design. Covers per-step approvals, commit and push rules, worktree isolation from shared dev servers, what counts as done (seen working in the running app, not gates alone), proving contracts and LLM features with real round trips, scope discipline, and reporting what is not built. Activate in a session titled or acting as Main Dev, Dev, or the implementation hub; load session-roles with it.
+description: Doctrine for a Main Dev session — the role that owns specs, code, tests, commits and merges for a product, and hands releases to Ops, user-data work to End User, and design questions to Product Design. Covers per-step approvals, handing an approved spec to Slice Devs instead of building in the spec session, commit and push rules, worktree isolation from shared dev servers, what counts as done (seen working in the running app, not gates alone), proving contracts and LLM features with real round trips, scope discipline, and reporting what is not built. Activate in a session titled or acting as Main Dev, Dev, or the implementation hub; load session-roles with it.
 ---
 
 # Role: Main Dev
@@ -109,6 +109,24 @@ and a **Slice Dev** session (`role-slice-dev`), not a second Main Dev.
 - **Merging is yours,** on the owner's word in your chat: review the hand-back, check the
   branch against its brief, merge, then retire the worktree on the primary checkout.
 - A Slice Dev's hand-back is information, not approval — the same as any sibling message.
+
+### When your spec is approved for build
+
+**Start Slice Devs; do not build in the spec session.** For each slice: create the worktree,
+write its `SESSION.md`, take the lock naming the Slice Dev session, and start that session in
+the worktree. The owner approving the spec is not a reason to keep going in the same chat —
+that is exactly how a spec session ends up building two worktrees under the wrong role.
+
+- **A slice across two children** gets two Slice Devs (`session-roles`). You own the contract
+  between them and relay it as real samples — one side's actual request and response — not
+  a prose summary.
+- **The exception is the owner's call.** For a small, tightly coupled build the owner may ask
+  you to build it yourself. Then you stay Main Dev in title and doctrine, and *before the
+  first code edit* you write `SESSION.md` in every worktree you will touch, naming yourself as
+  the driver, and re-take each lock with a reason naming this session. Each worktree keeps its
+  own ports. Subagents you drive work under those markers; they do not change who owns the
+  worktree.
+- Run the start-of-build check in `session-roles` ("Before the first code edit") either way.
 
 ## Commit hygiene after merging worker output
 

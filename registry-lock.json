@@ -344,13 +344,13 @@
     },
     "inventory/skills/role-main-dev": {
       "name": "role-main-dev",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-zJOMdfgYcQ0ra4u4XTYn70pOjvO0dqHmaUKefDaWKX0=",
+      "integrity": "sha256-SoYQSHdsHtpZ332ti/EmvuGUyGR2WP1mUOx57q2XOxc=",
       "files": {
-        "SKILL.md": "sha256-RMJ9raeU365nX43cssD+HIsq0KIAF2uYZLG2PIS314o="
+        "SKILL.md": "sha256-irdbHs2Fospei1DIaOoB/sIFqtSTvfzTMThO+9j24zY="
       }
     },
     "inventory/skills/role-ops": {
@@ -377,13 +377,13 @@
     },
     "inventory/skills/role-slice-dev": {
       "name": "role-slice-dev",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-WPfAoIN1l8WvA535EQT60BRvfyW9ItFWTVd4lwh6MvI=",
+      "integrity": "sha256-RKREgOQWIro78G97Xi83fEfKjGv/RMKX5taedT6pajw=",
       "files": {
-        "SKILL.md": "sha256-lQdBHB3G6nBD7DLBv/dzxe3XxCUMGgdKxGeNXbphj5w="
+        "SKILL.md": "sha256-dEM6JouAR5AKdTRhfZj4FPzQbo8B07JFN9T9aJfiY60="
       }
     },
     "inventory/skills/security-baseline": {
@@ -399,13 +399,13 @@
     },
     "inventory/skills/session-roles": {
       "name": "session-roles",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-XfCmKNjcUxYiBqS5sq5/+z4XjediE2oqCpAIgsGXnPY=",
+      "integrity": "sha256-Y1fAeREEjAyznbl75NDgh9u4ySg8cFI8K+XMpPXWS9M=",
       "files": {
-        "SKILL.md": "sha256-003SVRP3zXGusx7elGScDADB/7ju7/+guAuKpQei99s="
+        "SKILL.md": "sha256-2K3kNl8URIjZ5hgk1GiEBXGjdiGnMvv4Zp2r0EHAwq8="
       }
     },
     "inventory/skills/skill-forge-authoring": {
@@ -466,13 +466,13 @@
     },
     "inventory/skills/umbrella-workspace": {
       "name": "umbrella-workspace",
-      "version": "0.12.1",
+      "version": "0.13.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-y615nOYR5Ml6LdWFanSD0dZDCQFrVVfPkTWq2l+2frw=",
+      "integrity": "sha256-J8Q5/2n3G9pYeozpGLRI011/aPDtlsCoJ4uI5xoC+Fc=",
       "files": {
-        "PARALLEL-WORKTREES.md": "sha256-8KIxU4KNf4mdHjtGqPV2oGijeQS/iqNsgN41IO9tneI=",
+        "PARALLEL-WORKTREES.md": "sha256-nsZLjG2d74sRzcFGyd9k8X6EyU9pcqVRcNf1Vfm66hA=",
         "SKILL.md": "sha256-M9KkcFR2RTv2cvbyl1Hg2NRzsmP9+xF9Zad+idmQoHk="
       }
     },

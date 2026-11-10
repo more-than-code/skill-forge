@@ -85,6 +85,15 @@ git -C child-be worktree lock ../work-billing-be \
   --reason "slice=billing session=<id> started-by=<id> 2026-11-07"
 ```
 
+**The lock names whoever drives the worktree now.** A lock taken while the spec was written
+names the spec session; when the build starts, re-take it for the session that builds:
+
+```bash
+git -C child-be worktree unlock ../work-billing-be
+git -C child-be worktree lock ../work-billing-be \
+  --reason "slice=billing session=<builder id> started-by=<main dev id> 2026-11-10"
+```
+
 The note lives exactly as long as the worktree, covers workers that are not app sessions (an external agent CLI), and blocks `git worktree prune` and a plain `git worktree remove`. **A `work-*` worktree with no lock note is unclaimed: ask the owner before touching it.** At session start Main Dev cross-checks `worktree list --verbose` for each child against the ledger and fixes the ledger, not the other way round.
 
 ## `SESSION.md` — the brief a worktree session reads first
@@ -102,6 +111,13 @@ Written fresh by Main Dev for each slice. It carries **only what git cannot**: t
 - **Plan entry** — the umbrella `tasks/todo.md` section for this slice. The session reports status there (or to Main Dev), never into a copy of the ledger.
 - **Hand back** — which session to message, and what "done" means (merged by Main Dev, not by the worker).
 - **Overlay skills** — any skills given through `skf project add --overlay`, so the session knows they are there.
+
+**Required however the worktree is built.** A Slice Dev started in it, or — when the owner
+chooses — Main Dev building it from the umbrella: either way the worktree has a `SESSION.md`
+before the first code edit. In the second case it names Main Dev as the driver and says the
+session is rooted at the umbrella. Observed on one project (2026-11-10): an umbrella session
+built two worktrees through subagents, both locked by a spec-phase claim, neither with a
+`SESSION.md` — the safety rules held, and nothing on disk said who was building.
 
 It sits inside the worktree, so it is also readable from the umbrella (`work-billing-be/SESSION.md`) when Main Dev checks on a slice.
 

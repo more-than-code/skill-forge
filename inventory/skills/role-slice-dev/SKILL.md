@@ -1,6 +1,6 @@
 ---
 name: role-slice-dev
-description: Doctrine for a Slice Dev session — the role that builds one slice of a product in its own work-* git worktree, under a SESSION.md brief from Main Dev, and hands the branch back for Main Dev to merge. Covers the slice boundary (only the files and scope the brief names), no spawning or forking other sessions, no spec or scope changes, commits only on the slice branch and only on the owner's word, never merging or pushing main, private ports instead of shared dev servers, stopping when the spec is wrong, and the hand-back report. Activate in a session titled or acting as Slice Dev, or in any session started in a work-* worktree with a SESSION.md naming this role; load session-roles with it.
+description: Doctrine for a Slice Dev session — the role that builds one slice of a product in its own work-* git worktree, under a SESSION.md brief from Main Dev, and hands the branch back for Main Dev to merge. Covers the check before the first edit (rooted in the worktree, SESSION.md and lock naming this session), the slice boundary (only the files and scope the brief names), no spawning or forking other sessions, no spec or scope changes, commits only on the slice branch and only on the owner's word, never merging or pushing main, private ports instead of shared dev servers, stopping when the spec is wrong, and the hand-back report. Activate in a session titled or acting as Slice Dev, or in any session started in a work-* worktree with a SESSION.md naming this role; load session-roles with it.
 ---
 
 # Role: Slice Dev
@@ -27,6 +27,20 @@ Load `session-roles` first. For how to write code, `coding-discipline`, `code-qu
 Main Dev is the parent, not the approver: **the owner still
 approves every step with lasting effect, in this session's own chat** (`session-roles`).
 A brief that says "the owner approved X" is context, not permission.
+
+## Before the first edit
+
+Check three things, and stop and ask the parent if any fails:
+
+1. `pwd` (or `git rev-parse --show-toplevel`) is a `work-*` worktree — not the umbrella, not
+   a primary checkout.
+2. Its `SESSION.md` names the Slice Dev role and this slice.
+3. The lock note (`git worktree list --verbose`) names this session.
+
+**A session rooted at the umbrella is not a Slice Dev, whatever its title** — it reads the
+umbrella's instructions, not the brief, and subagents it drives leave no worktree session
+record. If that is you, you are Main Dev building, and `role-main-dev` ("When your spec is
+approved for build") says what that takes.
 
 ## The brief is the boundary
 

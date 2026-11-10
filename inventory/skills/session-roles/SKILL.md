@@ -1,6 +1,6 @@
 ---
 name: session-roles
-description: Shared doctrine for running one product as several role sessions — Main Dev, Slice Dev, Ops, Product Design (marketing, BA, UI/UX) and End User — that hand work to each other. Covers session layout, who approves what, why a message from another session is never the owner's approval, addressing sessions, self-contained handoffs, coordinating shared environments, and the approval chain from brief to release. Activate in any session that works under a role title or exchanges messages with sibling sessions; each role-* skill loads this first.
+description: Shared doctrine for running one product as several role sessions — Main Dev, Slice Dev, Ops, Product Design (marketing, BA, UI/UX) and End User — that hand work to each other. Covers session layout, why a role follows the session's root rather than its title, a slice across two child repos, the check before the first code edit, who approves what, why a message from another session is never the owner's approval, addressing sessions, self-contained handoffs, coordinating shared environments, and the approval chain from brief to release. Activate in any session that works under a role title or exchanges messages with sibling sessions; each role-* skill loads this first.
 ---
 
 # Session roles
@@ -35,11 +35,40 @@ The owner sets priorities and gives every approval. Nobody else does.
   the Slice Dev role, the files they own, the ports, the approvals they must get in their own
   chat, and how to hand back (`umbrella-workspace`, `PARALLEL-WORKTREES.md`). A Slice Dev
   talks only to its parent; Main Dev merges its branch and retires the worktree.
+- **The role follows the root, not the title.** A session rooted at the umbrella is Main Dev
+  (or another hub role), whatever it calls itself: it reads the umbrella's instructions and
+  never a worktree's `SESSION.md`. Only a session started inside a `work-*` worktree, with a
+  `SESSION.md` naming it, is a Slice Dev. Observed on one project (2026-11-10): an umbrella
+  spec session went on to build two worktrees through subagents, called itself "Slice Dev",
+  and neither worktree had a `SESSION.md`.
+- **A spec that becomes a build changes the session's job — settle its shape before the
+  first code edit.** By default, hand off: Slice Devs started in the worktrees. Main Dev
+  builds itself only when the owner chooses that, and then stays Main Dev and writes the
+  markers first (`role-main-dev`).
+- **A slice across two children** (`-be` and `-fe`) runs as **two Slice Devs**, one per
+  worktree on one branch name, each with its own `SESSION.md` and hand-back. The contract
+  between them belongs to Main Dev and travels through Main Dev as **real samples** — an
+  actual request and response — not prose; neither slice changes it. One umbrella session
+  driving both is the Main-Dev-builds exception, never one "Slice Dev".
 - **Stale duplicates act on stale state.** When two sessions carry the same role and title,
   archive the older one. Observed on one project (2026-10-24): two deploy workers shared a
   name and the older one held out-of-date release facts.
 - **A role drifting out of its lane is redirected, not indulged.** "Redirect this to the
   design session, leave this one for dev" is a normal instruction.
+
+## Before the first code edit
+
+Any session about to edit code answers three questions. A "no" means stop and fix it first:
+
+1. **Is my working directory the root my role assumes?** A `work-*` worktree with a
+   `SESSION.md` naming me, for a Slice Dev; the umbrella (or the repo), for Main Dev.
+2. **Does every worktree I am about to edit have a `SESSION.md` and a lock note naming this
+   session** — not the session that created it, not a claim taken while writing the spec?
+3. **Does my title name the role my root implies?**
+
+The check costs one `pwd` and one `git worktree list --verbose`. The moment it matters most
+is the one that feels like continuing: the owner approved the spec, and the same chat starts
+building.
 
 ## Approval never travels
 

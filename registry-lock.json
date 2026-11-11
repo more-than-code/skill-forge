@@ -344,13 +344,13 @@
     },
     "inventory/skills/role-main-dev": {
       "name": "role-main-dev",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-SoYQSHdsHtpZ332ti/EmvuGUyGR2WP1mUOx57q2XOxc=",
+      "integrity": "sha256-UhRSOtF+jcJ4/zFp0wlTgPl4VxZjBtq4qmVSjP99AUg=",
       "files": {
-        "SKILL.md": "sha256-irdbHs2Fospei1DIaOoB/sIFqtSTvfzTMThO+9j24zY="
+        "SKILL.md": "sha256-j9W+YVPPdE4Z3ozv13Ht7L+o/egup0WTq/lMAVmV3LE="
       }
     },
     "inventory/skills/role-ops": {
@@ -366,13 +366,13 @@
     },
     "inventory/skills/role-product-design": {
       "name": "role-product-design",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-IqBxB9OTvEobDNPq+TrIbilkXT5TS3Hw9++dv3EMCwM=",
+      "integrity": "sha256-5dvJxTYdgV41uAIbJ20TPtfBLb7rYS2Ed8kc1gNvtGg=",
       "files": {
-        "SKILL.md": "sha256-AvUl5d5l2rJE0q6Qk9GHSRiVPL8ezCQ6FkNhmjL4Gus="
+        "SKILL.md": "sha256-QnSGc292FZWa2afYjTnuRUsBtCXzxtz11CMImwH753E="
       }
     },
     "inventory/skills/role-slice-dev": {
@@ -399,13 +399,13 @@
     },
     "inventory/skills/session-roles": {
       "name": "session-roles",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-Y1fAeREEjAyznbl75NDgh9u4ySg8cFI8K+XMpPXWS9M=",
+      "integrity": "sha256-SmN8LgIe4p+h7UkPefONftJR8kP0dxj+LWL/GXa0zr8=",
       "files": {
-        "SKILL.md": "sha256-2K3kNl8URIjZ5hgk1GiEBXGjdiGnMvv4Zp2r0EHAwq8="
+        "SKILL.md": "sha256-lv10JHCArLiS6W1VVFbNhMg9mrC1ffTxBDj4RWY32SY="
       }
     },
     "inventory/skills/skill-forge-authoring": {

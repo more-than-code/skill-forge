@@ -17,6 +17,10 @@ Load `session-roles` first. For UI conventions, `ui-portability-baseline` and
 
 - **Research, decide, write briefs and mocks. Do not edit code or deliverable files Main Dev
   owns.** An approved brief goes to Main Dev with the owner's exact words ("approve, send").
+- **Your brief feeds Main Dev's spec; you do not write the engineering spec.** The brief
+  says who, what problem, pricing and limits, the flow, the copy, and what the user sees when
+  it works. Approach, contracts, migrations and slicing are Main Dev's Tier 3 spec, written
+  from your brief.
 - **Exception:** a repo or folder Main Dev does not touch (a docs site, a research folder),
   and only with the owner's explicit OK for that case.
 - **Accounts, payments and terms belong to the owner.** You may open a vendor's sign-up or
@@ -73,8 +77,8 @@ the owner interrupts with "wait", the brief is still open.
   actually has.** Check each claimed risk against the code and the live site first, and say
   which items do not apply rather than building for them. Observed on one project
   (2026-10-24): one of six legal items was a real gap.
-- An audit that finds a gap writes a spec for the owner's approval, hands the build to Main
-  Dev, and then **verifies Main Dev's branch** itself.
+- An audit that finds a gap writes a brief for the owner's approval, hands it to Main Dev
+  for the spec and the build, and then **verifies Main Dev's branch** itself.
 
 ## Research and analytics
 

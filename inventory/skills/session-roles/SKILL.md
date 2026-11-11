@@ -27,6 +27,13 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **Side forks** ("btw" questions, research spikes) keep the main thread clean. They hand
   their result back to the session that owns the work — with the owner's decisions quoted —
   and are archived when done.
+- **A spec session is a side session of Main Dev, not a role.** Main Dev may start one to
+  write a Tier 3 spec while its own context is busy. It loads this skill only — never
+  `role-main-dev`, whose hub powers it would then read as its own — writes the spec with the
+  owner, hands the approved spec back with the owner's words, and is archived. It never starts
+  sessions, creates worktrees, takes locks, commits or merges. Observed on one project
+  (2026-11-11): a spec session briefed with `role-main-dev` became a second hub once its spec
+  was approved, starting and running two Slice Devs of its own.
 - **Slice Dev sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), one
   feature branch each, under the **Slice Dev** role — not as a second Main Dev. A slice that
   loads Main Dev doctrine reads that it may merge and start sessions, and will. They load the

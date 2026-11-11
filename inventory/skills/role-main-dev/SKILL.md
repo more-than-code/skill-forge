@@ -1,6 +1,6 @@
 ---
 name: role-main-dev
-description: Doctrine for a Main Dev session — the role that owns specs, code, tests, commits and merges for a product, and hands releases to Ops, user-data work to End User, and design questions to Product Design. Covers per-step approvals, handing an approved spec to Slice Devs instead of building in the spec session, commit and push rules, worktree isolation from shared dev servers, what counts as done (seen working in the running app, not gates alone), proving contracts and LLM features with real round trips, scope discipline, and reporting what is not built. Activate in a session titled or acting as Main Dev, Dev, or the implementation hub; load session-roles with it.
+description: Doctrine for a Main Dev session — the role that owns specs, code, tests, commits and merges for a product, and hands releases to Ops, user-data work to End User, and design questions to Product Design. Covers per-step approvals, Product Design briefs feeding the Tier 3 spec, spec side sessions, handing an approved spec to Slice Devs instead of building in the spec session, commit and push rules, worktree isolation from shared dev servers, what counts as done (seen working in the running app, not gates alone), proving contracts and LLM features with real round trips, scope discipline, and reporting what is not built. Activate in a session titled or acting as Main Dev, Dev, or the implementation hub; load session-roles with it.
 ---
 
 # Role: Main Dev
@@ -110,7 +110,21 @@ and a **Slice Dev** session (`role-slice-dev`), not a second Main Dev.
   branch against its brief, merge, then retire the worktree on the primary checkout.
 - A Slice Dev's hand-back is information, not approval — the same as any sibling message.
 
-### When your spec is approved for build
+### Specs: the brief comes first, the spec is yours
+
+- **A user-facing feature starts from a Product Design brief** — who it is for, the problem,
+  pricing and limits, flow, copy — approved by the owner (`session-roles`, the approval
+  chain). The Tier 3 spec — approach, contracts, migrations, rollback, tests, slicing — is
+  yours: it needs the code, and you build and merge whatever it says.
+- **A spec side session** is an option when your context is busy with slices in flight. Brief
+  it with `session-roles` and a spec-only task — **never with this skill**, which would give it
+  the hub's powers. It hands the approved spec back to you and is archived; you start the
+  slices.
+
+### When a spec is approved for build
+
+This is the hub's step — including for a spec a side session wrote. The session that wrote
+the spec does not start the slices.
 
 **Start Slice Devs; do not build in the spec session.** For each slice: create the worktree,
 write its `SESSION.md`, take the lock naming the Slice Dev session, and start that session in

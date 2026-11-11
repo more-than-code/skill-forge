@@ -24,16 +24,20 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **Main Dev is the hub**, rooted where the work is (an umbrella or the repo).
 - **Ops is usually a child of Main Dev**, started for recurring deploy work. Main Dev routes
   release work there rather than doing host steps itself.
-- **Side forks** ("btw" questions, research spikes) keep the main thread clean. They hand
-  their result back to the session that owns the work — with the owner's decisions quoted —
-  and are archived when done.
-- **A spec session is a side session of Main Dev, not a role.** Main Dev may start one to
-  write a Tier 3 spec while its own context is busy. It loads this skill only — never
-  `role-main-dev`, whose hub powers it would then read as its own — writes the spec with the
-  owner, hands the approved spec back with the owner's words, and is archived. It never starts
-  sessions, creates worktrees, takes locks, commits or merges. Observed on one project
-  (2026-11-11): a spec session briefed with `role-main-dev` became a second hub once its spec
-  was approved, starting and running two Slice Devs of its own.
+- **Side sessions keep the main thread clean.** A side session does one job for the session
+  that owns the work, hands the result back with the owner's decisions quoted, and is
+  archived. It has **no role of its own**: it never starts sessions, creates worktrees, takes
+  locks, commits or merges. Two kinds, and how it starts decides what it knows:
+  - **A "btw:" fork** inherits the parent's whole conversation — including any role skill
+    the parent loaded. For a quick question that needs that context.
+  - **A started side session** gets fresh context and a self-contained brief, and loads this
+    skill only — never a role skill. For long work: a spec, a research spike.
+- **A spec session is always a started side session, never a fork.** A fork of Main Dev
+  inherits `role-main-dev` and reads the hub's powers as its own. Main Dev may start one to
+  write a Tier 3 spec while its own context is busy; it writes the spec with the owner and
+  hands the approved spec back with the owner's words. Observed on one project (2026-11-11): a
+  spec session briefed with `role-main-dev` became a second hub once its spec was approved,
+  starting and running two Slice Devs of its own.
 - **Slice Dev sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), one
   feature branch each, under the **Slice Dev** role — not as a second Main Dev. A slice that
   loads Main Dev doctrine reads that it may merge and start sessions, and will. They load the

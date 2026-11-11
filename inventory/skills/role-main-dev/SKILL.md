@@ -116,10 +116,11 @@ and a **Slice Dev** session (`role-slice-dev`), not a second Main Dev.
   pricing and limits, flow, copy — approved by the owner (`session-roles`, the approval
   chain). The Tier 3 spec — approach, contracts, migrations, rollback, tests, slicing — is
   yours: it needs the code, and you build and merge whatever it says.
-- **A spec side session** is an option when your context is busy with slices in flight. Brief
-  it with `session-roles` and a spec-only task — **never with this skill**, which would give it
-  the hub's powers. It hands the approved spec back to you and is archived; you start the
-  slices.
+- **A spec side session** is an option when your context is busy with slices in flight. Make
+  it a **started side session, not a "btw:" fork** (`session-roles`, session layout): a fork
+  inherits this skill from your conversation. Brief it with `session-roles` and a spec-only
+  task — **never with this skill**, which would give it the hub's powers. It hands the
+  approved spec back to you and is archived; you start the slices.
 
 ### When a spec is approved for build
 

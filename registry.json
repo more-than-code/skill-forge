@@ -602,6 +602,19 @@
       }
     }
   ],
+  "instructionVariants": [
+    {
+      "name": "full",
+      "version": "0.1.0",
+      "description": "Today's full process instructions (core.md) for AGENTS.md, plus the Claude Code overlay for CLAUDE.md; delivered per project by skf sync.",
+      "core": "inventory/agents/core.md",
+      "claude": "inventory/agents/claude-code/CLAUDE.md",
+      "vars": {
+        "explore_agent": "Explore`/`researcher",
+        "plan_agent": "Plan`/`planner"
+      }
+    }
+  ],
   "managedHooks": [
     {
       "type": "hooks",

@@ -30,6 +30,16 @@ import {
   renderAgentsMd
 } from '../lib/instruction-templates.js';
 import {
+  applyBlock,
+  blockBegin,
+  escapeGitignore,
+  excludeEntries,
+  findBlock,
+  hasBlockMarker,
+  isOwnedExclude,
+  mergeExcludes
+} from '../lib/managed-instructions.js';
+import {
   HOSTS_SCHEMA,
   HostsFileError,
   loadHostsFile,
@@ -38,6 +48,7 @@ import {
 } from '../lib/hosts.js';
 
 const execFileAsync = promisify(execFile);
+const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -342,6 +353,22 @@ async function buildLock(registry) {
     packages[packagePath] = await buildPackageEntry(artifact);
   }
 
+  // A variant has no directory of its own (it composes existing files), so it is locked by
+  // what a consumer receives: the rendered blocks.
+  for (const variant of registry.instructionVariants || []) {
+    const rendered = await renderInstructionVariant(variant);
+    const files = { 'AGENTS.md': await hashBytes(rendered.agents) };
+    if (rendered.claude !== null) files['CLAUDE.md'] = await hashBytes(rendered.claude);
+    const treeInput = Object.entries(files).map(([file, hash]) => `${file}\0${hash}`).join('\n');
+    packages[`instructions:${variant.name}`] = {
+      name: variant.name,
+      version: variant.version,
+      type: 'instructions',
+      integrity: await hashBytes(treeInput),
+      files
+    };
+  }
+
   return {
     name: registry.name,
     version: registry.version,
@@ -518,6 +545,8 @@ async function validateRegistry() {
     }
   }
 
+  await validateInstructionVariants(registry, errors);
+
   const agentCore = getAgentCore(registry);
   if (agentCore) {
     const coreSource = await fs.readFile(path.join(REPO_ROOT, agentCore.path), 'utf8');
@@ -558,9 +587,16 @@ async function validateRegistry() {
   }
 
   if (await fs.pathExists(REGISTRY_LOCK_PATH)) {
-    const expected = JSON.stringify(await buildLock(registry), null, 2);
+    // A file reported missing above makes the rebuild throw; report that instead of crashing.
+    let expected = null;
+    try {
+      expected = JSON.stringify(await buildLock(registry), null, 2);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      reportValidationError(errors, `registry-lock.json cannot be rebuilt: ${error.message}`);
+    }
     const actual = JSON.stringify(await fs.readJson(REGISTRY_LOCK_PATH), null, 2);
-    if (expected !== actual) reportValidationError(errors, 'registry-lock.json is stale; run `skill-forge lock`');
+    if (expected !== null && expected !== actual) reportValidationError(errors, 'registry-lock.json is stale; run `skill-forge lock`');
   }
 
   return { errors, warnings };
@@ -838,6 +874,49 @@ async function composeAgentContent(registry, artifact) {
   return substituteVars(composed, artifact.vars);
 }
 
+// --- Instruction variants (project-delivered agent instructions) ---
+
+function getInstructionVariant(registry, name) {
+  return (registry.instructionVariants || []).find((variant) => variant.name === name) ?? null;
+}
+
+/** The block bodies a consumer receives: `agents` for AGENTS.md, `claude` (or null) for CLAUDE.md. */
+async function renderInstructionVariant(variant) {
+  const render = async (relPath) => substituteVars(await fs.readFile(path.join(REPO_ROOT, relPath), 'utf8'), variant.vars).trimEnd();
+  return {
+    agents: await render(variant.core),
+    claude: variant.claude ? await render(variant.claude) : null
+  };
+}
+
+async function validateInstructionVariants(registry, errors) {
+  const seen = new Set();
+  for (const variant of registry.instructionVariants || []) {
+    const label = `instructions variant ${variant.name ?? '(unnamed)'}`;
+    if (!variant.name || !variant.version || !variant.core) {
+      reportValidationError(errors, `${label} needs name, version and core`);
+      continue;
+    }
+    if (seen.has(variant.name)) reportValidationError(errors, `${label} is declared twice`);
+    seen.add(variant.name);
+    if (!SEMVER_PATTERN.test(variant.version)) reportValidationError(errors, `${label} has invalid version "${variant.version}"`);
+    const files = [variant.core, ...(variant.claude ? [variant.claude] : [])];
+    const missing = [];
+    for (const relPath of files) {
+      if (!await fs.pathExists(path.join(REPO_ROOT, relPath))) missing.push(relPath);
+    }
+    if (missing.length > 0) {
+      reportValidationError(errors, `${label} missing file at ${missing.join(', ')}`);
+      continue;
+    }
+    const rendered = await renderInstructionVariant(variant);
+    const unresolved = findUnresolvedPlaceholders(`${rendered.agents}\n${rendered.claude ?? ''}`);
+    if (unresolved.length > 0) {
+      reportValidationError(errors, `${label} has unresolved placeholders: ${unresolved.map((name) => `{{${name}}}`).join(', ')}; add them to its vars in registry.json`);
+    }
+  }
+}
+
 async function confirmOverwrite(destPath, yes) {
   if (!await fs.pathExists(destPath)) return true;
   if (yes) return true;
@@ -1005,6 +1084,48 @@ async function readProjectManifest(projectRoot) {
 
 async function writeProjectManifest(projectRoot, manifest) {
   await fs.writeJson(projectManifestPath(projectRoot), manifest, { spaces: 2 });
+}
+
+/**
+ * `instructions.variant` and `instructions.version`, or null when no variant is declared.
+ * A non-object `instructions` stays the instruction commands' problem (readInstructionsRole),
+ * so it never breaks sync; a declared variant must be well-formed, because sync acts on it.
+ */
+function readManagedInstructions(manifest) {
+  const config = manifest.instructions;
+  if (!isPlainObject(config) || config.variant === undefined) return null;
+  if (typeof config.variant !== 'string' || config.variant === '') {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "instructions.variant" must be a variant name.`);
+  }
+  if (typeof config.version !== 'string' || !RANGE_PATTERN.test(config.version)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "instructions.version" must be a range like "^0.1.0"; got ${JSON.stringify(config.version)}.`);
+  }
+  return { variant: config.variant, range: config.version };
+}
+
+function variantNames(registry) {
+  return (registry.instructionVariants || []).map((variant) => variant.name).join(', ') || 'none';
+}
+
+/** The declared variant, checked against the registry, with its rendered blocks; null when none is declared. */
+async function resolveManagedInstructions(registry, manifest) {
+  const declared = readManagedInstructions(manifest);
+  if (!declared) return null;
+  const variant = getInstructionVariant(registry, declared.variant);
+  if (!variant) {
+    throw new Error(`Unknown instructions variant "${declared.variant}". Known: ${variantNames(registry)}.`);
+  }
+  if (!satisfiesRange(variant.version, declared.range)) {
+    throw new Error(`Instructions variant "${variant.name}"@${variant.version} does not satisfy range "${declared.range}" (${PROJECT_MANIFEST_NAME}). Update the range or the registry.`);
+  }
+  const rendered = await renderInstructionVariant(variant);
+  return {
+    variant: variant.name,
+    version: variant.version,
+    begin: blockBegin(variant.name, variant.version),
+    agents: rendered.agents,
+    claude: rendered.claude
+  };
 }
 
 // --- Local overlay (skill-forge.local.json) ---
@@ -1270,7 +1391,7 @@ async function getRegistryCommit() {
   }
 }
 
-async function buildProjectLock(projectRoot, registry, resolution, source = 'registry') {
+async function buildProjectLock(projectRoot, registry, resolution, source = 'registry', instructions = null) {
   if (!await fs.pathExists(REGISTRY_LOCK_PATH)) {
     throw new Error(`registry-lock.json is missing in the Skill Forge repo; run "${CLI_NAME} lock" there first.`);
   }
@@ -1290,7 +1411,7 @@ async function buildProjectLock(projectRoot, registry, resolution, source = 'reg
     skills[name] = { path: relPath, integrity, source: 'local' };
   }
 
-  return {
+  const lock = {
     schemaVersion: 1,
     registry: {
       name: registry.name,
@@ -1300,6 +1421,209 @@ async function buildProjectLock(projectRoot, registry, resolution, source = 'reg
     },
     skills: Object.fromEntries(Object.entries(skills).sort(([a], [b]) => a.localeCompare(b)))
   };
+  // Machine-independent on purpose: the exclude entries are absolute paths, so they are
+  // recomputed per checkout and never written to this tracked file.
+  if (instructions) lock.instructions = instructions;
+  return lock;
+}
+
+/** The project-lock entry for the managed blocks this root receives. */
+async function managedLockEntry(managed, writesClaude) {
+  const sha256 = { agents: await hashBytes(managed.agents) };
+  if (writesClaude && managed.claude !== null) sha256.claude = await hashBytes(managed.claude);
+  return { variant: managed.variant, version: managed.version, sha256 };
+}
+
+const CLAUDE_LOCAL_SETTINGS = path.join('.claude', 'settings.local.json');
+
+/** Directories above this root (nearest first) that hold a skill-forge.json; $HOME's profile never counts. */
+async function skfAncestors(projectRoot) {
+  const real = await fs.realpath(projectRoot);
+  const home = await fs.realpath(os.homedir()).catch(() => null);
+  const found = [];
+  for (let dir = path.dirname(real); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    if (dir !== home && await fs.pathExists(path.join(dir, PROJECT_MANIFEST_NAME))) found.push(dir);
+  }
+  return found;
+}
+
+/** Text of a regular file, null when missing; refuses symlinks and anything else, so nothing is written through them. */
+async function readManagedFile(filePath, label) {
+  const stat = await fs.lstat(filePath).catch((error) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (!stat) return null;
+  if (stat.isSymbolicLink()) {
+    throw new Error(`${label} is a symlink; skill-forge will not write through it. Replace it with a regular file${label === 'CLAUDE.md' ? ` containing "${AGENTS_IMPORT_LINE}"` : ''}.`);
+  }
+  if (!stat.isFile()) throw new Error(`${label} is not a regular file.`);
+  return fs.readFile(filePath, 'utf8');
+}
+
+/** Like readManagedFile, but null for anything that is not a regular file: for roots that only might hold a block. */
+const peekManagedFile = (filePath, label) => readManagedFile(filePath, label).catch(() => null);
+
+/**
+ * One instruction file: the --check issue, the warning sync prints, and what sync writes
+ * (`write`: new text, null to delete, undefined to leave alone). `text` is the file as it is;
+ * `base` is what the block is spliced into (a fresh import line for a CLAUDE.md about to be created).
+ */
+async function planInstructionFile({ label, text, base, block, storedSha, isLeftover }) {
+  const existing = findBlock(text, label);
+  const next = applyBlock(base, block, label);
+  const plan = { issue: null, warning: null, removedBlock: !block && existing !== null, write: undefined };
+  if (block && !existing) {
+    plan.issue = `${label}: the skill-forge instructions block is missing; run "${CLI_NAME} sync".`;
+  } else if (block && (existing.beginLine !== block.begin || existing.inner !== block.content)) {
+    const edited = storedSha !== undefined && await hashBytes(existing.inner) !== storedSha;
+    plan.issue = edited
+      ? `${label}: the skill-forge instructions block was edited; sync replaces it, so move your text outside the markers first.`
+      : `${label}: the skill-forge instructions block is stale; run "${CLI_NAME} sync".`;
+    if (edited) plan.warning = `${label}: replaced an edited skill-forge instructions block.`;
+  } else if (plan.removedBlock) {
+    plan.issue = `${label}: the skill-forge instructions block is no longer declared; run "${CLI_NAME} sync" to remove it.`;
+  }
+  if (text !== null && next !== null && isLeftover(next.trim(), plan.removedBlock)) plan.write = null;
+  else if (next !== text) plan.write = next;
+  return plan;
+}
+
+/**
+ * What sync would write for managed instructions, and what --check reports. Every refusal
+ * throws here, before sync writes anything. A root with no variant, none recorded in its lock
+ * and no marker in its instruction files is inactive: nothing there is touched, so roots that
+ * never opted in sync exactly as before.
+ */
+async function computeManagedState(projectRoot, { manifest, managed, storedLock }) {
+  const state = { active: false, files: [], warnings: [], settings: null, excludes: [], issues: [] };
+  const agentsPath = path.join(projectRoot, 'AGENTS.md');
+  const claudePath = path.join(projectRoot, 'CLAUDE.md');
+  const stored = storedLock?.instructions?.sha256;
+  if (!managed && !stored) {
+    // A block whose lock entry never got written (an interrupted "use") is still ours to remove.
+    const peeked = [await peekManagedFile(agentsPath, 'AGENTS.md'), await peekManagedFile(claudePath, 'CLAUDE.md')];
+    if (!peeked.some((text) => text !== null && hasBlockMarker(text))) return state;
+  }
+  state.active = true;
+  const homeReal = await fs.realpath(os.homedir()).catch(() => null);
+  if (managed && homeReal && await fs.realpath(projectRoot) === homeReal) {
+    throw new Error('Managed instructions never go in $HOME: a ~/AGENTS.md or ~/CLAUDE.md would load in every project under it. Remove "instructions.variant" from the $HOME profile.');
+  }
+  const blockFor = (content) => (content === null ? null : { begin: managed.begin, content });
+  const record = (filePath, plan) => {
+    if (plan.issue) state.issues.push(plan.issue);
+    if (plan.warning) state.warnings.push(plan.warning);
+    if (plan.write !== undefined) state.files.push({ path: filePath, next: plan.write });
+  };
+
+  // AGENTS.md is read by every tool, Claude Code through the CLAUDE.md import. Deleted only
+  // when this pass removed its block and nothing else is left.
+  const agentsText = managed ? await readManagedFile(agentsPath, 'AGENTS.md') : await peekManagedFile(agentsPath, 'AGENTS.md');
+  const agentsPlan = await planInstructionFile({
+    label: 'AGENTS.md',
+    text: agentsText,
+    base: agentsText,
+    block: blockFor(managed?.agents ?? null),
+    storedSha: stored?.agents,
+    isLeftover: (rest, removedBlock) => removedBlock && rest === ''
+  });
+  record(agentsPath, agentsPlan);
+  const agentsGone = agentsPlan.write === null;
+
+  // CLAUDE.md, with the claude-code shim: it must import AGENTS.md, and a missing one is created
+  // as that import (plus the variant's Claude block, if it has one). Without the shim, a block
+  // left from before is still removed.
+  const shim = hasClaudeShim(manifest);
+  const claudeText = managed && shim ? await readManagedFile(claudePath, 'CLAUDE.md') : await peekManagedFile(claudePath, 'CLAUDE.md');
+  if (managed && shim && claudeText !== null && !findClaudeImport(claudeText.split(/\r?\n/).map((line) => line.trim())).direct) {
+    throw new Error(`CLAUDE.md does not import AGENTS.md, so Claude Code would never see the managed block; add a line "${AGENTS_IMPORT_LINE}".`);
+  }
+  if (shim || stored?.claude !== undefined || (claudeText !== null && hasBlockMarker(claudeText))) {
+    const content = managed && shim ? managed.claude : null;
+    record(claudePath, await planInstructionFile({
+      label: 'CLAUDE.md',
+      text: claudeText,
+      base: claudeText === null && managed && shim ? `${AGENTS_IMPORT_LINE}\n` : claudeText,
+      block: blockFor(content),
+      storedSha: stored?.claude,
+      // An import of an AGENTS.md this pass deletes would dangle.
+      isLeftover: (rest, removedBlock) => (removedBlock && rest === '') || (agentsGone && rest === AGENTS_IMPORT_LINE)
+    }));
+  }
+
+  // claudeMdExcludes: Claude Code loads every ancestor's CLAUDE.md, and this root carries its own.
+  // Sync owns exactly the entries for the root's current skf ancestors; any other entry is the user's.
+  const ancestors = await skfAncestors(projectRoot);
+  const { entries, unsafe } = excludeEntries(ancestors);
+  const ownedDirs = ancestors.filter((dir) => !unsafe.includes(dir));
+  state.excludes = managed ? entries : [];
+  if (managed) {
+    for (const dir of unsafe) {
+      state.issues.push(`cannot exclude ${printableOnly(dir)} from Claude Code: its path has glob characters, so its instruction files load in sessions here too.`);
+    }
+  }
+  const settingsPath = path.join(projectRoot, CLAUDE_LOCAL_SETTINGS);
+  const settingsText = await readManagedFile(settingsPath, CLAUDE_LOCAL_SETTINGS);
+  let settings = {};
+  if (settingsText !== null) {
+    try {
+      settings = JSON.parse(settingsText);
+    } catch {
+      throw new Error(`${CLAUDE_LOCAL_SETTINGS} is not valid JSON; fix it by hand, then run sync again.`);
+    }
+    if (!isPlainObject(settings)) throw new Error(`${CLAUDE_LOCAL_SETTINGS} must hold a JSON object.`);
+  }
+  const current = settings.claudeMdExcludes ?? [];
+  if (!Array.isArray(current)) throw new Error(`${CLAUDE_LOCAL_SETTINGS} "claudeMdExcludes" must be an array.`);
+  for (const entry of state.excludes.filter((item) => !current.includes(item))) {
+    state.issues.push(`${CLAUDE_LOCAL_SETTINGS} does not exclude ${printableOnly(entry)}; run "${CLI_NAME} sync".`);
+  }
+  for (const entry of current.filter((item) => isOwnedExclude(item, ownedDirs) && !state.excludes.includes(item))) {
+    state.issues.push(`${CLAUDE_LOCAL_SETTINGS} still excludes ${printableOnly(entry)}; run "${CLI_NAME} sync".`);
+  }
+  const merged = mergeExcludes(current, state.excludes, ownedDirs);
+  if (JSON.stringify(merged) !== JSON.stringify(current)) {
+    if ((await fs.lstat(path.join(projectRoot, '.claude')).catch(() => null))?.isSymbolicLink()) {
+      throw new Error('.claude is a symlink; skill-forge will not write settings.local.json through it, since the target may be shared by other projects.');
+    }
+    if (await gitWorkTreeInfo(projectRoot)) {
+      const { stdout } = await execFileAsync('git', ['-C', projectRoot, 'ls-files', '--', CLAUDE_LOCAL_SETTINGS], { env: gitEnvironment(), timeout: DOCTOR_GIT_TIMEOUT_MS });
+      if (stdout.trim() !== '') {
+        throw new Error(`${CLAUDE_LOCAL_SETTINGS} is tracked by git, so changing its exclude entries would change a committed file. Untrack it (it is personal), then run sync again.`);
+      }
+    }
+    const next = { ...settings };
+    if (merged.length > 0) next.claudeMdExcludes = merged;
+    else delete next.claudeMdExcludes;
+    state.settings = { path: settingsPath, next: Object.keys(next).length > 0 ? `${JSON.stringify(next, null, 2)}\n` : null };
+  }
+  return state;
+}
+
+async function applyManagedState(state) {
+  for (const warning of state.warnings) console.log(chalk.yellow(`  ${warning}`));
+  for (const { path: filePath, next } of [...state.files, ...(state.settings ? [state.settings] : [])]) {
+    const shown = path.relative(process.cwd(), filePath) || path.basename(filePath);
+    if (next === null) {
+      await fs.remove(filePath);
+      console.log(chalk.yellow(`  removed ${shown} (nothing left in it)`));
+    } else {
+      await fs.ensureDir(path.dirname(filePath));
+      await fs.writeFile(filePath, next);
+      console.log(chalk.green(`  updated ${shown}`));
+    }
+  }
+}
+
+/** This work tree's info/exclude line for the settings file sync writes (gitignore metacharacters escaped). */
+function managedExcludeLine(git) {
+  return `/${escapeGitignore(`${git.prefix}${CLAUDE_LOCAL_SETTINGS.split(path.sep).join('/')}`)}`;
+}
+
+/** The managed line already in this work tree's block, so overlay commands that rewrite the block keep it. */
+async function keptManagedExcludeLines(git) {
+  return (await readOverlayExclude(git) ?? []).filter((line) => line === managedExcludeLine(git));
 }
 
 /** registry.commit moves with unrelated registry commits; drift compares content only. */
@@ -1314,9 +1638,12 @@ async function computeProjectState(projectRoot) {
   const resolution = resolveProjectProfile(registry, manifest);
   const { realDir, linkDirs } = projectSkillLayout(manifest);
   const targetDirs = [realDir, ...linkDirs];
-  const expectedLock = await buildProjectLock(projectRoot, registry, resolution);
+  const managed = await resolveManagedInstructions(registry, manifest);
+  const instructionsLock = managed ? await managedLockEntry(managed, hasClaudeShim(manifest)) : null;
+  const expectedLock = await buildProjectLock(projectRoot, registry, resolution, 'registry', instructionsLock);
   const lockPath = projectLockPath(projectRoot);
   const storedLock = await fs.pathExists(lockPath) ? await fs.readJson(lockPath) : null;
+  const managedState = await computeManagedState(projectRoot, { manifest, managed, storedLock });
 
   const overlay = await readOverlayManifest(projectRoot);
   const overlayResolved = resolveOverlay(registry, overlay, resolution);
@@ -1324,7 +1651,7 @@ async function computeProjectState(projectRoot) {
     ? await buildProjectLock(projectRoot, registry, { resolved: overlayResolved, locals: [] }, 'overlay')
     : null;
   const storedOverlayLock = await fs.pathExists(overlayLockPath(projectRoot)) ? await fs.readJson(overlayLockPath(projectRoot)) : null;
-  const git = overlay || storedOverlayLock ? await gitWorkTreeInfo(projectRoot) : null;
+  const git = overlay || storedOverlayLock || managedState.active ? await gitWorkTreeInfo(projectRoot) : null;
   if (overlayResolved.length > 0 && !git) {
     throw new Error(`${PROJECT_OVERLAY_NAME} needs a git work tree: it exists to keep skills out of a repository. Outside git, declare them in ${PROJECT_MANIFEST_NAME}.`);
   }
@@ -1386,8 +1713,12 @@ async function computeProjectState(projectRoot) {
       issues.push(`overlay: ${path.join(realDir, name)} is no longer in the overlay; run "${CLI_NAME} sync" to prune it.`);
     }
   }
-  const overlayExclude = git && overlay
-    ? overlayExcludeLines(git, overlayNames, { manifest: true, lock: overlayResolved.length > 0 })
+  // The same per-work-tree block keeps the Claude settings file this checkout writes out of git.
+  const overlayExclude = git
+    ? [
+        ...(overlay ? overlayExcludeLines(git, overlayNames, { manifest: true, lock: overlayResolved.length > 0 }) : []),
+        ...(managedState.excludes.length > 0 ? [managedExcludeLine(git)] : [])
+      ]
     : [];
   if (git && JSON.stringify(await readOverlayExclude(git) ?? []) !== JSON.stringify(overlayExclude)) {
     issues.push(`overlay: this work tree's block in ${git.excludePath} is out of date; run "${CLI_NAME} sync".`);
@@ -1447,9 +1778,11 @@ async function computeProjectState(projectRoot) {
     }
   }
 
+  issues.push(...managedState.issues);
+
   return {
     registry, manifest, resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, staleNames, orphaned, inactiveLinks, vendored, issues,
-    overlay, overlayResolved, expectedOverlayLock, storedOverlayLock, overlayStaleNames, overlayExclude, git
+    overlay, overlayResolved, expectedOverlayLock, storedOverlayLock, overlayStaleNames, overlayExclude, git, managed, managedState
   };
 }
 
@@ -1539,6 +1872,8 @@ async function syncProject(projectRoot) {
       current = path.dirname(current);
     }
   }
+
+  await applyManagedState(state.managedState);
 
   await fs.writeJson(projectLockPath(projectRoot), expectedLock, { spaces: 2 });
   if (expectedOverlayLock) {
@@ -2342,10 +2677,13 @@ async function runOverlayAdd(projectRoot, skillNames) {
 
   await fs.writeJson(overlayManifestPath(projectRoot), overlay, { spaces: 2 });
   // Excluded at once, so the new file never shows in git status, even before a sync.
-  await writeOverlayExclude(git, overlayExcludeLines(git, Object.keys(overlay.skills.dependencies), {
-    manifest: true,
-    lock: await fs.pathExists(overlayLockPath(projectRoot))
-  }));
+  await writeOverlayExclude(git, [
+    ...overlayExcludeLines(git, Object.keys(overlay.skills.dependencies), {
+      manifest: true,
+      lock: await fs.pathExists(overlayLockPath(projectRoot))
+    }),
+    ...await keptManagedExcludeLines(git)
+  ]);
   console.log(chalk.gray(`Run "${CLI_NAME} sync" to vendor and lock. ${PROJECT_OVERLAY_NAME} is untracked; this checkout only.`));
 }
 
@@ -2375,8 +2713,9 @@ async function runProjectOverlay(projectRoot, { clear }) {
   await fs.remove(overlayManifestPath(projectRoot));
   await fs.remove(overlayLockPath(projectRoot));
   const git = await gitWorkTreeInfo(projectRoot);
-  if (git) await writeOverlayExclude(git, []);
-  console.log(chalk.green(`Cleared the overlay: ${names.length} skill(s), ${PROJECT_OVERLAY_NAME}, its lock and this work tree's info/exclude block.`));
+  // The block also keeps managed instructions' settings file out of git; that line stays.
+  if (git) await writeOverlayExclude(git, await keptManagedExcludeLines(git));
+  console.log(chalk.green(`Cleared the overlay: ${names.length} skill(s), ${PROJECT_OVERLAY_NAME}, its lock and its lines in this work tree's info/exclude block.`));
 }
 
 projectCommand
@@ -2655,16 +2994,67 @@ async function runProjectInstructions(projectRoot, options) {
   }
 }
 
+/**
+ * `use <variant>[@range]` records the managed variant and syncs; `use none` removes it and syncs.
+ * Everything is validated before the manifest is written, and a failed sync restores it (a block
+ * it already wrote is still found by its markers, so the next sync removes or repairs it).
+ */
+async function runInstructionsUse(projectRoot, spec) {
+  if (!spec) throw new Error(`Name a variant: "${CLI_NAME} project instructions use <variant>[@range]" or "use none".`);
+  await assertNotHome(projectRoot, 'instructions use', 'managed instructions never go in $HOME: a ~/AGENTS.md or ~/CLAUDE.md would load in every project under it.');
+  const registry = await readRegistry();
+  const manifest = await readProjectManifest(projectRoot);
+  if (manifest.instructions !== undefined && !isPlainObject(manifest.instructions)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "instructions" must be an object; fix it by hand first.`);
+  }
+  const before = await fs.readFile(projectManifestPath(projectRoot), 'utf8');
+  const next = { ...manifest, instructions: { ...manifest.instructions } };
+
+  if (spec === 'none') {
+    delete next.instructions.variant;
+    delete next.instructions.version;
+  } else {
+    const at = spec.indexOf('@');
+    const name = at < 0 ? spec : spec.slice(0, at);
+    const variant = getInstructionVariant(registry, name);
+    if (!variant) throw new Error(`Unknown instructions variant "${name}". Known: ${variantNames(registry)}.`);
+    const range = at < 0 ? `^${variant.version}` : spec.slice(at + 1);
+    if (!RANGE_PATTERN.test(range)) throw new Error(`Invalid range "${range}"; use an exact, ~ or ^ version.`);
+    if (!satisfiesRange(variant.version, range)) {
+      throw new Error(`Instructions variant "${name}"@${variant.version} does not satisfy range "${range}".`);
+    }
+    next.instructions.variant = name;
+    next.instructions.version = range;
+  }
+  if (Object.keys(next.instructions).length === 0) delete next.instructions;
+
+  const changed = JSON.stringify(next) !== JSON.stringify(manifest);
+  if (changed) await writeProjectManifest(projectRoot, next);
+  try {
+    await syncProject(projectRoot);
+  } catch (error) {
+    if (changed) await fs.writeFile(projectManifestPath(projectRoot), before);
+    throw error;
+  }
+  const chosen = next.instructions?.variant;
+  console.log(chalk.green(chosen
+    ? `Instructions: ${chosen}@${getInstructionVariant(registry, chosen).version} (${next.instructions.version}).`
+    : 'Instructions: none (managed blocks removed).'));
+}
+
 projectCommand
-  .command('instructions')
-  .description('Check that this session root has AGENTS.md and (with the claude-code shim) a CLAUDE.md importing it; read-only')
+  .command('instructions [action] [spec]')
+  .description('Check this session root\'s AGENTS.md / CLAUDE.md (read-only), or "use <variant>[@range] | none" to choose the managed instructions variant and sync')
   .option('--check', 'Exit non-zero when a file is missing or mis-wired')
   .option('--json', 'Output structured JSON')
-  .action(async (options) => {
+  .action(async (action, spec, options) => {
+    const verb = action === undefined ? 'checking agent instructions' : 'choosing the instructions variant';
     try {
-      await runProjectInstructions(process.cwd(), options);
+      if (action === undefined) await runProjectInstructions(process.cwd(), options);
+      else if (action === 'use') await runInstructionsUse(process.cwd(), spec);
+      else throw new Error(`Unknown action "${action}"; the only action is "use".`);
     } catch (error) {
-      printSkillError(options, `Error checking agent instructions: ${error.message}`);
+      printSkillError(options, `Error ${verb}: ${error.message}`);
     }
   });
 
@@ -2866,6 +3256,52 @@ async function computeLayoutState(projectRoot, role) {
   return layout;
 }
 
+/**
+ * Managed instructions against skf ancestors (umbrellas). Claude Code still loads a child's
+ * CLAUDE.md lazily in an umbrella session, so the two must carry the same variant and version.
+ * Both sides are read the same way: the variant the manifest declares, at the version its lock
+ * recorded (the registry's version when the lock has none for that variant).
+ */
+async function computeManagedDoctorState(projectRoot) {
+  const section = { notes: [], issues: [] };
+  const registry = await readRegistry();
+  const declaredAt = async (dir) => {
+    const declared = readManagedInstructions(await fs.readJson(path.join(dir, PROJECT_MANIFEST_NAME)));
+    if (!declared) return null;
+    const lock = await fs.readJson(path.join(dir, PROJECT_LOCK_NAME)).catch(() => null);
+    const version = lock?.instructions?.variant === declared.variant
+      ? lock.instructions.version
+      : getInstructionVariant(registry, declared.variant)?.version ?? '?';
+    return `${declared.variant}@${version}`;
+  };
+
+  const mine = await declaredAt(projectRoot);
+  const ancestors = await skfAncestors(projectRoot);
+  for (const dir of ancestors) {
+    let theirs;
+    try {
+      theirs = await declaredAt(dir);
+    } catch (error) {
+      section.notes.push(`could not read the managed instructions of ${printableOnly(dir)}: ${error.message}`);
+      continue;
+    }
+    if (!theirs) continue;
+    if (!mine) {
+      section.notes.push(`${printableOnly(dir)} uses ${theirs} and this root declares none; Claude Code sessions here load that copy.`);
+    } else if (theirs !== mine) {
+      section.issues.push(`this root uses ${mine} but ${printableOnly(dir)} uses ${theirs}; an umbrella session that touches this root loads both, so declare the same variant and version in each.`);
+    }
+  }
+  if (!mine) section.notes.push('no managed instructions variant declared.');
+  const { entries, unsafe } = excludeEntries(ancestors);
+  const skips = entries.map(printableOnly).join(', ');
+  if (entries.length > 0) {
+    section.notes.push(mine ? `Claude Code sessions rooted here skip: ${skips}` : `with a variant declared, Claude Code sessions rooted here would skip: ${skips}`);
+  }
+  for (const dir of unsafe) section.notes.push(`${printableOnly(dir)} has glob characters in its path, so it cannot be excluded.`);
+  return section;
+}
+
 async function checkedSection(label, produce) {
   try {
     return { value: await produce() };
@@ -2893,7 +3329,10 @@ async function runProjectDoctor(projectRoot, options) {
     ? { applicable: false, notes: [], issues: [layoutResult.failure], warnings: [] }
     : layoutResult.value;
 
-  const sections = { profile, instructions, layout };
+  const managedResult = await checkedSection('managed instructions', () => computeManagedDoctorState(projectRoot));
+  const managed = managedResult.failure ? { notes: [], issues: [managedResult.failure] } : managedResult.value;
+
+  const sections = { profile, instructions, layout, managed };
   const issues = Object.entries(sections).flatMap(([section, value]) => value.issues.map((message) => ({ section, message })));
   const warnings = layout.warnings.map((message) => ({ section: 'layout', message }));
   const report = { root: projectRoot, role, ok: issues.length === 0, sections, issues, warnings };
@@ -2916,6 +3355,9 @@ async function runProjectDoctor(projectRoot, options) {
   for (const note of layout.notes) console.log(chalk.gray(`  note: ${note}`));
   for (const warning of layout.warnings) console.log(chalk.yellow(`  warning: ${warning}`));
   if (layout.issues.length > 0) console.log(count(layout.issues));
+  console.log(chalk.bold('\nManaged instructions'));
+  for (const note of managed.notes) console.log(chalk.gray(`  note: ${note}`));
+  if (managed.issues.length > 0) console.log(count(managed.issues));
 
   console.log();
   if (issues.length === 0) {

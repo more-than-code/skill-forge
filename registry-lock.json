@@ -637,6 +637,16 @@
         "skill-forge-stats.json": "sha256-FVSG1EMeGNl4UBbWhLDNGvZoSIGG3kg4T/E/SaBVp6Q=",
         "skill-forge-stats.mjs": "sha256-4019n6BsEwDqjR4mJ31J9XaTn5YNLHn9+J6gqJhZdDQ="
       }
+    },
+    "instructions:full": {
+      "name": "full",
+      "version": "0.1.0",
+      "type": "instructions",
+      "integrity": "sha256-AKKJkMkMQDZOLnRzS//yrjdF57CFftJBclRKnUrgZWI=",
+      "files": {
+        "AGENTS.md": "sha256-2bFr6mZQCqFW5F5NVgflJw9E1SCmNaY3G3x3FZMcp5M=",
+        "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
+      }
     }
   }
 }

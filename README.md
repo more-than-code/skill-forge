@@ -12,8 +12,10 @@ local registry and installer for agent-facing artifacts:
 The repository is the source of truth. Skills are project-scoped: consumer
 repositories (and `$HOME` for machine-wide skills) declare a profile in
 `skill-forge.json`, and `skf sync` vendors exact copies into the repo. Managed
-instructions, subagents, and hooks deploy to per-tool runtime files. All
-runtime locations are deployment targets, never the source of truth.
+instructions deploy to per-tool runtime files and, for a root that declares an
+instruction variant, into marked blocks of its own `AGENTS.md`/`CLAUDE.md`;
+subagents and hooks deploy to per-tool runtime files. All runtime locations are
+deployment targets, never the source of truth.
 
 ## Features
 
@@ -23,7 +25,7 @@ runtime locations are deployment targets, never the source of truth.
 - Syncs project and `$HOME` skill profiles (manifest + lockfile + vendored
   copies) and installs agents, subagents, and hooks to per-tool runtimes.
 - Composes managed agent instructions from `inventory/agents/core.md` plus a
-  tool-specific overlay.
+  tool-specific overlay, globally or per project as a chosen variant.
 - Validates registry metadata, skill frontmatter, managed artifact paths, and
   lock freshness.
 - Diffs canonical inventory against runtime targets without writing.
@@ -38,7 +40,7 @@ design decisions log live in [docs/DESIGN.md](docs/DESIGN.md).
 bin/cli.js                 # skill-forge CLI
 inventory/
   skills/                  # installable custom skills
-  agents/                  # managed global instruction overlays
+  agents/                  # managed instruction core and overlays (global installs and project variants)
   subagents/               # managed subagent definitions
   hooks/                   # managed runtime hook scripts (usage stats)
 test/                      # node:test CLI suite (npm test)
@@ -209,6 +211,73 @@ directory as it is now. `instructions` notes the scaffold marker line until you
 delete it. Like `instructions`, it needs a `skill-forge.json` and refuses to run
 in `$HOME`.
 
+### Managed instructions (per-project variants)
+
+A session root can carry the managed agent instructions itself, at a variant and
+version its manifest chooses, instead of relying on the global files that
+`agent install` writes:
+
+```bash
+node bin/cli.js project instructions use full            # ^ of the registry version
+node bin/cli.js project instructions use full@^0.1.0     # explicit range
+node bin/cli.js project instructions use none            # remove the managed blocks
+```
+
+`use` records `"instructions": {"variant": "full", "version": "^0.1.0"}` in
+`skill-forge.json` (any `role` is kept) and runs `sync`; if that sync fails,
+the manifest is restored. The registry's `instructionVariants` list what exists
+(`full` is today's `core.md` plus the Claude Code overlay; its agent names read
+`Explore`/`researcher`, since the block serves every tool). Commit the blocks
+with the repository, so fresh clones and cloud sessions, which never read
+`~/.claude`, get them. With a variant declared, `sync`:
+
+- writes the variant's core into `AGENTS.md` between
+  `<!-- >>> skill-forge instructions full@0.1.0 >>> -->` and
+  `<!-- <<< skill-forge instructions <<< -->` (a begin line counts only when it
+  is the whole line, so a marker quoted in prose is left alone). Text outside
+  the markers is yours and is never changed. A new block is appended after one
+  blank line, in the file's own line endings (CRLF when the file uses them);
+  `use none` removes the block and that blank line, so a newline-terminated
+  file comes back byte for byte (one without a final newline gains one).
+  Claude Code strips these comment lines before the model sees them.
+- with the `claude-code` shim, writes the variant's Claude block (if it has one)
+  into `CLAUDE.md` the same way. `CLAUDE.md` must import `AGENTS.md`
+  (`@AGENTS.md`); a missing `CLAUDE.md` is created as that import (plus the
+  block). A `CLAUDE.md` that is a symlink to `AGENTS.md` satisfies `project
+  instructions`, but sync refuses it, since it would write through the link.
+  Dropping the shim later removes the Claude block.
+- adds `claudeMdExcludes` entries to `.claude/settings.local.json` for every
+  ancestor directory that has its own `skill-forge.json` (an umbrella above a
+  child or a `work-*` worktree): its `CLAUDE.md`, `.claude/CLAUDE.md` and
+  `AGENTS.md`, as absolute real paths. Claude Code loads every ancestor's
+  instruction file at launch, so without this a child session would load the
+  umbrella's copy as well as its own. `$HOME`'s profile never counts as an
+  ancestor. Sync owns exactly the entries naming those files of the root's
+  current skf ancestors; every other entry (say, one for `~/.claude/CLAUDE.md`)
+  is yours and is kept, as are other keys (the file is re-written as 2-space
+  JSON). The file stays out of git through this work tree's block in
+  `info/exclude` (`overlay --clear` keeps that line). An ancestor whose path
+  holds glob characters (`* ? [ ] { } ! ( ) | + @ \ ^`) is not excluded but
+  reported by `sync --check`, since a glob matcher could misread it.
+- records `instructions: {variant, version, sha256: {agents, claude}}` in
+  `skill-forge.lock.json` (`claude` only when a Claude block is written). The
+  exclude entries are absolute paths, so they are recomputed per checkout and
+  never written to the tracked lock.
+
+Sync refuses, before writing anything: a lone or duplicated marker; an
+instruction file, `.claude/settings.local.json` or the `.claude` folder that is
+a symlink; a `CLAUDE.md` without the import; a `settings.local.json` that is not
+a JSON object, has a non-array `claudeMdExcludes`, or is tracked by git; and a
+variant declared in the `$HOME` profile (a `~/AGENTS.md` would load in every
+project under it). `sync --check` reports a block that is missing, stale (the
+registry changed), edited (text changed inside the markers; told apart from
+stale by the lock's hash) or no longer declared, and an exclude entry that is
+missing or left over. Sync replaces an edited block and says so. A block whose
+variant and lock entry are both gone (an interrupted `use`) is still found by
+its markers and removed. `use none` strips both blocks, deletes an `AGENTS.md`
+that removing the block left empty (and a `CLAUDE.md` then holding only its
+import), and removes only the exclude entries sync owns.
+
 One read-only gate for a session root, composing the other checks:
 
 ```bash
@@ -217,7 +286,7 @@ node bin/cli.js project doctor --check    # exits 1 on any issue (CI gate)
 node bin/cli.js project doctor --json
 ```
 
-`doctor` reports three sections. **Profile** is the `sync --check` result.
+`doctor` reports four sections. **Profile** is the `sync --check` result.
 **Instructions** is the `project instructions` result. **Layout** depends on the
 role recorded by `scaffold` (`skf project scaffold --role <role>` records it
 without creating anything when the files already exist; with no role the section
@@ -227,7 +296,13 @@ path in `AGENTS.md` (issues), and every child repo it holds named in `AGENTS.md`
 mention `SESSION.md` and git to ignore its `tasks/` ledger (issues; it asks
 `git check-ignore`, so `.gitignore`, `.git/info/exclude` and global excludes all
 count, and any failure to run git is only a warning). `repo` has no layout
-rules. Warnings and notes never fail `--check`, and a section that cannot run is
+rules. **Managed instructions** fails when this root's variant or version
+differs from that of an ancestor with its own `skill-forge.json` (an umbrella
+session that touches the child would load both); both sides are read as the
+declared variant at the version their lock recorded. A root that declares no
+variant under an ancestor that does gets a note, not an issue (it is not opted
+in). The section also notes the ancestor files Claude Code sessions rooted here
+skip, or would skip once a variant is declared. Warnings and notes never fail `--check`, and a section that cannot run is
 reported as an issue while the others still appear. A missing or invalid
 manifest, a bad role, or running in `$HOME` aborts with exit 1 before any report.
 It writes nothing.
@@ -330,7 +405,8 @@ installed rather than vendored.
 ## Installing Agents, Subagents, Hooks (global)
 
 Managed instructions, subagents, and hooks stay push-based, one namespace per
-artifact type:
+artifact type. (Instructions can also be pulled per project as a variant; see
+"Managed instructions" above.)
 
 ```bash
 node bin/cli.js agent install codex-agents --target codex --path '~/.codex/AGENTS.md' --yes
@@ -456,6 +532,12 @@ inventory/agents/<tool>/<overlay-file>
 The CLI writes the composed result to the runtime target declared in
 `registry.json`. For example, `codex-agents` targets `~/.codex/AGENTS.md`.
 
+The same sources also ship per project: `instructionVariants` in `registry.json`
+name a `core` (for `AGENTS.md`), an optional `claude` block (for `CLAUDE.md`)
+and `vars`, and `skf project instructions use <variant>` delivers them through
+`sync` (see "Managed instructions" above). Each variant is locked as
+`instructions:<name>` by the hashes of the blocks it renders.
+
 Run a read-only drift check before installing:
 
 ```bash
@@ -553,11 +635,15 @@ session ID.
 ## Safety Notes
 
 - `<type> diff`, `sync --check`, `project|home status`,
-  `project instructions`, and `project doctor` are read-only. `project scaffold` is create-only: it
+  `project instructions` (without an action), and `project doctor` are read-only.
+  `project instructions use` writes `skill-forge.json` and then runs `sync`. `project scaffold` is create-only: it
   never overwrites a file, and its only edit to existing files is adding
   `instructions.role` to `skill-forge.json`.
 - `sync` writes only the profile's own targets and never overwrites an
-  unmanaged directory (declare hand-authored skills in `skills.local`).
+  unmanaged directory (declare hand-authored skills in `skills.local`). With
+  `instructions.variant` declared it also edits `AGENTS.md`/`CLAUDE.md`, but only
+  between its markers, and only its own `claudeMdExcludes` entries in
+  `.claude/settings.local.json`.
 - `agent|subagent|hook install` write to runtime targets; existing files are
   not overwritten without confirmation unless `--yes` is set.
 - Runtime files are deployment targets, not the source of truth.

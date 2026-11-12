@@ -127,10 +127,25 @@ active for a project because its body sits at a project-local discovery path the
 harness and activation protocol already read — not because an instruction asks
 agents to ignore globally installed alternatives.
 
-### Scope: skills only
+### Scope: skills, and opt-in instruction variants
 
-Only skills become project-scoped. Managed agent instructions, subagents, and
-hooks remain global per-tool installs:
+Skills are project-scoped. Since 2026-11-12, managed agent instructions can be
+too, opt-in per session root: `instructions.variant` and `instructions.version`
+in `skill-forge.json` make `sync` write the variant into marked blocks in the
+root's `AGENTS.md` and `CLAUDE.md`, and exclude skf-managed ancestors'
+instruction files from Claude Code (`claudeMdExcludes` in the untracked
+`.claude/settings.local.json`). The reasons, which reverse part of the
+2026-07-19 decision below: a variant can only be compared (evaluated) per
+project if the global file is not loaded alongside it; cloud sessions and fresh
+clones read only what the repository carries; and Claude Code stacks every
+ancestor's `CLAUDE.md`, so an umbrella and its children must each carry their
+own copy and skip the others. Sync edits only the text between its markers, so
+the rest of those files stays user prose and `sync --check` never reports it.
+The global installs below still exist while consumers migrate.
+
+The rest of this section is the original reasoning, which still holds for
+subagents and hooks. Before 2026-11-12, managed agent instructions, subagents,
+and hooks all remained global per-tool installs:
 
 - They are runtime configuration, not task-domain dependencies — the process
   (risk tiers, delegation roles, gates) is the same in every repository.
@@ -155,8 +170,11 @@ shows per-project role variation matters.
 - `skill-forge.lock.json` is the generated project lockfile: exact resolved
   versions, integrity hashes, and registry provenance.
 - There is no `.skill-forge/` project directory. Sync writes only committed
-  artifacts (manifest, lockfile, vendored skill bodies), so no machine-local
-  project state exists to store or gitignore.
+  artifacts (manifest, lockfile, vendored skill bodies, managed instruction
+  blocks), plus, where managed instructions exclude skf ancestors, one
+  machine-local file: Claude Code's own untracked `.claude/settings.local.json`,
+  kept out of git through `info/exclude` and recomputed on every sync rather
+  than locked.
 - Machine-local, per-user state lives in `~/.skill-forge/` (or `$SKILL_FORGE_HOME`), never in a
   project. `hosts.json` there declares the remote machines this machine may delegate to
   (`skf home hosts`). It is hand-written and per machine on purpose: how a host is reached is a
@@ -241,6 +259,10 @@ Design notes:
   commands; `sync` and `status` ignore and preserve it. It is not part of the
   lock: the project lock hashes the registry and the resolved skills, never the
   manifest, so recording a role cannot make `sync --check` stale.
+- `instructions.variant` and `instructions.version` (written by `skf project
+  instructions use`) are different: `sync` acts on them, so a declared variant
+  must be well-formed, and the lock records the resolved variant (below). A
+  non-object `instructions` still never breaks `sync`.
 - Negative controls such as `deny` remain rare compatibility escapes (for
   example, suppressing one inherited home-profile skill) — not the activation
   mechanism.
@@ -267,9 +289,18 @@ Generated lockfile shape:
       "integrity": "sha256-...",
       "source": "local"
     }
+  },
+  "instructions": {
+    "variant": "full",
+    "version": "0.1.0",
+    "sha256": { "agents": "sha256-...", "claude": "sha256-..." }
   }
 }
 ```
+
+`instructions` is present only when the manifest declares a variant; `sha256`
+hashes the rendered blocks, which is how `sync --check` tells a hand-edited
+block from a stale one.
 
 `registry.commit` anchors provenance to an exact registry state. Registry-side
 paths are deliberately absent: the consumer repository never resolves anything
@@ -296,7 +327,8 @@ no tools enabled is an error.
 
 Plain copies over symlinks: relative in-repo symlinks would deduplicate but add
 platform caveats, and sync already owns drift detection for every written copy.
-All sync outputs are committed.
+All sync outputs are committed, except the untracked `settings.local.json`
+exclude entries described under "Scope".
 
 ### Revised install flow
 
@@ -331,8 +363,10 @@ Behavior:
 - `skf sync` resolves the manifest, vendors the skills, and writes or updates
   `skill-forge.lock.json`.
 - `skf sync --check` is read-only and exits non-zero when the manifest,
-  lockfile, or vendored copies disagree. Because sync produces no machine-local
-  state, this is a complete check in CI, not just on developer machines.
+  lockfile, or vendored copies disagree. Because the only machine-local state
+  sync produces is the untracked Claude settings file, recomputed from the
+  checkout's location, this is a complete check in CI, not just on developer
+  machines.
 - `skf project status` is the human-facing view: which skills are active, which
   came from which profile, which are local overrides, and what is stale. It
   absorbs what a separate `diff-project` command would report — two commands
@@ -340,9 +374,12 @@ Behavior:
   overlapping ones. A `doctor` that only repeated those checks would be
   redundant, so `skf project doctor` exists only as a composition (below).
 - `skf project instructions [--check] [--json]` is the one read-only check that
-  is not about the skill profile. It stays a separate command because its
+  is not about the skill profile (its `use` action is the exception: it writes
+  the manifest and syncs). It stays a separate command because its
   subject is user-owned prose, not vendored skills: folding it into `sync
-  --check` would report permanent false drift on files people edit, and into
+  --check` would report permanent false drift on files people edit (the managed
+  blocks are different: `sync --check` hashes only the text between their
+  markers), and into
   `project status` would mix instructions into a profile view that exits 0. It
   runs only where a `skill-forge.json` exists, since that file already marks a
   session root, so children meant to inherit from their umbrella are never
@@ -350,8 +387,10 @@ Behavior:
 - `skf project doctor [--check] [--json]` composes the read-only checks behind
   one report and one exit code, so a repository needs a single CI gate: the
   skill-profile check (the `sync --check` logic), the instructions check, and
-  layout rules keyed on the recorded `instructions.role`. It adds no check of
-  its own to those two and keeps them as separate commands, so each stays
+  layout rules keyed on the recorded `instructions.role`, and (since
+  2026-11-12) a managed-instructions section that compares this root's variant
+  and version with each skf ancestor's. Apart from that section it adds no check
+  of its own to those two and keeps them as separate commands, so each stays
   usable alone. Layout rules: an umbrella needs its `tasks/todo.md` ledger and
   that ledger's absolute path in `AGENTS.md` (issues), and names each child
   repo there (a warning, because the match is a heuristic); a child's
@@ -491,7 +530,8 @@ cleanup exist, so no workflow is ever without a working path.
   writes or reads them, and `$HOME` skills live in `~/.agents/skills` and
   `~/.claude/skills` via the home profile.
 - `diff-global`'s skill half is superseded (`sync --check` in `$HOME`); its
-  agents, subagents, and hooks drift checks remain, since those stay global.
+  agents, subagents, and hooks drift checks remain, since those stay global
+  (instructions are also project-delivered as variants since 2026-11-12).
 - The registry repo's change workflow becomes pull-based for skills: after a
   skill edit, the registry-side gates stop at `lock` + `validate`; consumers
   (each project repo and `$HOME`) pick up the new version on their next
@@ -645,7 +685,7 @@ any new component.
 | 2026-07-14 | Evaluation framework: one phase vocabulary; hook-based Layer 2; tier-scaled judge | Avoid dual taxonomies, unreliable self-audit, and unbounded judge cost |
 | 2026-07-18 | Grok first-class: agents overlay, subagents, hooks | Grok has built-in `explore`/`plan` + hooks JSON discovery; role set mirrors Claude Code asymmetry rather than copying Codex |
 | 2026-07-19 | Project skill profiles: skills vendor per-project; home profile replaces per-tool global skill installs | A physical activation boundary beats an instructional one; the repo tree alone carries the pinned content, so fingerprints and reproduction come from checkout |
-| 2026-07-19 | Managed instructions, subagents, and hooks stay global | Runtime configuration, not task-domain dependencies; tools already offer native project-level overrides |
+| 2026-07-19 | Managed instructions, subagents, and hooks stay global (instructions: partly reversed 2026-11-12) | Runtime configuration, not task-domain dependencies; tools already offer native project-level overrides |
 | 2026-07-19 | CLI converges on noun-verb subcommands (`skf <type> <verb>`); `skf skill` stays authoring-only | Namespaces hold each type's primary operations — skill deployment is project-scoped (`skf project`/`skf sync`); `--type` flags and hyphenated `diff-*` commands retire behind aliases; bare `skf install` remains the picker and escape hatch |
 | 2026-07-20 | `skf home` namespace; home profile seeds only `skill-forge-project` | "project" at `$HOME` reads wrong; a minimal home keeps baselines per-repo, so repos stay self-contained and no skill is surfaced twice (home + repo) |
 | 2026-07-20 | Sync targets derive from the manifest `tools` map | `.agents/skills/` only when a non-Claude tool is enabled; `.claude/skills/` for Claude Code; narrowing the tool set prunes orphaned copies and husk dirs |
@@ -653,4 +693,5 @@ any new component.
 | 2026-10-04 | `skf project scaffold`, and an optional `instructions.role` in the manifest | The check could report missing files but not fix them. Create-only (exclusive create, so symlinks are never written through), placeholder templates, `CLAUDE.md` only with the `claude-code` shim. The role is stored because role-aware layout checks (a later `project doctor` that composes `sync --check`, `instructions` and those rules) need it; the project lock hashes the registry and resolved skills, never the manifest, so the key cannot make `sync --check` stale, and only the instruction commands validate it, so a bad value cannot break `sync` or `status` |
 | 2026-11-06 | Local overlay: untracked `skill-forge.local.json` + its own lock, kept out of git by a per-work-tree block in the shared `info/exclude` | Worktree slices need skills their child repo's profile does not declare, without committing them into that repo. Separate locks keep the tracked lock byte-identical; promotion into a tracked profile clears the exclude lines everywhere, because a shared exclude would otherwise hide the new tracked folder from `git add` |
 | 2026-10-05 | `skf project doctor`: one read-only gate composing the profile check, `project instructions`, and role-aware layout rules | A repo needed three commands to be sure it was healthy. Composition only, so it reverses the earlier "doctor is redundant" argument without duplicating anything; the two checks stay separate. Severities came from a read-only scan of seven umbrellas (37 children): umbrella ledger 7/7 and absolute path 6/7 pass (issues), unnamed children 4/37 (warning, heuristic match), child SESSION.md hook and git-ignored ledger fail often enough to be real findings (issues, only where a root opts in with a recorded role). The ledger rule asks git itself, so any failure to run git (no binary, a refusal, a timeout) degrades to a warning |
+| 2026-11-12 | Managed instructions ship per project as opt-in variants (`instructionVariants`; `skf project instructions use`); partly reverses 2026-07-19 | Comparing instruction variants needs projects that load only their own copy; cloud sessions and Claude Projects threads read only the repository, never `~/.claude`. Delivered as marked blocks in `AGENTS.md`/`CLAUDE.md`, the precedent being the shell-rc block, so user prose stays outside `sync --check`. Claude Code stacks ancestor `CLAUDE.md` files and sandboxing does not change what loads, so sync excludes skf ancestors with `claudeMdExcludes` in the untracked `settings.local.json`; those absolute paths are recomputed per checkout, never put in the tracked lock. `$HOME` never gets a block (it would load in every project). Phase 1 ships `full` (today's text, global files untouched); slim, the eval and global removal follow (`tasks/spec-project-instructions.md`) |
 | 2026-11-07 | Enforcement hooks for Claude Code: `git-guard` (PreToolUse/Bash) and `staleness` (SessionStart) | Principle 4: what must happen reliably is a hook, not an instruction. The guard denies commit/push outside the session's project and answers **ask**, not deny, for main/master and for commands it cannot resolve: the harness's own permission prompt is the one thing a relayed peer message can never satisfy, so the hook does not have to judge who approved what. Grok deferred (not in recent use); its docs confirm the same reply format would work. |

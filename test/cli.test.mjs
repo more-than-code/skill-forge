@@ -2290,7 +2290,8 @@ test('project doctor keeps its JSON contract and exits 1 under --check --json wi
   const root = await layoutRoot('umbrella', { 'AGENTS.md': '# Rules\n', 'CLAUDE.md': '@AGENTS.md\n' });
   const report = await doctorJson(root);
   assert.deepEqual(Object.keys(report).sort(), ['issues', 'ok', 'role', 'root', 'sections', 'warnings']);
-  assert.deepEqual(Object.keys(report.sections).sort(), ['instructions', 'layout', 'profile']);
+  assert.deepEqual(Object.keys(report.sections).sort(), ['instructions', 'layout', 'managed', 'profile']);
+  assert.deepEqual(Object.keys(report.sections.managed).sort(), ['issues', 'notes']);
   assert.deepEqual(Object.keys(report.sections.profile), ['issues']);
   assert.deepEqual(Object.keys(report.sections.instructions).sort(), ['claudeMdRequired', 'files', 'issues', 'notes']);
   assert.deepEqual(Object.keys(report.sections.layout).sort(), ['applicable', 'issues', 'notes', 'warnings']);

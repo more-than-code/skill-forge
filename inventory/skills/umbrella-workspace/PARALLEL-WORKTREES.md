@@ -65,6 +65,10 @@ The root rule also leaves a record. An app session started with the worktree as 
 
 **A worktree session loads the child's tracked skills plus the home profile** (`~/.agents/skills`, `~/.claude/skills`, from `skf home`) — never the umbrella's own profile. So a skill every session of every product should have (`umbrella-workspace`, the `session-roles` / `role-*` set) belongs in the **home profile**, where worktree sessions get it for free. A skill that is genuinely specific to one umbrella is out of a worktree session's reach. When the slice needs it, give it through the **local overlay** in that worktree — `skf project add <skill> --overlay`, then `skf sync`: vendored and version-locked like any other skill, but untracked and kept out of git, so it is never committed into the child or merged with the branch. Never add it to the child's tracked `skill-forge.json` for one slice, and never hand-copy it. Name the overlay skills in `SESSION.md` too.
 
+**"The child's skills" means the ones in the tool's own skill folder.** Claude Code reads `.claude/skills`, which `skf sync` writes only when the child's profile has the `claude-code` shim. A child whose profile has `"shims": []` vendors to `.agents/skills` alone. A Claude Code session rooted in its worktree then gets none of the child's skills, only the home profile. Before starting a Claude Code slice in a child, check that the worktree has `.claude/skills`. If it doesn't, turn the shim on in the child's profile and run `skf sync` there. Observed on one project (2026-11-12): the mobile child was set up for one other tool only, so its stack skills never reached a Claude Code slice.
+
+**The root is fixed when the session starts.** It is the start call's working folder. A brief telling an umbrella-rooted session to "`cd` into the worktree and use absolute paths" changes where its commands run, not which instructions and skills it loaded. In the desktop app, a proposal card cannot carry a folder, so a slice started from a card opens at the umbrella. Start slices directly, with the folder set.
+
 ## Who owns a worktree: git first, the ledger second
 
 The umbrella ledger is gitignored, and the umbrella is usually not a repository, so `tasks/todo.md` can be lost or go stale. Ownership therefore lives where it cannot drift from the worktree itself:
@@ -219,7 +223,8 @@ Published / generated content that is gitignored on purpose (packs, images, audi
 5. [ ] Write a **fresh** `SESSION.md` in each worktree (role, approvals, scope, runtime, plan entry, hand back, overlay skills — nothing git already says); confirm it is in `info/exclude`
 6. [ ] The "read SESSION.md" hook is in the **umbrella** `AGENTS.md` (reaches Claude Code) and the child `AGENTS.md` (reaches Codex, Grok)
 7. [ ] One line per worktree in the umbrella `tasks/todo.md` slice block, matching the lock note
-8. [ ] Start the slice session with its root = the `work-<slice>/` folder only, and a brief that points at `SESSION.md`
+8. [ ] Start the slice session with its root = the `work-<slice>/` folder only (the start call's working folder, not a card and not a `cd` in the brief), and a brief that points at `SESSION.md`. For a Claude Code slice, also confirm the worktree has `.claude/skills` (the child's `claude-code` shim)
+9. [ ] Confirm in the session list that the new session's folder is the worktree
 
 ## Retire on the primary
 

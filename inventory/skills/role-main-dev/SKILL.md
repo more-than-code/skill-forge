@@ -132,6 +132,22 @@ write its `SESSION.md`, take the lock naming the Slice Dev session, and start th
 the worktree. The owner approving the spec is not a reason to keep going in the same chat —
 that is exactly how a spec session ends up building two worktrees under the wrong role.
 
+**The worktree is the session's folder, set when it starts** — the start call's working
+folder (`cwd`), not a line in the brief. Nothing fixes it later: a brief saying "`cd` there
+and use absolute paths" leaves the session reading the umbrella's instructions and skills.
+
+- **A proposal card cannot carry a folder.** A card the owner clicks opens at your root,
+  the umbrella. So never propose a slice as a card, and never drop the folder to get a start
+  call through.
+- **On a turn another session's message started, the app will not start a session.** Ask
+  the owner in chat instead ("Start the X slice in `work-x-be`?"), and on their yes start it
+  with the folder set.
+- **Check after starting:** the session list shows each slice's folder. A slice rooted at
+  the umbrella is stopped and started again in its worktree, before it edits anything.
+- Observed on one project (2026-11-12): after one refused start, Main Dev proposed every
+  later slice as a card without a folder. All of them, mobile included, ran from the
+  umbrella with "`cd` there" briefs.
+
 - **A slice across two children** gets two Slice Devs (`session-roles`). You own the contract
   between them and relay it as real samples — one side's actual request and response — not
   a prose summary.

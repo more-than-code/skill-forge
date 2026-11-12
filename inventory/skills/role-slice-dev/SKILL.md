@@ -38,9 +38,16 @@ Check three things, and stop and ask the parent if any fails:
 3. The lock note (`git worktree list --verbose`) names this session.
 
 **A session rooted at the umbrella is not a Slice Dev, whatever its title** — it reads the
-umbrella's instructions, not the brief, and subagents it drives leave no worktree session
-record. If that is you, you are Main Dev building, and `role-main-dev` ("When your spec is
-approved for build") says what that takes.
+umbrella's instructions, not the brief, and leaves no worktree session record.
+
+- **Started as a slice but rooted at the umbrella?** Check 1 fails: stop before the first
+  edit. Tell the parent your session id and actual root, and ask it to start the slice again
+  with the worktree as its folder. A brief that says "`cd` there and use absolute paths" does
+  not move the root — `cd` changes where commands run, not which instructions and skills the
+  session loaded. Do not build, and do not decide you are Main Dev. Observed on one project
+  (2026-11-12): every slice of a product, mobile included, ran from the umbrella this way.
+- **Main Dev building from the umbrella** on the owner's word is a different case;
+  `role-main-dev` ("When a spec is approved for build") says what that takes.
 
 ## The brief is the boundary
 

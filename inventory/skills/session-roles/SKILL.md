@@ -49,7 +49,8 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **The role follows the root, not the title.** A session rooted at the umbrella is Main Dev
   (or another hub role), whatever it calls itself: it reads the umbrella's instructions and
   never a worktree's `SESSION.md`. Only a session started inside a `work-*` worktree, with a
-  `SESSION.md` naming it, is a Slice Dev. Observed on one project (2026-11-10): an umbrella
+  `SESSION.md` naming it, is a Slice Dev. The root is the folder the session was started in;
+  a brief that says "`cd` into the worktree" does not change it. Observed on one project (2026-11-10): an umbrella
   spec session went on to build two worktrees through subagents, called itself "Slice Dev",
   and neither worktree had a `SESSION.md`.
 - **A spec that becomes a build changes the session's job — settle its shape before the

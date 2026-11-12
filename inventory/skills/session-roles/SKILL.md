@@ -41,8 +41,8 @@ The owner sets priorities and gives every approval. Nobody else does.
 - **Slice Dev sessions** run in a `git worktree` of one child (`umbrella/work-<slice>`), one
   feature branch each, under the **Slice Dev** role — not as a second Main Dev. A slice that
   loads Main Dev doctrine reads that it may merge and start sessions, and will. They load the
-  child's skills and the home profile, not the umbrella's — so keep this skill and the
-  `role-*` set in the home profile, and have the `SESSION.md` Main Dev writes for them name
+  child's skills and the home profile, not the umbrella's — so declare this skill and the
+  `role-*` set in each child's profile (as well as `$HOME`), and have the `SESSION.md` Main Dev writes for them name
   the Slice Dev role, the files they own, the ports, the approvals they must get in their own
   chat, and how to hand back (`umbrella-workspace`, `PARALLEL-WORKTREES.md`). A Slice Dev
   talks only to its parent; Main Dev merges its branch and retires the worktree.

@@ -40,13 +40,18 @@ agents/subagents/hooks (`skf agent|subagent|hook install`).
    now carries `name`, `version`, `tags`, and `description` — use those to
    match against what step 1 found. Filter client-side; there is no server-side
    `--query`.
-3. **Propose a minimal set**, not everything that could plausibly apply:
+3. **Propose the `$HOME` set plus a minimal set of stack skills**, not every
+   stack skill that could plausibly apply:
    - **Declare what the repo needs, whether or not `$HOME` also provides it.**
      A repo's manifest should state its own requirements, so it resolves the
-     same way on a machine whose `$HOME` profile is empty. The baseline trio
-     (`security-baseline`, `coding-discipline`, `code-quality`) therefore
-     belongs in each repo's profile regardless of what the machine happens to
-     carry.
+     same way on a machine whose `$HOME` profile is empty. So the whole
+     `$HOME` set — the baseline trio (`security-baseline`, `coding-discipline`,
+     `code-quality`), `testing-strategy`, `umbrella-workspace`, `session-roles`
+     and the `role-*` set, and the rest of `~/skill-forge.json` — belongs in
+     each repo's profile, on top of the stack skills below. A Claude Project or
+     cloud session opened on the repo gets only what it commits (owner,
+     2026-11-13: "whole $HOME set to every root"). Read the current set from
+     `~/skill-forge.json` rather than from this list.
 
      Overlap does **not** double-load. Observed 2026-09-22 on two tools
      independently: names present in both the project and `$HOME` trees
@@ -57,8 +62,9 @@ agents/subagents/hooks (`skf agent|subagent|hook install`).
      The cost that is real is **shadowing**: the project copy wins
      unconditionally, so once the repo's pin lags a `$HOME` bump, the stale
      project copy is what loads — and `sync --check` passes at both levels,
-     because each is internally consistent. Keep the pins deliberate and
-     re-sync repos you have not touched in a while.
+     because each is internally consistent. Now that every repo declares the
+     `$HOME` set, re-sync every root after each registry change, not only
+     `$HOME`. Widen a pin in every root and in `$HOME` together.
    - Add stack-specific skills only where a detected signal maps directly to a
      skill's tags/description (e.g. a `Dockerfile`/compose file →
      `podman-utilization`; a frontend framework → `frontend-engineering` and/or

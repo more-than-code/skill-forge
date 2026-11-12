@@ -38,9 +38,18 @@ Do **not** put single-repo work in the umbrella `tasks/` or `docs/`.
 
 ## Skill profiles across the workspace
 
-Two sources: the **`$HOME` profile** for what applies regardless of stack, and **one project profile** for stack-specific skills. Don't re-declare a home skill in the project profile.
+**Every root declares the whole set it needs, including what `$HOME` also provides.** That covers the baseline, `umbrella-workspace`, `session-roles` and the `role-*` set, plus the stack skills. The `$HOME` profile stays for sessions rooted outside any project. It is no longer what a repo relies on.
 
-Not because it double-loads - it doesn't. Observed 2026-09-22, six names present in *both* the project and `$HOME` trees surfaced exactly once each, resolved project-over-home, on two tools independently (`grok inspect` labels the winner `project`; the other listed ten unique names from sixteen directories). The real costs are two: you store, commit and update a second copy, and **the project copy shadows the home one unconditionally**. While the two match, the duplication is invisible. The moment the project's pin lags a `$HOME` bump, the stale project copy is what loads - `sync --check` passes at both levels, because each is internally consistent, and nothing reports the shadowing. A skill that applies regardless of stack belongs at `$HOME` only.
+The reason is that a repo travels without `$HOME`. A Claude Project, a cloud session or another machine gets only what the repo commits, so a skill it leaves to `$HOME` is simply missing there. The owner decided this on 2026-11-13: "whole $HOME set to every root".
+
+Overlap does not double-load. Observed 2026-09-22: six names present in *both* the project and `$HOME` trees surfaced exactly once each, resolved project-over-home, on two tools independently (`grok inspect` labels the winner `project`; the other listed ten unique names from sixteen directories).
+
+The cost is **shadowing**: the project copy wins unconditionally. Once a root's lock lags a registry bump that `$HOME` already has, the older project copy is what loads there. Two rules keep that bounded:
+
+- **Every registry change is synced into every root, not just `$HOME`.** Run `sync --check` in each root after it: any registry change marks every root stale until it is re-synced.
+- **Pins move together.** When a pin is widened (below 1.0 a caret range does not reach the next minor), widen it in every root that declares the skill, and in `$HOME`.
+
+The `skill-forge-project` skill carries the shadowing comparison that `--check` cannot make.
 
 **Every level that is a session root declares its own profile.** The umbrella declares what umbrella-rooted sessions need; each child declares what its own sessions and worktrees need. Both are ordinary consumers - `skf project init`, `add`, `sync`, `sync --check` - and neither is a view onto the other.
 
@@ -95,7 +104,7 @@ done
 
 The hazard is not duplication but **drift between the two pins**. The umbrella at `^0.3.0` and a child at `^0.5.0` means the same skill behaves differently depending on which directory the session started in, and each level's `sync --check` passes because each is internally consistent. Keep the pins aligned deliberately, and treat a level you have not synced in a while as serving stale skills until proven otherwise.
 
-**A child whose signals `$HOME` already covers needs nothing.** A stub with no code yet is not a consumer - revisit when it becomes one.
+**A child with code needs a profile, even if `$HOME` covers all its signals.** It declares the shared set so it is self-contained. A stub with no code yet is not a consumer - revisit when it becomes one.
 
 **When the profile lives at an umbrella that is not a git repo, it is unversioned.** Children commit their own; an umbrella that is only a container commits nothing. Record which skill serves which child in the umbrella's `AGENTS.md`: that table plus `skf sync` is the profile's only durable record, and it is what rebuilds the workspace after the container is lost.
 
@@ -192,7 +201,7 @@ When **two sessions** would edit the **same child repo** at once:
 - A **branch** is not enough if both share one working directory.
 - **`git worktree add`** each **git** child you will change as `umbrella/work-<slice>`, inside the umbrella next to the primary checkouts (same branch name across related children).
 - Role sessions stay rooted at the **umbrella**; a slice session is rooted at **only** its `work-<slice>/` folder.
-- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) belong in the home profile. An umbrella-only skill the slice needs goes in through the untracked **local overlay** (`skf project add <skill> --overlay` + `skf sync` in the worktree), never the child's tracked profile. Its **`SESSION.md`** carries only what git cannot: role, the approvals it must get in its own chat, scope and off-limits paths, ports and DB, plan entry, how to hand back, overlay skills. Untracked via `info/exclude`; rewritten fresh per slice. The *read `SESSION.md` at session start* hook goes in the **umbrella** `AGENTS.md` (Claude Code reaches it through the parent folder) and in each child `AGENTS.md` (Codex, Grok).
+- A worktree session loads the **child's skills plus the home profile** — never the umbrella's profile. Product-agnostic skills every session needs (this one, `session-roles`, `role-*`) are declared in each **child's** profile, and kept in `$HOME` too, so the worktree has them from its own checkout. An umbrella-only skill the slice needs goes in through the untracked **local overlay** (`skf project add <skill> --overlay` + `skf sync` in the worktree), never the child's tracked profile. Its **`SESSION.md`** carries only what git cannot: role, the approvals it must get in its own chat, scope and off-limits paths, ports and DB, plan entry, how to hand back, overlay skills. Untracked via `info/exclude`; rewritten fresh per slice. The *read `SESSION.md` at session start* hook goes in the **umbrella** `AGENTS.md` (Claude Code reaches it through the parent folder) and in each child `AGENTS.md` (Codex, Grok).
 - **Claim each worktree in git**: `git worktree lock --reason "slice=… session=… started-by=… <date>"` on create, `unlock` on retire. `git worktree list --verbose` is the source of truth for what exists and who owns it; the ledger is a status view rebuilt from it. A `work-*` with no lock note is unclaimed — ask before touching it.
 - Own DB file and ports per worktree. Distinguish **git worktrees** from **copies**.
 - Slice-specific absolute paths belong in the umbrella **plan** / `SESSION.md`, not in this skill.
@@ -234,8 +243,8 @@ umbrella/                 # usually not a git repo
   child-a/                # each child its own git repo when ready
     AGENTS.md
     tasks/todo.md         # pointer stub when participating — committed, status-free
-    skill-forge.json      # this child's own skills; committed, so worktrees get them.
-                          #   Absent only when $HOME already covers everything it needs
+    skill-forge.json      # this child's own skills, the $HOME set included; committed,
+                          #   so worktrees and Claude Projects get them
     skill-forge.lock.json
     .agents/skills/       # the one real store, vendored by `skf sync`; never hand-copied
     .claude/skills        # symlink -> ../.agents/skills, written by `skf sync`

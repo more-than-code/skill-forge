@@ -766,3 +766,245 @@ test('states: route templates match, a reason is required, and a state with no p
   const wrongRoute = await setup([{ route: '/x', state: 'empty', reason: 'r' }], [{ id: 'y', web: { route: '/y' }, state: 'empty' }]);
   assert.deepEqual(wrongRoute.failures.find((x) => x.check === 'state-coverage')?.items, ['/x — empty']);
 });
+
+// --- 0.14.0: journeys (check Q) and the navigation scan (check R) ---------------------------
+const { runJourneys } = await import(path.join(SCRIPTS, 'parity-journeys.mjs'));
+const { runNavigation } = await import(path.join(SCRIPTS, 'parity-navigation.mjs'));
+
+// Web and mirror route schemes differ on purpose for one screen, so criterion 5 is exercised
+// by every journey test, not just one.
+const J_CAPTURES = [
+  { id: 'hub', web: { route: '/practice' }, mobile: { route: '/practice' } },
+  { id: 'done', web: { route: '/practice/completed' }, mobile: { route: '/practice/done' } },
+  { id: 'record', web: { route: '/records/[id]' }, mobile: { route: '/records/:id' } },
+  { id: 'chat', web: { route: '/?chat=c1' }, mobile: { route: '/?chat=c1' } },
+];
+const J_JOURNEY = {
+  id: 'record-back',
+  start: 'hub',
+  steps: [
+    { do: 'tap:Completed', expect: 'done' },
+    { do: 'tap:first-record', expect: 'record' },
+    { do: 'back', expect: 'done' },
+  ],
+};
+const J_ROOTS = ['/', '/practice'];
+const goodWeb = [
+  { do: 'tap:Completed', route: '/practice/completed' },
+  { do: 'tap:first-record', route: '/records/7' },
+  { do: 'back', route: '/practice/completed', popped: true },
+];
+const goodMobile = [
+  { do: 'tap:Completed', route: '/practice/done', canPop: true },
+  { do: 'tap:first-record', route: '/records/7', canPop: true },
+  { do: 'back', route: '/practice/done', popped: true, canPop: true },
+];
+
+async function journeyRepo({ journeys = [J_JOURNEY], web = goodWeb, mobile = goodMobile, captures = J_CAPTURES, cfg = {}, stamp } = {}) {
+  const root = await scanRepo({ 'manifest.json': { captures, journeys } });
+  const out = path.join(root, 'parity-out', 'journeys');
+  await fs.mkdir(out, { recursive: true });
+  for (const j of journeys) {
+    if (web) await fs.writeFile(path.join(out, `${j.id}.web.json`), JSON.stringify({ journey: j.id, steps: web }));
+    if (mobile) await fs.writeFile(path.join(out, `${j.id}.mobile.json`), JSON.stringify({ journey: j.id, steps: mobile }));
+  }
+  if (stamp) await fs.writeFile(path.join(root, 'parity-out', '.run.json'), JSON.stringify(stamp));
+  return runJourneys({ manifest: 'manifest.json', navigation: { roots: J_ROOTS }, ...cfg }, root);
+}
+const ids = (r) => r.failures.map((f) => f.id);
+const itemsOf = (r, id) => r.failures.find((f) => f.id === id)?.items ?? [];
+
+test('journeys: matching landings pass, per column, even where the two route schemes differ', async () => {
+  const r = await journeyRepo();
+  assert.deepEqual(r.failures, [], JSON.stringify(r.failures));
+  assert.ok(r.notes.some((n) => n.includes('1 journey(s)')), r.notes.join('\n'));
+});
+
+test('journeys: a mirror step landing somewhere else fails journeys:landing, naming journey, step and client', async () => {
+  const mobile = goodMobile.map((s, i) => (i === 1 ? { ...s, route: '/practice' } : s));
+  const r = await journeyRepo({ mobile });
+  assert.deepEqual(ids(r), ['journeys:landing']);
+  assert.deepEqual(itemsOf(r, 'journeys:landing'), ['record-back step 2 (tap:first-record) on mobile: landed on /practice, expected record (/records/:id)']);
+});
+
+test('journeys: back that stays put or pops nothing is a dead end', async () => {
+  const stuck = goodMobile.map((s, i) => (i === 2 ? { ...s, route: '/records/7' } : s));
+  const r = await journeyRepo({ mobile: stuck });
+  assert.deepEqual(ids(r), ['journeys:dead-end']);
+  assert.match(itemsOf(r, 'journeys:dead-end')[0], /record-back step 3 \(back\) on mobile: stayed on \/records\/7/);
+
+  const nothing = goodWeb.map((s, i) => (i === 2 ? { ...s, popped: false } : s));
+  const r2 = await journeyRepo({ web: nothing });
+  assert.deepEqual(ids(r2), ['journeys:dead-end']);
+  assert.match(itemsOf(r2, 'journeys:dead-end')[0], /on web: nothing to go back to/);
+});
+
+test('journeys: a mirror non-root that cannot pop fails; the same on a root passes', async () => {
+  const r = await journeyRepo({ mobile: goodMobile.map((s, i) => (i === 1 ? { ...s, canPop: false } : s)) });
+  assert.deepEqual(ids(r), ['journeys:cannot-pop']);
+  assert.match(itemsOf(r, 'journeys:cannot-pop')[0], /record-back step 2 .* on mobile: \/records\/7 is not a root but cannot pop/);
+
+  const toRoot = { id: 'to-hub', start: 'chat', steps: [{ do: 'tap:Practice', expect: 'hub' }] };
+  const r2 = await journeyRepo({
+    journeys: [toRoot],
+    web: [{ do: 'tap:Practice', route: '/practice' }],
+    mobile: [{ do: 'tap:Practice', route: '/practice', canPop: false }],
+  });
+  assert.deepEqual(r2.failures, [], JSON.stringify(r2.failures));
+});
+
+test('journeys: query keys on the expected capture must be present with the same value', async () => {
+  const toChat = { id: 'chat-with-pip', start: 'hub', steps: [{ do: 'tap:Chat with Pip', expect: 'chat' }] };
+  const run = (route) =>
+    journeyRepo({ journeys: [toChat], web: [{ do: 'tap:Chat with Pip', route: '/?chat=c1' }], mobile: [{ do: 'tap:Chat with Pip', route, canPop: true }] });
+  assert.deepEqual(ids(await run('/?chat=c1&x=1')), []);
+  assert.deepEqual(ids(await run('/')), ['journeys:landing']);
+  assert.deepEqual(ids(await run('/?chat=new')), ['journeys:landing']);
+});
+
+test('journeys: missing artifacts, step drift, unknown captures and a non-root start each fail on their own id', async () => {
+  assert.deepEqual(ids(await journeyRepo({ mobile: null })), ['journeys:missing']);
+  assert.deepEqual(ids(await journeyRepo({ web: goodWeb.slice(0, 2) })), ['journeys:missing']);
+  assert.deepEqual(ids(await journeyRepo({ web: goodWeb.map((s, i) => (i === 0 ? { ...s, do: 'tap:Other' } : s)) })), ['journeys:missing']);
+
+  const unknown = { ...J_JOURNEY, steps: [{ do: 'tap:X', expect: 'nope' }] };
+  const r = await journeyRepo({ journeys: [unknown], web: [{ do: 'tap:X', route: '/' }], mobile: [{ do: 'tap:X', route: '/' }] });
+  assert.deepEqual(ids(r), ['journeys:unknown-capture']);
+
+  const deep = { ...J_JOURNEY, start: 'record' };
+  assert.deepEqual(ids(await journeyRepo({ journeys: [deep] })), ['journeys:unknown-capture']);
+  assert.match(itemsOf(await journeyRepo({ journeys: [deep] }), 'journeys:unknown-capture')[0], /start record .* is not in navigation\.roots/);
+});
+
+test('journeys: an artifact older than the run stamp is stale', async () => {
+  const r = await journeyRepo({ stamp: { startedAt: new Date(Date.now() + 60_000).toISOString() } });
+  assert.deepEqual(ids(r), ['journeys:stale']);
+  assert.equal(itemsOf(r, 'journeys:stale').length, 2);
+});
+
+test('journeys: the gate fails unconfigured, notes an optOut, and runs Q when journeys exist', async () => {
+  const unset = await gate(await fixture({ manifest: 'manifest.json' }));
+  assert.ok(unset.failures.some((x) => x.check === 'journeys-not-configured'), JSON.stringify(unset.failures));
+  const out = await gate(await fixture({ manifest: 'manifest.json', journeys: { optOut: 'web-only mirror, no stack navigation' } }));
+  assert.ok(!out.failures.some((x) => x.check.startsWith('journeys')), JSON.stringify(out.failures));
+  assert.ok(out.notes.some((n) => n.startsWith('journeys: opted out — web-only mirror')), out.notes.join('\n'));
+
+  const dir = await fixture({ manifest: 'manifest.json', navigation: { roots: J_ROOTS } });
+  await writeRepoFiles(dir, { 'manifest.json': { captures: J_CAPTURES, journeys: [J_JOURNEY] } });
+  const wired = await gate(dir);
+  assert.ok(wired.failures.some((x) => x.check === 'journeys:missing'), JSON.stringify(wired.failures));
+});
+
+const NAV_FILES = {
+  'lib/a.dart': [
+    "context.go('/practice');",
+    "context.go('/records/${r.id}');",
+    "context.go('/records/${r.id}');",
+    "// context.go('/settings/profile');",
+    "context.go('/settings/profile');",
+    'context.go(backPath);',
+    "context.go('/?chat=$id');",
+  ].join('\n'),
+};
+const NAV = (over = {}) => ({
+  navigation: {
+    roots: ['/', '/practice'],
+    replace: {
+      dirs: ['lib'],
+      extensions: ['.dart'],
+      patterns: ["context\\.go\\(\\s*(?:'(?<path>[^']+)'|(?<expr>[A-Za-z_][\\w.]*))"],
+      ...over,
+    },
+  },
+});
+
+test('navigation scan: literal replace-navigation to a non-root fails, grouped by target with file:line', async () => {
+  const root = await scanRepo(NAV_FILES);
+  const r = runNavigation(NAV(), root);
+  const f = r.failures.find((x) => x.id === 'navigation:replace');
+  assert.ok(f, JSON.stringify(r.failures));
+  assert.deepEqual(f.items, ['/records/:param — lib/a.dart:2, lib/a.dart:3', '/settings/profile — lib/a.dart:5']);
+  assert.ok(r.notes.some((n) => n.includes('1 dynamic target(s)')), r.notes.join('\n'));
+});
+
+test('navigation scan: waivers clear a target, stale and incomplete ones are reported', async () => {
+  const root = await scanRepo(NAV_FILES);
+  const full = { reason: 'r', owner: 'o', addedOn: '2026-11-13', removeWhen: 'w' };
+  const r = runNavigation(NAV({ waivers: [{ item: '/records/:id', ...full }, { item: '/gone', ...full }, { item: '/settings/profile' }] }), root);
+  assert.deepEqual(r.failures.find((x) => x.id === 'navigation:replace')?.items, ['/settings/profile — lib/a.dart:5']);
+  assert.ok(r.failures.some((x) => x.id === 'navigation:waivers'), JSON.stringify(r.failures));
+  assert.ok(r.notes.some((n) => n.includes('no longer needed') && n.includes('/gone')), r.notes.join('\n'));
+});
+
+test('navigation scan: a dead pattern or missing roots are unresolved; unconfigured is only a note', async () => {
+  const root = await scanRepo(NAV_FILES);
+  const dead = runNavigation(NAV({ patterns: ["router\\.replace\\('(?<path>[^']+)'"] }), root);
+  assert.ok(dead.failures.some((x) => x.id === 'navigation-unresolved'), JSON.stringify(dead.failures));
+  const noRoots = runNavigation({ navigation: { replace: NAV().navigation.replace } }, root);
+  assert.ok(noRoots.failures.some((x) => x.id === 'navigation-unresolved'), JSON.stringify(noRoots.failures));
+  const unset = runNavigation({}, root);
+  assert.deepEqual(unset.failures, []);
+  assert.ok(unset.notes.some((n) => n.startsWith('navigation: replace scan not configured')), unset.notes.join('\n'));
+});
+
+// --- 0.14.0 review round -----------------------------------------------------------------
+test('journeys: the start must be a root in the MIRROR column, since the mirror reaches it by replacing the stack', async () => {
+  const caps = [...J_CAPTURES, { id: 'home', web: { route: '/home' }, mobile: { route: '/practice' } }];
+  const startHome = { ...J_JOURNEY, start: 'home' };
+  assert.deepEqual(ids(await journeyRepo({ journeys: [startHome], captures: caps })), []);
+  const flipped = [...J_CAPTURES, { id: 'home', web: { route: '/practice' }, mobile: { route: '/home' } }];
+  const r = await journeyRepo({ journeys: [startHome], captures: flipped });
+  assert.deepEqual(ids(r), ['journeys:unknown-capture']);
+  assert.match(itemsOf(r, 'journeys:unknown-capture')[0], /\(\/home on mobile\) is not in navigation\.roots/);
+});
+
+test('journeys: malformed journeys are reported, not matched against "/" or written outside the folder', async () => {
+  const noRoute = [...J_CAPTURES, { id: 'blank', web: {}, mobile: {} }];
+  const toBlank = { id: 'b', start: 'hub', steps: [{ do: 'tap:X', expect: 'blank' }] };
+  const r1 = await journeyRepo({ journeys: [toBlank], captures: noRoute, web: [{ do: 'tap:X', route: '/' }], mobile: [{ do: 'tap:X', route: '/' }] });
+  assert.deepEqual(ids(r1), ['journeys:unknown-capture']);
+  assert.match(itemsOf(r1, 'journeys:unknown-capture')[0], /capture blank has no route for web/);
+
+  const empty = await journeyRepo({ journeys: [{ id: 'e', start: 'hub', steps: [] }], web: [], mobile: [] });
+  assert.match(itemsOf(empty, 'journeys:unknown-capture')[0], /e: has no steps/);
+
+  const root = await scanRepo({ 'manifest.json': { captures: J_CAPTURES, journeys: [{ ...J_JOURNEY, id: '../../x' }, J_JOURNEY, J_JOURNEY] } });
+  const r2 = runJourneys({ manifest: 'manifest.json', navigation: { roots: J_ROOTS } }, root);
+  const items = itemsOf(r2, 'journeys:unknown-capture');
+  assert.ok(items.some((i) => i.includes('../../x: id must be')), items.join('\n'));
+  assert.ok(items.some((i) => i.includes('record-back: declared twice')), items.join('\n'));
+});
+
+test('journeys: a back that stays put is a dead end even when expect names the same screen; tap-back too', async () => {
+  const sameExpect = { ...J_JOURNEY, steps: [...J_JOURNEY.steps.slice(0, 2), { do: 'tap-back', expect: 'record' }] };
+  const web = [...goodWeb.slice(0, 2), { do: 'tap-back', route: '/records/7', popped: true }];
+  const mobile = [...goodMobile.slice(0, 2), { do: 'tap-back', route: '/records/7', popped: true, canPop: true }];
+  const r = await journeyRepo({ journeys: [sameExpect], web, mobile });
+  assert.deepEqual(ids(r), ['journeys:dead-end']);
+  assert.equal(itemsOf(r, 'journeys:dead-end').length, 2);
+  assert.match(itemsOf(r, 'journeys:dead-end')[0], /step 3 \(tap-back\) on web: stayed on \/records\/7/);
+});
+
+test('journeys: a web-side wrong landing names web; a fresh artifact under a run stamp passes', async () => {
+  const r = await journeyRepo({ web: goodWeb.map((s, i) => (i === 0 ? { ...s, route: '/practice' } : s)) });
+  assert.match(itemsOf(r, 'journeys:landing')[0], /record-back step 1 \(tap:Completed\) on web: landed on \/practice/);
+  const fresh = await journeyRepo({ stamp: { startedAt: new Date(Date.now() - 60_000).toISOString() } });
+  assert.deepEqual(fresh.failures, [], JSON.stringify(fresh.failures));
+  assert.ok(!fresh.notes.some((n) => n.includes('cannot be detected')), fresh.notes.join('\n'));
+});
+
+test('journeys: roots are compared on the path, and a #fragment does not break a landing', async () => {
+  const r = await journeyRepo({ cfg: { navigation: { roots: ['/?tab=x', '/practice'] } }, mobile: goodMobile.map((s, i) => (i === 0 ? { ...s, route: '/practice/done#top' } : s)) });
+  assert.deepEqual(r.failures, [], JSON.stringify(r.failures));
+});
+
+test('navigation scan: a bad exclude regex or shape is unresolved, not a crash; runtime targets are dynamic', async () => {
+  const root = await scanRepo({
+    'lib/a.dart': ["context.go('/records/' + id);", "context.go('$path');", "context.go('/settings/profile');"].join('\n'),
+  });
+  assert.ok(runNavigation(NAV({ exclude: ['('] }), root).failures.some((x) => x.id === 'navigation-unresolved'));
+  assert.ok(runNavigation(NAV({ extensions: '.dart' }), root).failures.some((x) => x.id === 'navigation-unresolved'));
+  const r = runNavigation(NAV(), root);
+  assert.deepEqual(r.failures.find((x) => x.id === 'navigation:replace')?.items, ['/settings/profile — lib/a.dart:3']);
+  assert.ok(r.notes.some((n) => n.includes('2 dynamic target(s)')), r.notes.join('\n'));
+});

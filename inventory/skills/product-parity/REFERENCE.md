@@ -29,7 +29,7 @@ the harness the day the skill moves between profiles.
 
 | File | Role |
 |---|---|
-| `scripts/parity-gate.mjs` | The gate. Runs checks A–N below, plus i18n locale coverage; no browser, no simulator, ~1s. |
+| `scripts/parity-gate.mjs` | The gate. Runs checks A–R below, plus i18n locale coverage; no browser, no simulator, ~1s. |
 | `scripts/parity-review.mjs` | The LLM vision review — structured findings to `<out>/findings.json`. Feeds check F. |
 | `scripts/parity-geometry.mjs` | Check H. Also runnable standalone. |
 | `scripts/parity-interactive.mjs` | Check I. Also runnable standalone. |
@@ -38,6 +38,9 @@ the harness the day the skill moves between profiles.
 | `scripts/parity-session.mjs` | Check L. Also runnable standalone. |
 | `scripts/parity-freshness.mjs` | Check M. Also runnable standalone. |
 | `scripts/parity-assets.mjs` | Check N. Also runnable standalone. |
+| `scripts/parity-inventory.mjs` | Check O. Also runnable standalone. |
+| `scripts/parity-journeys.mjs` | Check Q. Also runnable standalone. |
+| `scripts/parity-navigation.mjs` | Check R. Also runnable standalone. |
 | `scripts/parity-columns.mjs` | Which client is the source and which the mirror; shared by all of the above. |
 | `scripts/parity-strings.mjs` | Reads string tables (TS/JS objects, JSON/ARB, Dart locale maps) for checks B, C and locale coverage. |
 | `scripts/parity.config.example.json` | Config template. |
@@ -97,6 +100,8 @@ not a pass.
 | N asset parity | does every image in a source asset folder have a mirror counterpart? | **always**: `assets.pairs`, or `assets.optOut` with a reason | project |
 | O inventory | does every API call (or tool handler, or other declared set) in the source's code exist in the mirror's? | **always**: `inventory.sets`, or `inventory.optOut` with a reason | project |
 | P required states | does each declared interaction state have a capture? | `states.required` | per route |
+| Q journeys | does each step land on the same screen on both clients, does Back never dead-end, can the mirror pop every non-root it reaches? | **always**: manifest `journeys` + `navigation.roots`, or `journeys.optOut` with a reason | per journey |
+| R navigation scan | does the mirror's code replace the stack to reach a drill-down? | `navigation.replace` (optional) | project, mirror only |
 
 ### A — coverage ratchet
 
@@ -424,6 +429,82 @@ or the gate fails `state-coverage`. A matching capture with no `prep` step is no
 fixture data produces the state, it shows the default screen under the state's name. Coverage (A) is satisfied by any capture of the route;
 this is the check that a state behind a user action was captured too. Produce it with a
 `prep` step (`DYNAMIC-STATES.md`).
+
+### Q — journeys
+
+```jsonc
+// manifest
+"journeys": [{
+  "id": "record-back-to-completed",
+  "start": "practice-hub",                       // a capture whose route is in navigation.roots
+  "steps": [
+    { "do": "tap:Completed",    "expect": "practice-completed" },
+    { "do": "tap:first-record", "expect": "record-detail" },
+    { "do": "back",             "expect": "practice-completed" }
+  ]
+}]
+// config
+"navigation": { "roots": ["/", "/practice", "/library", "/settings"] }
+```
+
+Each harness performs the steps and writes `<out>/journeys/<id>.<column>.json`:
+
+```json
+{ "journey": "record-back-to-completed",
+  "steps": [ { "do": "back", "route": "/practice/completed", "popped": true, "canPop": true } ] }
+```
+
+- `route` is the location after the step, path plus query.
+- `popped` is recorded for `back` and `tap-back`: whether anything was popped.
+- `canPop` is recorded by the mirror only: whether the screen it landed on can pop.
+
+**How a landing is matched.** Each client's `route` is matched against the `expect` capture's route for **that client's column**, so the two clients may spell routes differently. A capture with no mirror route is taken to use its source route.
+- A path segment written `[x]` or `:x` matches any one segment.
+- Query keys on the capture's route must be present on the landing with the same value; a value written `:x` matches any.
+- A `#fragment` and a trailing `/` are ignored.
+
+**Roots.** `navigation.roots` is spelled in the **mirror's** route scheme and compared on the path only. A journey's `start` must be a root in the mirror column, because the mirror harness reaches it by replacing the stack.
+
+| Failure | Meaning |
+|---|---|
+| `journeys-not-configured` | no journeys and no `journeys.optOut` reason |
+| `journeys:landing` | a client landed somewhere other than `expect` |
+| `journeys:dead-end` | `back`/`tap-back` recorded `popped:false`, or stayed on the route it left — whatever `expect` says |
+| `journeys:cannot-pop` | mirror `canPop:false` on a route that is not a root |
+| `journeys:missing` | no artifact for a column, its step names or count differ from the manifest, or a step has no `route` |
+| `journeys:unknown-capture` | the journey is malformed: `start`/`expect` names no capture or a capture with no route, no steps, a step with no `do`, an id that is not `[A-Za-z0-9._-]`, a duplicate id, or a `start` that is not a mirror root |
+| `journeys:stale` | an artifact older than `.run.json` `startedAt` (5 s grace). With no stamp, a note says staleness is unchecked |
+
+A mirror step without `canPop` is counted in a note, never passed silently. The step rules, the vocabulary and the harness recipes are in `JOURNEYS.md`.
+
+### R — navigation scan
+
+```jsonc
+"navigation": {
+  "roots": ["/", "/practice"],
+  "replace": {
+    "dirs": ["mobile/lib"], "extensions": [".dart"],
+    "patterns": ["context\\.go\\(\\s*(?:'(?<path>[^']+)'|(?<expr>[A-Za-z_][\\w.]*))"],
+    "waivers": [{ "item": "/practice/new", "reason": "…", "owner": "…", "addedOn": "2026-11-13", "removeWhen": "…" }]
+  }
+}
+```
+
+How the scan reads a match:
+- **Named group `path`:** a literal target. It is normalised (interpolations, `{x}`, `[x]`, `:x` and digit segments become `:param`; the query is dropped) and compared with the roots.
+- **No `path`, a literal ending in `/` (`'/records/' + id`), or a literal that is only an interpolation (`'$path'`):** a dynamic target. It is counted in a note, never failed. Read those call sites by hand.
+
+`exclude` (regexes on the relative path) and `skipDirs` work as in check O. Whole-line comments are skipped, and symlinks under `dirs` are not followed.
+
+Failures and notes:
+
+| Id | Meaning |
+|---|---|
+| `navigation:replace` | a non-root target, listed with `file:line` |
+| `navigation:waivers` | a waiver missing a field |
+| `navigation-unresolved` | missing roots, bad folders, a bad regex, or a pattern that matched nothing |
+
+A stale waiver is listed in a note. With no `navigation.replace`, the scan is a note only.
 
 ## Review backends
 

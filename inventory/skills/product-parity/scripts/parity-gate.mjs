@@ -5,8 +5,8 @@
 //   node <skill>/scripts/parity-gate.mjs --config parity.config.json
 // It searches for ./parity.config.json then ./scripts/parity/parity.config.json.
 //
-// Checks (skipped gracefully when not configured — except M and N, which FAIL unconfigured
-// unless `freshness.optOut` / `assets.optOut` gives a reason):
+// Checks (skipped gracefully when not configured — except M, N, O and Q, which FAIL
+// unconfigured unless their `optOut` gives a reason):
 //   A  coverage ratchet — every source-client route needs a capture or a waiver with reason,
 //                         date, owner, removeWhen (and an open item behind any tracker)
 //   B  regeneration     — every mirror i18n key must exist in the generated artifact
@@ -52,6 +52,12 @@
 //                         FAILS unconfigured unless `inventory.optOut` gives a reason.
 //   P  required states  — each declared interaction state (an empty search, a panel a tool
 //                         result opens) has a capture. A populated-only route hides them.
+//   Q  journeys         — named step sequences (including `back`) land on the same screen on
+//                         both clients, Back never dead-ends, and the mirror can pop every
+//                         non-root screen it reaches. The only check that sees how the user
+//                         MOVES between screens. FAILS unconfigured unless `journeys.optOut`.
+//   R  navigation scan  — the mirror's code never REPLACES the navigation stack to reach a
+//                         drill-down screen (literal targets only). Optional; a note when unset.
 //
 // Columns: `source.column` / `source.name` and `mirror.column` / `mirror.name` in the config
 // (see parity-columns.mjs). Defaults: web / webapp and mobile / Flutter mobile app.
@@ -68,6 +74,8 @@ import { runApi } from './parity-api.mjs';
 import { runFreshness } from './parity-freshness.mjs';
 import { runAssets } from './parity-assets.mjs';
 import { runInventory } from './parity-inventory.mjs';
+import { runJourneys } from './parity-journeys.mjs';
+import { runNavigation } from './parity-navigation.mjs';
 import { columns } from './parity-columns.mjs';
 import { readTable, readLocaleMap } from './parity-strings.mjs';
 
@@ -961,6 +969,18 @@ function checkStates() {
   }
 }
 
+function checkJourneys() {
+  const { notes: jNotes, failures: jFailures } = runJourneys(cfg, ROOT);
+  for (const n of jNotes) notes.push(n);
+  for (const f of jFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
+function checkNavigation() {
+  const { notes: nNotes, failures: nFailures } = runNavigation(cfg, ROOT);
+  for (const n of nNotes) notes.push(n);
+  for (const f of nFailures) failures.push({ check: f.id, message: f.msg, items: f.items });
+}
+
 function checkAssets() {
   const { notes: aNotes, failures: aFailures } = runAssets(cfg, ROOT);
   for (const n of aNotes) notes.push(n);
@@ -988,6 +1008,8 @@ checkFreshness();
 checkAssets();
 checkInventory();
 checkStates();
+checkJourneys();
+checkNavigation();
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ok: failures.length === 0, config: configPath, notes, failures }, null, 2));

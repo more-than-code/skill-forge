@@ -58,7 +58,7 @@ export function normalizeEndpoint(method, rawPath) {
 }
 
 // Files under `dirs`, without following symlinks (no loops, no leaving the tree).
-function listFiles(root, side) {
+export function listFiles(root, side) {
   const out = [];
   const exts = new Set((side.extensions ?? []).map((e) => e.toLowerCase()));
   const skip = new Set(side.skipDirs ?? SKIP_DIRS);
@@ -77,7 +77,7 @@ function listFiles(root, side) {
   return out;
 }
 
-const dropLineComments = (text) =>
+export const dropLineComments = (text) =>
   text
     .split('\n')
     .map((l) => (/^\s*(\/\/|\/\*|\*)/.test(l) ? '' : l))

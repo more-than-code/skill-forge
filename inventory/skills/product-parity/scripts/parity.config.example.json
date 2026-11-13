@@ -170,5 +170,30 @@
         "reason": "the \"Ask AI\" fallback shows only when a search finds nothing"
       }
     ]
+  },
+  "journeys": {
+    "$comment": "Check Q. Journeys live in the MANIFEST (\"journeys\": [{ id, start, steps: [{ do, expect }] }]); see JOURNEYS.md. Required: declare at least one, or set optOut to the reason this mirror has no stack navigation.",
+    "optOut": ""
+  },
+  "navigation": {
+    "$comment": "roots: top-level routes, shared by checks Q and R. replace: check R, a scan of the mirror's code for stack-replacing navigation to non-root targets (optional).",
+    "roots": [
+      "/",
+      "/practice",
+      "/library",
+      "/settings"
+    ],
+    "replace": {
+      "dirs": [
+        "mobile/lib"
+      ],
+      "extensions": [
+        ".dart"
+      ],
+      "patterns": [
+        "context\\.go\\(\\s*(?:'(?<path>[^']+)'|(?<expr>[A-Za-z_][\\w.]*))"
+      ],
+      "waivers": []
+    }
   }
 }

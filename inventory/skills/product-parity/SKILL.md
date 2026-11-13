@@ -1,6 +1,6 @@
 ---
 name: product-parity
-description: Verify that a mirrored or ported client faithfully reproduces its source of truth — screens, look, geometry, design tokens, copy/i18n, interaction behaviour, and the API calls behind them — using a capture-driven parity harness rather than code review. Use when porting or mirroring a product to a second client (web ↔ mobile or any pair), auditing feature/screen parity, investigating "the two clients differ" reports, or when a parity phase was marked complete on static-audit evidence alone. Covers capture harness design, dynamic-state capture via named prep steps, per-screen/per-lens working discipline, false-positive control, and coverage accounting.
+description: Verify that a mirrored or ported client faithfully reproduces its source of truth — screens, look, geometry, design tokens, copy/i18n, interaction behaviour, and the API calls behind them — using a capture-driven parity harness rather than code review. Use when porting or mirroring a product to a second client (web ↔ mobile or any pair), auditing feature/screen parity, investigating "the two clients differ" reports, checking that Back and in-app navigation behave the same on both clients, or when a parity phase was marked complete on static-audit evidence alone. Covers capture harness design, dynamic-state capture via named prep steps, journeys between screens (Back, dead ends, push versus replace), per-screen/per-lens working discipline, false-positive control, and coverage accounting.
 ---
 
 # Product parity
@@ -17,9 +17,11 @@ never asks whether either client is *right*. Treat look as one lens among severa
 
 Companion files in this directory — load the one the task needs:
 
-- **`REFERENCE.md`** — the bundled gate: every script, checks A–N, their config blocks and
+- **`REFERENCE.md`** — the bundled gate: every script, checks A–R, their config blocks and
   the files they read. Load it to configure the harness or trace a gate failure.
 - **`DYNAMIC-STATES.md`** — capturing menus, sheets and API-driven states with `prep` steps.
+- **`JOURNEYS.md`** — journeys between screens and the navigation scan: can the user get
+  back, and does an action land where the source's does (checks Q, R).
 - **`RECIPES.md`** — implementation recipes: manifest shape, source and mirror capture,
   data handoff, board generator, runner.
 
@@ -46,6 +48,7 @@ Conflating these is how a client's bug becomes the specification.
 | **Token conformance** | are the design tokens *declared* correctly in each client? | the **design system**, if one exists | a deterministic token check (check D) |
 | **Geometry / alignment** | do shared-chrome regions that should share a vertical centre actually do so on *both* clients? | the **source client** (cross-client spread) | a deterministic geometry check (check H) |
 | **Visual conformance** | does the rendered result actually *look* right? | the **design system** | usually nothing — see below |
+| **Navigation** | can the user get back, and does an action land where the source's does? | the **source client**, plus the mirror platform's conventions where the source has none (back gesture, pop animation) | journeys (check Q) and the navigation scan (check R) — never screenshots; `JOURNEYS.md` |
 
 **The vision review is the product-parity axis only.** Its prompt puts layout,
 spacing, alignment, ordering, type scale, font size and colour explicitly *out of
@@ -114,6 +117,7 @@ A lens is one question about one screen — **except the ones that are not**:
 | Tokens | do both clients use canon values? | check D | **project-wide** |
 | Copy / i18n | same strings, same keys? | checks B/C | **project-wide** |
 | Assets | does every source image asset have a mirror counterpart? | check N | **project-wide** |
+| Navigation | does each step land on the same screen, and can the user get back? | checks Q (journeys) and R (scan) | per-journey / **project-wide** |
 | Run validity | can this run's artifacts be trusted at all — and are they newer than the source UI? | checks G, L, M | **per-run** |
 
 **A project-wide lens cannot answer a per-screen question, and a screen is never "done"
@@ -164,6 +168,9 @@ check in this harness. The mechanism that closes it is `prep`: named steps perfo
 between ready and the screenshot, implemented by BOTH harnesses under the same name.
 
 Read **`DYNAMIC-STATES.md`** before adding a step, a dynamic capture, or an API assertion.
+How the user moves BETWEEN screens — Back, and where an action lands — is a different gap:
+every capture opens its route directly, so a pushed screen and a replaced one look identical.
+That is journeys (`JOURNEYS.md`).
 The rule that matters most: a `prep` implemented on one client only makes the two columns
 photograph different screens, which is worse than no capture at all.
 
@@ -594,6 +601,7 @@ These need no capture infrastructure and catch a large share of drift:
 - **Asset parity (N) — required.** Pair each source asset folder with the mirror folder that should carry the same images; a source image with no counterpart fails unless waived with a reason, owner, date and `removeWhen`. It needs no capture, so it is the cheapest visual check there is. Unconfigured, it fails unless `assets.optOut` gives a reason.
 - **Inventory parity (O) — required.** Scan both clients' code for the things a screen is built from — API calls at least, and the streamed tool results the source renders specially — and fail on any source item the mirror's code never mentions. **Captures show only the states someone thought to produce; the code shows all of them.** Observed 2026-11-07: two whole features (a chat panel a tool result opens, an AI lookup offered when search finds nothing) were missing on the mirror and the gate passed both — the mirror had no call to either endpoint and no handler for the tool, which a scan finds in a second.
 - **Required interaction states (P).** A route with a capture satisfies coverage (A) even when every capture shows it populated. A state behind a user action — an empty search and its fallback, a panel a tool result opens — is its own capture, produced by a `prep` step; declare the ones that matter in `states.required` so their absence fails.
+- **Navigation scan (R).** Scan the mirror's code for navigation that replaces the stack to reach a drill-down. It is the one cause behind a dead back button, a dead edge swipe and a backwards pop animation. Observed 2026-11-13: four of nine back-navigation defects on one project traced to it, and no screenshot could show any of them. Optional, and configured with the stack's own patterns.
 - **Behaviour (I, K) and data (J).** Declared affordances must be activatable controls (I); the controls named in a shared-chrome region must agree across clients (K); both clients must request the endpoints a screen declares (J). These are the only checks that see what a screen *does* and what it is *built from* — a dead icon, a swapped icon-only control and a skipped fetch are all pixel-identical to the correct screen. Declare few of each, for the same reason as H.
 
 ### Design-system conformance (check D) — when there is a canon
@@ -620,6 +628,7 @@ place. That residue is the visual-conformance axis in §1, and check D is not it
 
 - Regenerate captures and fail on any that render empty (content assertions, §5).
 - Publish the board as a build artifact so review is one click, not a local setup.
+- **Journeys (Q) — required.** Both harnesses walk the same named steps, `back` and `tap-back` included, and the gate compares where each lands. A Back that leads nowhere fails, and so does a mirror screen that is not a root but cannot pop. Unconfigured, it fails unless `journeys.optOut` gives a reason (`JOURNEYS.md`).
 
 ### Definition of done for a mirrored feature
 

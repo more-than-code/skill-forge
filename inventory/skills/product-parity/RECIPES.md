@@ -238,6 +238,11 @@ Three traps:
 - Shared keys are not coverage. A key the mirror has in its base locale but not in another locale falls back silently and never appears in a shared-key diff. The gate's locale-coverage check counts these per locale.
 - Do not extract with a line regex: wrapped and multi-line values silently fail to match. The gate parses the literals and fails on any value it still cannot read. Verify any surprising count with a direct `grep` for a specific key before reporting it.
 
+## Journeys
+
+The step loops for both harnesses — recording the landing route, `back` versus
+`tap-back`, `popped` and `canPop` — are in `JOURNEYS.md`, next to the rules they implement.
+
 ## Anti-patterns
 
 | Wrong | Right |

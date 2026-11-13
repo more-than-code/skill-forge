@@ -383,7 +383,12 @@ are counted in a note, not failed. A pair whose source folder does not exist fai
                      "addedOn": "YYYY-MM-DD", "removeWhen": "mobile ships in-app purchase" } ] },
     { "name": "stream-tools",
       "source": { "dirs": ["web/src"], "extensions": [".svelte"], "patterns": ["case\\s+'tool-(?<item>[a-z_]+)'"] },
-      "mirror": { "dirs": ["mobile/lib"], "extensions": [".dart"], "patterns": ["'(?<item>[a-z_]+)'\\s*=>"] } }
+      "mirror": { "dirs": ["mobile/lib"], "extensions": [".dart"], "patterns": ["'(?<item>[a-z_]+)'\\s*=>"] } },
+    { "name": "control-names",
+      "source": { "dirs": ["web/src"], "extensions": [".svelte"],
+                  "patterns": ["(?:aria-label|title)=\\{t\\('(?<item>[a-z0-9_]+)'"] },
+      "mirror": { "dirs": ["mobile/lib"], "extensions": [".dart"], "exclude": ["/generated/"],
+                  "patterns": ["l10n\\.(?<item>[a-z0-9_]+)\\b"] } }
   ]
 }
 ```
@@ -413,6 +418,15 @@ note. A missing folder, a bad pattern, or source patterns that match nothing fai
 Unconfigured, it fails `inventory-not-configured` unless `inventory.optOut` gives a reason.
 A scan is text, not a parse: write the patterns for your API layer, and check the note's
 counts against what you expect.
+
+**Declare a `control-names` set, not only endpoints.** An icon control's accessible name
+(`aria-label` / `title` key on the source, the same key used anywhere on the mirror) is
+the cheapest inventory of affordances, and it sees controls that only render in a state no
+capture reaches. Observed 2026-11-13 on one project: the source chat's "scroll to bottom"
+button shows only once the reader scrolls up, every capture was taken at the bottom, and
+the mirror shipped without it — the key was one of 718 in a long-red `i18n-source-only`
+list, so nobody saw it. As its own set it was one line of 44. The match works when both
+clients share string keys; with different key schemes, compare English values instead.
 
 ### P — required interaction states
 

@@ -143,6 +143,7 @@ Wire layers 3 and 4 into the same pre-commit and CI step so either failure block
 - Do not lint-ban `<slot>`: layer 2 already warns on it in components, and stays quiet inside shadow-DOM custom elements, where `<slot>` is correct.
 - Rule options replace rather than merge: if the config already sets `no-restricted-syntax` or `no-restricted-imports`, fold these entries into that rule, or the later one silently drops the earlier bans.
 - `<script lang="ts">` components need `parserOptions.parser` set to the TypeScript parser; without it every TS component is a parsing error, which blocks the gate but hides the real findings.
+- In a new project, set up all four layers before the first component (`sveltekit.md`, "New SvelteKit Project"). The gate is not only for migrations.
 - Turn the gate on only after the full migration; a partly migrated project fails it by design. Do not exclude project paths from the `runes` function or from ESLint to get it passing — the `node_modules` exemption is the only one.
 - Prove the gate before trusting it with two throwaway components, then delete them: one with `export let x;` and `$: y = x;` (both commands must exit non-zero), and one that is otherwise valid runes code with an `on:click` (`svelte-check` must exit non-zero). Keep them separate — `svelte-check` stops at a file's first compile error, so a deprecation next to `export let` is never reported, and without `--fail-on-warnings` the `on:` file passes.
 

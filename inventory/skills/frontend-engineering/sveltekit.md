@@ -2,6 +2,29 @@
 
 Load this companion after `svelte.md` for SvelteKit app work.
 
+## New SvelteKit Project: Before the First Component
+
+The `svelte.md` version gate is setup, not only migration advice. A fresh scaffold has none of it, and a project that writes only runes still needs the gate: one component written in Svelte 4 syntax compiles silently. Observed 2026-11-13 on one project: a new SvelteKit app (Svelte 5, 137 runes-only components) shipped without layers 2 and 3. The gap was caught in review, not by any check.
+
+Before the first component lands:
+
+1. `svelte` `^5` and `svelte-check` v4+ in `package.json` (layer 1).
+2. `compilerOptions.runes` in `svelte.config.js`, with the `node_modules` exemption (layer 2).
+3. A `check` script, `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings`, run in CI and pre-commit (layer 3).
+4. The lint bans (layer 4). If the project has no ESLint, either add it for these rules, or record that you chose an equivalent instead: for example, a test that greps `*.svelte` for `export let`, `$:`, `on:` and `createEventDispatcher`, and imports for `svelte/legacy` and `$app/stores`. Such a test replaces layer 4 only, never layers 2–3: a grep cannot see what the compiler sees.
+5. Prove it with the two throwaway components from `svelte.md`, then delete them.
+
+## SPA Build Served by Another Backend
+
+When `adapter-static` builds a client-only app that a non-Node server (Go, Rust, Java) embeds or serves:
+
+- **Config:** `adapter({ pages, assets, fallback: 'index.html' })`, with `export const ssr = false` and `export const prerender = false` in the root `+layout.ts`.
+- **Do not lose `_app/`.** Embedders often skip files whose names start with `_` or `.`. Go's `//go:embed dist` drops `_app/` silently, so the app ships without its JS and CSS. Use `//go:embed all:dist`, and have the server answer 404 for dot-path segments, since `all:` embeds those too. Check the output: list the embedded files, or request one `_app/immutable/` asset from the built server.
+- **Cache:**
+  - `_app/immutable/*`: `Cache-Control: public, max-age=31536000, immutable`.
+  - `_app/version.json`, `_app/env.js`, and `index.html`: revalidate (`no-cache`).
+- **Fallback:** only route paths get `index.html`. A miss under `_app/`, or any path with a file extension, is a 404. Otherwise a stale client asking for a deleted chunk gets HTML with status 200, and fails with a MIME error instead of reloading.
+
 ## SvelteKit Gotchas
 
 - Prefer `load` for route data dependencies instead of pushing initial page data fetching into `onMount`.
@@ -141,6 +164,8 @@ Use `onMount` for browser-only behavior, not for route data needed during SSR or
 - Is the route boundary the right place for auth, permissions, and data ownership?
 - Are progressive enhancement and no-JS behavior acceptable for this form or route?
 - Does the implementation follow existing local UI primitives and design-system conventions before adding custom controls?
+- In a new project: does `svelte.config.js` force runes mode, and does the `check` script use `--fail-on-warnings`?
+- For an SPA served by another backend: does the build ship `_app/`, and does a miss under `_app/` return 404 rather than `index.html`?
 
 ## SvelteKit Anti-Patterns
 

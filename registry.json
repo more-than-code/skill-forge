@@ -90,7 +90,7 @@
     {
       "type": "skill",
       "name": "frontend-engineering",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "scope": "custom",
       "path": "inventory/skills/frontend-engineering",
       "installable": true,
@@ -175,7 +175,7 @@
     {
       "type": "skill",
       "name": "testing-strategy",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "scope": "custom",
       "path": "inventory/skills/testing-strategy",
       "installable": true,

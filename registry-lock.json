@@ -191,16 +191,16 @@
     },
     "inventory/skills/frontend-engineering": {
       "name": "frontend-engineering",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-cwW8++kmMEsBa0YLSqb95tM1IYWh/DxXK7UG9WssI5Q=",
+      "integrity": "sha256-R9UAVoL1cf3CW4IsLCe+Wz8psedEwsYlp+5u/HSEsLw=",
       "files": {
         "react.md": "sha256-eUQ+eaye6m1J1CQC2qiHzTTcO60WZHEf5DqbkqKZq8E=",
-        "SKILL.md": "sha256-kbFaMZt16lduL4m+z68nDVnM6TFyG+sfczRiA4ybyUA=",
-        "svelte.md": "sha256-n9k2DvqZzZrkNIeXtgYU8g4VfnMUmC3YhR1SODD58TQ=",
-        "sveltekit.md": "sha256-3QJt70SJUrGZKuGlCuAwOmJM3f0+Ni0V/8/plru3vuw="
+        "SKILL.md": "sha256-io8goD8PPxTWAiUkHMBUlyTup3U4B17dpq+XooHJXcs=",
+        "svelte.md": "sha256-EAu4+OnkWChtcXHGI7mfrcS58An5iswaS6utgCYuKgQ=",
+        "sveltekit.md": "sha256-82VRhPK97Pkw5lsux5e2wRsv068cnYvDNWZ8LqBx7Vg="
       }
     },
     "inventory/skills/fvm-flutter": {
@@ -447,13 +447,13 @@
     },
     "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-KsqNmZ/F+oxg+PFicC4Q/6LMl+1FtbkwoX7JCgJ8h4A=",
+      "integrity": "sha256-cfmiBOiS13fpeZvPzpCKbsinyNkm86CQTNaN6XI0vwo=",
       "files": {
-        "SKILL.md": "sha256-Nl/s8uWLK48RERQ3XKOwVV7KTqqZjzj1PG1lOuRJCp8="
+        "SKILL.md": "sha256-nDVrgbMDuOC+UBphtIDH/Y+XNDuKU0/R75z4Hf8LIvk="
       }
     },
     "inventory/skills/ui-portability-baseline": {

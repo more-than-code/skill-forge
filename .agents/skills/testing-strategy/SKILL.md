@@ -37,6 +37,7 @@ description: >
 - Flaky tests that "pass on retry" mask real race conditions. Fix or delete — never ignore.
 - Time-dependent tests that pass locally fail in CI if the timezone differs. Always use UTC or freeze time.
 - Tests that share mutable state via class variables or module globals produce order-dependent results that only fail when run in isolation.
+- A smoke test that opens a deep link with a made-up record id (`?id=DEF-smoke`) passes while the page is a placeholder. It fails, or worse passes on an error page, once the page fetches the real record. Create the record through the API in the same run, and open the link with the id that call returned. Observed 2026-11-13: browser smokes went red only once their dialogs started loading real data.
 
 ## Patterns
 

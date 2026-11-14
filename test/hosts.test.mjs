@@ -37,7 +37,9 @@ if (argv.includes('-G')) {
   process.exit(0);
 }
 const probe = entry.probe || { stdout: '', stderr: '', code: 0 };
+if (probe.stampFile) fs.writeFileSync(probe.stampFile + '.start', String(Date.now()));
 setTimeout(() => {
+  if (probe.stampFile) fs.writeFileSync(probe.stampFile + '.end', String(Date.now()));
   if (probe.stderr) process.stderr.write(probe.stderr);
   if (probe.stdout) process.stdout.write(probe.stdout);
   process.exit(probe.code || 0);
@@ -276,18 +278,33 @@ test('home hosts --probe: a ProxyCommand is reported, not hidden', async () => {
 });
 
 test('probeAll: a hung host times out as unknown without holding back the others', async () => {
+  // Generous timeout so a loaded machine (the full suite runs files in parallel) still spawns the
+  // fast host's fake ssh in time; the hang is far longer still, so the two can never be confused.
+  const timeoutMs = 5000;
+  const hangMs = 60000;
+  const stamps = await tempDir('skf-probe-stamps-');
+  const slowStamp = path.join(stamps, 'slow');
+  const fastStamp = path.join(stamps, 'fast');
   const fx = await fixture({
     hosts: [],
-    ssh: { slow: { probe: { hangMs: 8000, stdout: GOOD_FACTS } }, fast: { probe: { stdout: GOOD_FACTS } } }
+    ssh: {
+      slow: { probe: { hangMs, stdout: GOOD_FACTS, stampFile: slowStamp } },
+      fast: { probe: { stdout: GOOD_FACTS, stampFile: fastStamp } }
+    }
   });
   const started = Date.now();
   const results = await probeAll(
     [{ name: 'slow', ssh: 'slow', dedicated: false }, { name: 'fast', ssh: 'fast', dedicated: false }],
-    { env: fx.env, timeoutMs: 400 }
+    { env: fx.env, timeoutMs }
   );
-  assert.ok(Date.now() - started < 4000, 'returns near the timeout, not after the hang');
+  assert.ok(Date.now() - started < hangMs / 2, 'returns on the timeout, not after the hang');
   assert.deepEqual(results.map((r) => [r.name, r.status, r.reason ?? null]),
     [['slow', 'unknown', 'timeout'], ['fast', 'reachable', null]]);
+  // Ordering, not wall-clock closeness: the slow probe cannot be killed before slowStart + timeoutMs,
+  // so a fast host that finished before then was probed alongside it, not queued behind it.
+  const stamp = async (file) => Number(await fs.readFile(file, 'utf8'));
+  assert.ok(await stamp(`${fastStamp}.end`) < (await stamp(`${slowStamp}.start`)) + timeoutMs,
+    'the fast host finished while the slow one was still hanging');
 });
 
 test('probeHost: a missing ssh binary is an ssh-error, not a crash', async () => {

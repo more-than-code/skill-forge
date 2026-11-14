@@ -295,15 +295,15 @@
     },
     "inventory/skills/product-parity": {
       "name": "product-parity",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-3VNoWwIZi/6l+IHCOx2axUd6aEQBXiiNVJhkOOCye3E=",
+      "integrity": "sha256-Ah2rWjn/saxfqoEr72kdJ0nG2qyxNWY7TtHnhppBjks=",
       "files": {
         "DYNAMIC-STATES.md": "sha256-wkmzl9WCOndYJ/9ZlCiJ18CWhH1l0VWseY8vwEGV9pw=",
         "JOURNEYS.md": "sha256-XLLnLFl2DfdjOgkXEAJvd6UJfHpO3LGS8vr5m94U7gM=",
-        "RECIPES.md": "sha256-JnAnHe3DOtMn68KwMLHgnD3FVEmycs/Y80UWSxz6QYI=",
+        "RECIPES.md": "sha256-/hOPnQg2g6ag+lv3odf80O1GAIC8ZSMtXE0WExyalK8=",
         "REFERENCE.md": "sha256-fW6S4rU07VbGEY20kWD9/FcyZFKRINREJ4le208oHgE=",
         "scripts/parity-api.mjs": "sha256-FlKLZUkmf89cfstq7UTYe4NRdEW7H1h0Km3IA3DWeXQ=",
         "scripts/parity-assets.mjs": "sha256-YOZnuoinVizZTg65iSmaMfUSdKVsnfoaZpHOHn2ud9A=",
@@ -447,13 +447,13 @@
     },
     "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-cfmiBOiS13fpeZvPzpCKbsinyNkm86CQTNaN6XI0vwo=",
+      "integrity": "sha256-6Y54DGWfZBWdFuJ5WRh4GFaHAsIh0Ll28xK/K+n9UAE=",
       "files": {
-        "SKILL.md": "sha256-nDVrgbMDuOC+UBphtIDH/Y+XNDuKU0/R75z4Hf8LIvk="
+        "SKILL.md": "sha256-2dDN3MFs+5L0SCkdFkrpYp7Dv9AMtr+Bm0KjpRJCpk8="
       }
     },
     "inventory/skills/ui-portability-baseline": {

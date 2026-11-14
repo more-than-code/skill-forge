@@ -175,7 +175,7 @@
     {
       "type": "skill",
       "name": "testing-strategy",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "scope": "custom",
       "path": "inventory/skills/testing-strategy",
       "installable": true,
@@ -320,7 +320,7 @@
     {
       "type": "skill",
       "name": "product-parity",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "scope": "custom",
       "path": "inventory/skills/product-parity",
       "installable": true,

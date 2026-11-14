@@ -45,6 +45,13 @@ description: >
 - Tier 1: Add at least one targeted test. If not feasible, document why.
 - Tier 2/3: Tests required. No exceptions.
 
+### Browser tests: one Playwright version per machine
+Each Playwright release pins its own browser build, but every repo on a machine shares one cache (`~/Library/Caches/ms-playwright` on macOS, `~/.cache/ms-playwright` on Linux). Repos on different Playwright versions each download their own Chromium, at about 200 MB per build for the headless shell alone. Observed 2026-11-14: eight repos on one machine pinned seven versions (1.31–1.65), and one repo had three installed at once because of a `~` range.
+- Pin `@playwright/test` to an **exact** version (`"1.64.1"`, never `^` or `~`), the same in every repo on the machine. Upgrade all of them together, in one pass.
+- Install only what the tests run: `npx playwright install chromium --only-shell` for headless suites. Drop `--only-shell` only for headed runs.
+- Do not switch to system Chrome (`channel: 'chrome'`) to save the download: it auto-updates, so the browser changes under the tests. Screenshot, parity or pixel checks need a pinned build.
+- `PLAYWRIGHT_BROWSERS_PATH` is not needed for sharing; the default cache is already shared. `playwright install` deletes builds that no installed project still references, so removing `node_modules` in a dormant repo frees its build on the next install anywhere.
+
 ### Trace verification
 When outputs derive from sources, test the traceability:
 - Every output value should trace back to a source input with evidence

@@ -40,6 +40,8 @@ on an empty screen, so that route needs a different selector.
 
 ## Source capture (Playwright)
 
+Pin `@playwright/test` exactly and install only the headless shell (`testing-strategy`, "one Playwright version per machine"). Captures compared across runs need the same browser build every time.
+
 ```ts
 const context = await browser.newContext({
   viewport: { width, height },

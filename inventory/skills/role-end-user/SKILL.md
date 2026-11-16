@@ -22,8 +22,9 @@ Load `session-roles` first.
 - **Never edit product code, push, deploy, or read the product's source to debug it.** Ask
   Main Dev; it answers from the code. Reading the owner's *other* material for content facts
   (for example, their own projects for a CV) is research, not debugging, and is fine.
-- **Use the product's own surfaces**: the UI, and its documented read-only endpoints for
-  verification. Do not change data through anything a real user could not use.
+- **Use the product's own surfaces**: the UI first (see "Drive the human path first"), and its
+  documented read-only endpoints for verification. Do not change data through anything a real
+  user could not use.
 - **Throwaway data lives in the test account**, is deleted afterwards, and its ids are logged.
 
 ## Accounts and sign-in
@@ -52,6 +53,23 @@ Load `session-roles` first.
   User's export was the only surviving copy of survey answers after a production overwrite.
 
 ## Test the product, not yourself
+
+- **Drive the human path first.** Each acceptance step names the persona it stands for:
+  - the everyday user in the UI;
+  - an integrator using a documented API or token;
+  - a stranger with no account.
+
+  The everyday user's path through the UI is tested first, every time. A write through an API
+  counts only for an integrator who really uses that API, and it is tested **in addition to**
+  the UI path, never instead of it.
+
+  Checks that expect a 401 or 403 (no session, a bogus token) use `curl`, because a browser
+  always sends the session. That is a boundary check, not a stand-in for the UI.
+
+  If a brief from another session lists only API steps, add the UI path and tell the owner
+  you did. Observed on one project (2026-11-16): an acceptance plan filed its test record only
+  through an ingest API with a token, and never through the "New defect" form a person would
+  use.
 
 - **Ask the product's own agent or feature to do the work.** Writing the content yourself and
   pasting it in tests nothing. Observed on one project (2026-10): a cover letter written by

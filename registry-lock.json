@@ -336,13 +336,13 @@
     },
     "inventory/skills/role-end-user": {
       "name": "role-end-user",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-f6Z1UBaVwPBnwtNg9J/4tViwWkkXQumyXAxmeZg/KYw=",
+      "integrity": "sha256-vQKMTLe78vxA9sycJ/zzeafXEShQ/NGfFK0GkyaOGew=",
       "files": {
-        "SKILL.md": "sha256-e10lGjkgQaDCvseL5+WK8uDejx0S5l0I6SLS5HN+GQ8="
+        "SKILL.md": "sha256-OLxxXrKP2M46dTex5C8G4+OvpnMmYBnGt3jdJTDqzYg="
       }
     },
     "inventory/skills/role-main-dev": {

@@ -3897,6 +3897,7 @@ ${vars ? `<p><small>Vars: ${escapeHtml(vars)}</small></p>` : ''}
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skill Forge Catalog</title>
+<link rel="icon" href="mark.svg" type="image/svg+xml">
 <style>
 :root { color-scheme: light dark; --border: #8884; --tagbg: #8882; }
 body { font: 15px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1rem; }
@@ -3924,6 +3925,8 @@ program
       await fs.ensureDir(outDir);
       const outFile = path.join(outDir, 'index.html');
       await fs.writeFile(outFile, await buildSiteHtml(registry));
+      // The favicon is the brand mark, copied from its one source (docs/brand) rather than redrawn.
+      await fs.copy(path.join(REPO_ROOT, 'docs', 'brand', 'logo', 'mark.svg'), path.join(outDir, 'mark.svg'));
       console.log(chalk.green(`Wrote ${outFile}`));
     } catch (error) {
       console.error(chalk.red('Error generating site:'), error.message);

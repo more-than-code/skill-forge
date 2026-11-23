@@ -935,6 +935,10 @@ test('site command generates a catalog with all sections and stats aggregation',
   }
   assert.match(html, /Explore \(1\)/);
   assert.doesNotMatch(html, /\{\{[a-z0-9_]+\}\}/);
+  // The brand mark is copied from its one source, never redrawn, and used as the favicon.
+  const mark = await fs.readFile(path.join(REPO_ROOT, 'docs', 'brand', 'logo', 'mark.svg'));
+  assert.deepEqual(await fs.readFile(path.join(out, 'mark.svg')), mark);
+  assert.match(html, /<link rel="icon" href="mark\.svg" type="image\/svg\+xml">/);
 });
 
 // --- Project skill profiles ---

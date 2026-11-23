@@ -1,4 +1,6 @@
-# Skill Forge
+# <img src="docs/brand/logo/mark.svg" alt="" width="36" height="36" align="absmiddle"> Skill Forge
+
+Agent skills and instructions registry
 
 Skill Forge evaluates how an agent tool and its artifacts — managed instructions,
 skills, subagents — perform together across SDLC lenses (work phase, task type,
@@ -44,6 +46,9 @@ inventory/
   subagents/               # managed subagent definitions
   hooks/                   # managed runtime hook scripts (usage stats)
 test/                      # node:test CLI suite (npm test)
+docs/
+  DESIGN.md                # architecture, roadmap, design decisions
+  brand/logo/mark.svg      # the brand mark; apps and `skf site` copy it from here, never redraw it
 otel/                      # local observability stack configs (see otel/README.md)
 docker-compose.yml         # container stack definition (docker/podman compose)
 registry.json              # human-maintained registry manifest

@@ -283,6 +283,25 @@ its markers and removed. `use none` strips both blocks, deletes an `AGENTS.md`
 that removing the block left empty (and a `CLAUDE.md` then holding only its
 import), and removes only the exclude entries sync owns.
 
+**The `cloud` variant** is for repositories worked by Claude Code cloud sessions
+and Claude Project threads. From the repository those load only `CLAUDE.md` and
+its imports, `.claude/rules`, `.claude/skills|agents|commands` (never `.mcp.json`
+or the hooks and permissions in `.claude/settings.json`), and they have none of
+your own `~/.claude`. In a Claude Project the same text is better delivered once
+per Project by the environment's setup script; see "Claude Project threads"
+below.
+It is a separate, compact core (`inventory/agents/variants/cloud/`, at most 150
+lines for both blocks, enforced by `validate` through the variant's `maxLines`):
+tiers, gates with "skipped is not passed", independent review, git rules for
+thread branches, task state in the PR, security, docs with code. It drops the
+workstation-only parts of `full` (the `tasks/` ledger, external workers and
+Grok, podman, skill-path protocol). The variant sets `requiresClaude`, so `use
+cloud` adds the `claude-code` shim when the profile lacks it and says so, and
+sync refuses a `cloud` declaration without the shim. Switch with `use cloud`
+from `full` or from nothing; `use none` removes the blocks but keeps the shim
+(it also links `.claude/skills`), and, as with `full`, deletes a `CLAUDE.md`
+left holding only its import.
+
 One read-only gate for a session root, composing the other checks:
 
 ```bash
@@ -311,6 +330,58 @@ skip, or would skip once a variant is declared. Warnings and notes never fail `-
 reported as an issue while the others still appear. A missing or invalid
 manifest, a bad role, or running in `$HOME` aborts with exit 1 before any report.
 It writes nothing.
+
+### Claude Project threads (`bin/skf-cloud.mjs`)
+
+Claude Project threads, and cloud sessions on the same environment, have no `skf`, no
+umbrella and no `~/.claude` of yours. They get Skill Forge from the Project's cloud
+environment instead: its setup script runs before every new thread starts, and whatever it
+writes to `~/.claude` loads in that thread. `bin/skf-cloud.mjs` is the one file that does
+this. It uses Node built-ins only and is fetched from this public repository at a pinned
+commit, so a Project that only ever existed in claude.ai needs nothing else.
+
+The setup-script block (a thread drafts it; the owner pastes it, since claude.ai has no API
+for Project settings):
+
+```bash
+# >>> skill-forge >>>
+cat > /tmp/skf-project-rules.md <<'SKF_EOF'
+<Project rules threads need; optional, drop these lines and SKF_PROJECT_RULES_FILE if empty>
+SKF_EOF
+export SKF_REF=<40-char commit sha> SKF_RULES=cloud SKF_AGENTS=claude-code
+export SKF_SKILLS="coding-discipline security-baseline code-quality testing-strategy"
+export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
+curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
+  && node /tmp/skf-cloud.mjs install || true
+# <<< skill-forge <<<
+```
+
+- `install` reads `registry.json` and `registry-lock.json` at `SKF_REF`, downloads the declared
+  variant (rendered into `~/.claude/rules/skill-forge.md`), subagent set (`~/.claude/agents/`)
+  and skills (`~/.claude/skills/<name>/`), checks every file against the lock, and writes only
+  files that verify. `SKF_PROJECT_RULES_FILE` adds `~/.claude/rules/project.md`. It records
+  what it wrote in `~/.claude/skill-forge/state.json` (ownership is that record; there are no
+  marker files), never touches files it did not write (the platform's own `~/.claude` files,
+  `CLAUDE.md`) or writes through a symlink, keeps a file it wrote that has since been edited,
+  removes a file it wrote earlier only while its hash still matches and never when this run
+  failed to fetch its replacement, and refuses skills tagged `workstation-only`. A bad name
+  or file fails alone and is recorded; the run has a 90-second budget, logs to
+  `~/skf-setup.log` and always exits 0 so a failure cannot stop threads from starting.
+- `doctor` (read-only; `--json`, `--check`, `--repos-dir`, `--context <file>`) checks the
+  install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
+  blocks, sections repeated across repos, always-loaded size, workstation-only rules,
+  duplicated skills, shadowing subagents, skills the profiles declare but nothing installs)
+  and, with `--context`, the Project-instructions text (length, missing PR base, restated
+  workflow rules); it also reports when the pinned `SKF_REF` is behind the registry's `main`
+  (`--offline` skips that). Each finding names who fixes it: an owner paste, an owner account
+  setting, a thread PR, or the thread itself. Not built: a branch-drift check (the steward
+  skill gives the manual `git diff`), and the "this repository" phrasing heuristic.
+- The `claude-project-steward` skill tells a thread how to run `doctor`, draft the setup
+  block, topic line and Project instructions, open repository fixes as PRs, and verify in a
+  new thread. Upload it once as a claude.ai account skill so new Projects have it before any
+  setup exists.
+- Changes reach new threads only: a changed setup script rebuilds the environment's snapshot,
+  and repository files load from each repo's default branch.
 
 Run the test suite:
 

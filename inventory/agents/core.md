@@ -255,6 +255,7 @@ This section is **normative**. `MUST`/`MUST NOT` are strict requirements.
 - **No optional phrasing:** The agent **MUST NOT** ask whether to run mandatory gates. Gates are automatic by default.
 - **Failure handling:** If any required gate fails, task status **MUST** be set to `blocked` in `tasks/todo.md`, then the agent **MUST** fix and re-run gates.
 - **Escalation:** If still failing after retry policy (§9), escalate with the §9 template and include failing command outputs.
+- **Skipped is not passed:** A skipped, filtered, or environment-gated test (`t.Skip`, `pytest.skip`, `it.skip`, a suite that needs a database or service the session lacks) is not a pass. Report skip counts next to pass counts, list every required gate that did not run as `not run: <reason>` in the gate block (and in the PR, when there is one), and **MUST NOT** claim a Tier 2/3 change done with a required gate not run unless the user waives it.
 - **Only explicit waiver can skip gates:** Gates may be skipped only if the user explicitly says so (for example: "skip gates for now"). The agent **MUST** record waiver text and timestamp in `tasks/todo.md`.
 
 ### 5.2) Required Gate Evidence Format (Tier 2/3)

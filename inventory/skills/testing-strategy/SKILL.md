@@ -52,6 +52,13 @@ Each Playwright release pins its own browser build, but every repo on a machine 
 - Do not switch to system Chrome (`channel: 'chrome'`) to save the download: it auto-updates, so the browser changes under the tests. Screenshot, parity or pixel checks need a pinned build.
 - `PLAYWRIGHT_BROWSERS_PATH` is not needed for sharing; the default cache is already shared. `playwright install` deletes builds that no installed project still references, so removing `node_modules` in a dormant repo frees its build on the next install anywhere.
 
+### Gate the environment cannot run
+A green run with skipped tests is not a green gate. Observed 2026-11-24: cloud sessions merged two migrations whose database tests had skipped themselves (`t.Skip` without a database), and the next release's gates broke.
+- Before reporting a gate, count skips as well as passes (`go test -v` `SKIP` lines, `pytest -rs`, the runner's skipped total). A required suite with skips is `not run`, not `pass`.
+- Report it as `not run: <reason>` in the gate block and the PR, with what would run it: the environment's setup script, a CI job, or the owner's machine.
+- Do not fake the gate (stub the database, delete the skip, mark it expected) to get green. Ask for the environment or a written waiver.
+- When writing an environment-gated test, make the skip loud: name the missing dependency in the skip message, so the count above is easy to read.
+
 ### Trace verification
 When outputs derive from sources, test the traceability:
 - Every output value should trace back to a source input with evidence

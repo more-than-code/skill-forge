@@ -1,0 +1,651 @@
+#!/usr/bin/env node
+// skf-cloud: Skill Forge for Claude Project threads and cloud sessions. Node 18+, built-ins only.
+//
+// Runs where `skf` is not installed: a cloud environment's setup script fetches this one file
+// at a pinned registry commit and runs `install`; a thread runs `doctor`.
+//
+//   install  Write the declared rules, subagents and skills into ~/.claude. Reads the
+//            declaration from SKF_REF, SKF_RULES, SKF_AGENTS, SKF_SKILLS and
+//            SKF_PROJECT_RULES_FILE. Logs to ~/skf-setup.log and always exits 0: a failing
+//            setup script would stop threads from starting. A name or file that cannot be
+//            installed is recorded as failed; everything else still installs.
+//   doctor   Read-only. Checks the setup, the cloned repositories and (optionally) the
+//            Project-instructions text, and prints findings with who fixes them and how.
+//
+// Trust model: SKF_REF is a full commit sha fetched over TLS from the public registry, so the
+// commit authenticates everything, this file included. The sha256 values in
+// registry-lock.json catch corruption in transit; they do not defend against a malicious ref.
+// registry.json is not in the lock and is trusted by the same commit pin; its paths are still
+// validated before use. Skill scripts are written without an executable bit: run them through
+// their interpreter (`node x.mjs`, `python3 x.py`).
+//
+// Spec: tasks/spec-project-thread-setup.md in the skill-forge repository.
+
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const DEFAULT_BASE = 'https://raw.githubusercontent.com/more-than-code/skill-forge';
+const STATE_VERSION = 1;
+const FETCH_TIMEOUT_MS = 20000;
+const INSTALL_DEADLINE_MS = Number(process.env.SKF_DEADLINE_MS) || 90000;
+const PROCESS_SKILLS = ['coding-discipline', 'security-baseline', 'code-quality', 'testing-strategy'];
+const ALWAYS_USEFUL_SKILLS = [...PROCESS_SKILLS, 'claude-project-steward'];
+const REPO_BYTES_BUDGET = 8 * 1024;
+const REPO_READ_CAP = 256 * 1024;
+const PROJECT_INSTRUCTIONS_LIMIT = 16000;
+const OWNED_KINDS = ['rules', 'agents', 'skills'];
+const BLOCK_BEGIN = /^<!-- >>> skill-forge instructions [A-Za-z0-9._-]+@\d+\.\d+\.\d+ >>> -->\r?$/m;
+const MANAGED_BLOCK = /<!-- >>> skill-forge instructions[^\n]*\n[\s\S]*?<!-- <<< skill-forge instructions <<< -->/g;
+// Phrases from the workstation (`full`) rules that contradict or repeat the cloud rules.
+const WORKSTATION_PHRASES = [/tasks\/todo\.md/, /tasks\/lessons\.md/, /external[- ]worker/i, /\bgrok\b/i, /podman/i, /skf sync --check/];
+
+const hashBytes = (bytes) => `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
+const withoutManagedBlocks = (text) => text.replace(MANAGED_BLOCK, '');
+const home = () => process.env.HOME || os.homedir();
+const claudeDir = () => path.join(home(), '.claude');
+const statePath = () => path.join(claudeDir(), 'skill-forge', 'state.json');
+const logPath = () => path.join(home(), 'skf-setup.log');
+
+// A plain relative path inside one package: no absolute paths, no "..", no empty segments.
+const isSafeRelative = (rel) => typeof rel === 'string' && rel !== '' && !path.isAbsolute(rel) && !/[?#%\\]/.test(rel)
+  && rel.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+const isSafeName = (name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+// An install destination we may own: a file under ~/.claude/{rules,agents,skills}.
+const isOwnedDest = (dest) => typeof dest === 'string' && path.isAbsolute(dest)
+  && OWNED_KINDS.some((kind) => path.resolve(dest).startsWith(path.join(claudeDir(), kind) + path.sep));
+
+function readJsonFile(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** The recorded state, with anything that is not ours dropped (a tampered entry never steers a delete). */
+function readState() {
+  const raw = readJsonFile(statePath());
+  if (!raw || typeof raw !== 'object') return null;
+  const files = {};
+  for (const [dest, hash] of Object.entries(raw.files && typeof raw.files === 'object' ? raw.files : {})) {
+    if (isOwnedDest(dest) && typeof hash === 'string') files[dest] = hash;
+  }
+  const strings = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
+  return {
+    ref: typeof raw.ref === 'string' ? raw.ref : null,
+    base: typeof raw.base === 'string' ? raw.base : DEFAULT_BASE,
+    skills: strings(raw.skills),
+    failed: strings(raw.failed),
+    versions: raw.versions && typeof raw.versions === 'object' ? raw.versions : {},
+    files
+  };
+}
+
+// --- install ---
+
+/** Bytes of `rel` at `ref`: from a local mirror laid out as <base>/<ref>/<rel> (tests, offline) or over HTTPS. */
+async function fetchBytes(base, ref, rel, deadline) {
+  if (base.startsWith('/')) {
+    const file = path.join(base, ref, rel);
+    if (!file.startsWith(path.join(base, ref) + path.sep)) throw new Error('path outside the mirror');
+    return fs.readFileSync(file);
+  }
+  if (!base.startsWith('https://')) throw new Error('SKF_BASE must be https:// or an absolute mirror path');
+  const signals = [AbortSignal.timeout(FETCH_TIMEOUT_MS)];
+  if (deadline) signals.push(deadline);
+  const response = await fetch(`${base}/${ref}/${rel}`, { signal: signals.length > 1 && AbortSignal.any ? AbortSignal.any(signals) : signals[0] });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function readDeclaration(env) {
+  const list = (value) => (value || '').split(/[\s,]+/).filter(Boolean);
+  return {
+    ref: env.SKF_REF || '',
+    base: env.SKF_BASE || DEFAULT_BASE,
+    rules: env.SKF_RULES || '',
+    agents: env.SKF_AGENTS || '',
+    skills: list(env.SKF_SKILLS),
+    projectRulesFile: env.SKF_PROJECT_RULES_FILE || ''
+  };
+}
+
+/** Rendered variant blocks, exactly as the registry renders and locks them (cli.js renderInstructionVariant). */
+function renderVariant(variant, sources) {
+  const render = (text) => Object.entries(variant.vars || {})
+    .reduce((acc, [key, value]) => acc.replaceAll(`{{${key}}}`, String(value)), text).trimEnd();
+  return { agents: render(sources.core), claude: sources.claude === null ? null : render(sources.claude) };
+}
+
+/**
+ * Plans every file the declaration installs: { dest, content, label }. Only an unusable ref or
+ * an unreadable registry throws; anything narrower lands in `failed` (with the destinations it
+ * covers in `failedDests`, so a file installed earlier is kept rather than removed).
+ */
+async function planInstall(decl, previous, log) {
+  if (!/^[0-9a-f]{40}$/.test(decl.ref)) throw new Error('SKF_REF must be a full 40-character registry commit sha');
+  const deadline = AbortSignal.timeout(INSTALL_DEADLINE_MS);
+  const get = (rel) => fetchBytes(decl.base, decl.ref, rel, deadline);
+  const registry = JSON.parse((await get('registry.json')).toString('utf8'));
+  const lock = JSON.parse((await get('registry-lock.json')).toString('utf8'));
+  const packages = lock.packages || {};
+  const planned = [];
+  const failed = [];
+  const failedDests = new Set();
+  const versions = {};
+  const fail = (what, reason, dests = []) => {
+    failed.push(`${what} (${reason})`);
+    for (const dest of dests) failedDests.add(dest);
+    log(`FAILED ${what}: ${reason}`);
+  };
+  const ownedUnder = (dir) => Object.keys(previous?.files || {}).filter((dest) => dest.startsWith(dir + path.sep));
+
+  const verified = async (rel, expected, dest, label) => {
+    try {
+      const bytes = await get(rel);
+      if (hashBytes(bytes) !== expected) throw new Error('hash mismatch');
+      planned.push({ dest, content: bytes, label });
+    } catch (error) {
+      fail(rel, error.name === 'TimeoutError' || error.name === 'AbortError' ? 'timed out' : error.message, [dest]);
+    }
+  };
+  /** Locked files of a package, each checked to be a plain relative path. */
+  const lockedFiles = (what, locked, filter = () => true) => Object.entries(locked.files || {}).filter(([rel]) => {
+    if (isSafeRelative(rel) && filter(rel)) return true;
+    fail(`${what}/${String(rel).slice(0, 80)}`, 'unsafe path in the lock');
+    return false;
+  });
+
+  if (decl.rules) {
+    const dest = path.join(claudeDir(), 'rules', 'skill-forge.md');
+    const variant = (registry.instructionVariants || []).find((entry) => entry.name === decl.rules);
+    const locked = packages[`instructions:${decl.rules}`];
+    if (!variant || !locked) {
+      fail(`rules ${decl.rules}`, 'unknown variant', [dest]);
+    } else if (!isSafeRelative(variant.core) || (variant.claude && !isSafeRelative(variant.claude))) {
+      fail(`rules ${decl.rules}`, 'unsafe path in registry.json', [dest]);
+    } else {
+      try {
+        const text = async (rel) => (await get(rel)).toString('utf8');
+        const rendered = renderVariant(variant, { core: await text(variant.core), claude: variant.claude ? await text(variant.claude) : null });
+        if (hashBytes(rendered.agents) !== locked.files?.['AGENTS.md']
+          || (rendered.claude !== null && hashBytes(rendered.claude) !== locked.files?.['CLAUDE.md'])) {
+          throw new Error('hash mismatch');
+        }
+        const body = [rendered.agents, rendered.claude].filter((part) => part !== null).join('\n\n');
+        planned.push({ dest, content: Buffer.from(`${body}\n`), label: `rules ${decl.rules}@${variant.version}` });
+        versions[`rules:${decl.rules}`] = variant.version;
+      } catch (error) {
+        fail(`rules ${decl.rules}`, error.message, [dest]);
+      }
+    }
+  }
+
+  if (decl.agents) {
+    const artifact = (registry.managedSubagents || []).find((entry) => entry.scope === decl.agents);
+    const locked = artifact && packages[artifact.path];
+    if (!locked || !isSafeRelative(artifact.path) || !artifact.path.startsWith('inventory/subagents/')) {
+      fail(`agents ${decl.agents}`, 'unknown subagent set', ownedUnder(path.join(claudeDir(), 'agents')));
+    } else {
+      versions[`agents:${decl.agents}`] = artifact.version;
+      for (const [rel, expected] of lockedFiles(artifact.path, locked, (rel) => !rel.includes('/') && rel.endsWith('.md'))) {
+        await verified(`${artifact.path}/${rel}`, expected, path.join(claudeDir(), 'agents', rel), `agent ${rel}`);
+      }
+    }
+  }
+
+  for (const name of decl.skills) {
+    const safe = isSafeName(name);
+    const skill = safe ? (registry.skills || []).find((entry) => entry.name === name) : null;
+    const locked = skill && skill.path === `inventory/skills/${name}` ? packages[skill.path] : null;
+    const kept = safe ? ownedUnder(path.join(claudeDir(), 'skills', name)) : [];
+    if (!locked || skill.installable === false) {
+      fail(`skill ${String(name).slice(0, 80)}`, 'unknown or not installable', kept);
+    } else if ((skill.tags || []).includes('workstation-only') || skill.workstationOnly === true) {
+      fail(`skill ${name}`, 'workstation-only; it does not belong in a cloud environment', kept);
+    } else {
+      versions[`skill:${name}`] = skill.version;
+      for (const [rel, expected] of lockedFiles(skill.path, locked)) {
+        await verified(`${skill.path}/${rel}`, expected, path.join(claudeDir(), 'skills', name, rel), `skill ${name}`);
+      }
+    }
+  }
+
+  if (decl.projectRulesFile) {
+    const dest = path.join(claudeDir(), 'rules', 'project.md');
+    try {
+      planned.push({ dest, content: fs.readFileSync(decl.projectRulesFile), label: 'project rules' });
+    } catch (error) {
+      fail('project rules', error.code || error.message, [dest]);
+    }
+  }
+  return { planned, failed, failedDests, versions };
+}
+
+/** Refuses a destination whose path below ~/.claude runs through a symlink (we never write through links). */
+function assertNoSymlink(dest) {
+  let current = claudeDir();
+  for (const part of path.relative(claudeDir(), dest).split(path.sep)) {
+    current = path.join(current, part);
+    if (fs.lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${current} is a symlink`);
+  }
+}
+
+/** Writes via a temp file and rename, so an existing file is replaced, never written through. */
+function writeAtomic(dest, content) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const tmp = `${dest}.skf-tmp-${process.pid}`;
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, dest);
+}
+
+/** Drops empty folders from `dir` up to, not including, ~/.claude/<kind>. */
+function pruneEmptyDirs(dir) {
+  const stop = OWNED_KINDS.map((kind) => path.join(claudeDir(), kind));
+  let current = dir;
+  while (!stop.includes(current) && current.startsWith(claudeDir() + path.sep)) {
+    if (fs.readdirSync(current).length > 0) return;
+    fs.rmdirSync(current);
+    current = path.dirname(current);
+  }
+}
+
+/**
+ * Writes the plan. A path is ours when the previous state recorded it. An existing path that is
+ * not ours is left alone unless its bytes already match (then it is adopted); one of ours that
+ * was edited since install is kept, not overwritten. Files we installed before and no longer
+ * plan are removed only while their hash still matches, and never when this run failed to
+ * fetch their replacement.
+ */
+function applyInstall(planned, previous, failedDests, log) {
+  const owned = previous?.files || {};
+  const files = {};
+  const failed = [];
+  for (const { dest, content, label } of planned) {
+    const hash = hashBytes(content);
+    try {
+      assertNoSymlink(dest);
+      const existing = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+      const current = existing === null ? null : hashBytes(existing);
+      if (current !== null && current !== hash && owned[dest] === undefined) {
+        log(`kept ${dest}: not installed by skill-forge`);
+        continue;
+      }
+      if (current !== null && current !== hash && current !== owned[dest]) {
+        log(`kept ${dest}: edited since install`);
+        files[dest] = owned[dest];
+        continue;
+      }
+      if (current !== hash) {
+        writeAtomic(dest, content);
+        log(`ok ${label} -> ${dest}`);
+      }
+      files[dest] = hash;
+    } catch (error) {
+      failed.push(`${dest} (${error.code || error.message})`);
+      log(`FAILED write ${dest}: ${error.code || error.message}`);
+      if (owned[dest] !== undefined) files[dest] = owned[dest];
+    }
+  }
+  for (const [dest, hash] of Object.entries(owned)) {
+    if (files[dest] !== undefined) continue;
+    if (failedDests.has(dest)) {
+      files[dest] = hash; // the replacement failed this run: keep the copy that worked
+      continue;
+    }
+    try {
+      assertNoSymlink(dest);
+      if (!fs.existsSync(dest)) continue;
+      if (hashBytes(fs.readFileSync(dest)) === hash) {
+        fs.rmSync(dest);
+        log(`removed ${dest} (no longer declared)`);
+        pruneEmptyDirs(path.dirname(dest));
+      } else {
+        log(`kept ${dest}: edited since install`);
+      }
+    } catch (error) {
+      log(`FAILED remove ${dest}: ${error.code || error.message}`);
+    }
+  }
+  return { files, failed };
+}
+
+async function runInstall() {
+  const lines = [];
+  const log = (line) => lines.push(line);
+  const decl = readDeclaration(process.env);
+  log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'}`);
+  try {
+    const previous = readState();
+    const plan = await planInstall(decl, previous, log);
+    const applied = applyInstall(plan.planned, previous, plan.failedDests, log);
+    const failed = [...plan.failed, ...applied.failed];
+    const state = {
+      version: STATE_VERSION,
+      ref: decl.ref,
+      base: decl.base,
+      rules: decl.rules || null,
+      agents: decl.agents || null,
+      skills: decl.skills,
+      projectRules: Boolean(decl.projectRulesFile),
+      versions: plan.versions,
+      failed,
+      files: applied.files
+    };
+    writeAtomic(statePath(), `${JSON.stringify(state, null, 2)}\n`);
+    log(failed.length === 0 ? 'done: all files verified' : `done with ${failed.length} failure(s)`);
+  } catch (error) {
+    log(`FAILED install: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
+  }
+  try {
+    const self = process.argv[1];
+    const selfDest = path.join(claudeDir(), 'skill-forge', 'skf-cloud.mjs');
+    if (self && path.resolve(self) !== selfDest) writeAtomic(selfDest, fs.readFileSync(self));
+  } catch (error) {
+    log(`FAILED keeping a copy for doctor: ${error.code || error.message}`);
+  }
+  try {
+    fs.writeFileSync(logPath(), `${lines.join('\n')}\n`);
+  } catch {
+    // Nothing else can report it; setup must still not fail.
+  }
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+// --- doctor ---
+
+const OWNERS = ['owner-paste', 'owner-account', 'thread-pr', 'thread', 'skill-forge'];
+
+function finding(id, severity, owner, evidence, fix) {
+  return { id, severity, owner, evidence, fix };
+}
+
+/** Repositories cloned for this thread: git work trees directly under the repos directory. */
+function findRepos(reposDir) {
+  const root = path.resolve(reposDir);
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => {
+      const dir = path.join(root, entry.name);
+      return (entry.isDirectory() || (entry.isSymbolicLink() && fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()))
+        && fs.existsSync(path.join(dir, '.git'));
+    })
+    .map((entry) => ({ name: entry.name, dir: path.join(root, entry.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A file's text, capped so a hostile repo cannot make doctor slow; null when absent. */
+function readText(file) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buffer = Buffer.alloc(REPO_READ_CAP);
+      const length = fs.readSync(fd, buffer, 0, REPO_READ_CAP, 0);
+      return buffer.subarray(0, length).toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** The always-loaded text of a repo: CLAUDE.md plus the files inside the repo it imports with @path. */
+function loadedRepoText(dir) {
+  const claude = readText(path.join(dir, 'CLAUDE.md'));
+  if (claude === null) return { claude: null, text: '', importsAgents: false };
+  let realDir;
+  try {
+    realDir = fs.realpathSync(dir);
+  } catch {
+    realDir = dir;
+  }
+  let text = claude;
+  let importsAgents = false;
+  for (const match of claude.matchAll(/(?:^|\s)@([^\s`]+)/g)) {
+    const target = match[1].replace(/^\.\//, '');
+    if (target === 'AGENTS.md') importsAgents = true;
+    let real;
+    try {
+      real = fs.realpathSync(path.resolve(dir, target));
+    } catch {
+      continue;
+    }
+    if (real.startsWith(realDir + path.sep)) text += `\n${readText(real) ?? ''}`;
+  }
+  return { claude, text, importsAgents };
+}
+
+/** `## heading` sections with their bodies, for spotting the same section in two repos. */
+function sections(text) {
+  const result = [];
+  let current = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^## /.test(line)) {
+      current = { heading: line.slice(3).trim(), body: [] };
+      result.push(current);
+    } else if (/^#{1,6} |^<!-- [<>]{3} skill-forge instructions/.test(line)) {
+      current = null; // any other heading or a managed-block marker ends the section
+    } else if (current) {
+      current.body.push(line);
+    }
+  }
+  return result.map(({ heading, body }) => ({ heading, body: body.join('\n').trim() })).filter((entry) => entry.body.length > 40);
+}
+
+function listDir(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+function logTail() {
+  const text = readText(logPath());
+  return text ? text.trim().split('\n').filter((line) => line.startsWith('FAILED')).slice(-3).join(' | ') : '';
+}
+
+function checkSetup(findings) {
+  const state = readState();
+  if (!state) {
+    const tail = logTail();
+    findings.push(finding('D-setup-missing', 'issue', 'owner-paste', `no ${statePath()}: the environment's setup script has no Skill Forge declaration, or it failed${tail ? ` (${tail})` : ''}`,
+      'Paste the Skill Forge declaration into the Project environment\'s setup script (the steward drafts it), then start a new thread.'));
+    return null;
+  }
+  if (state.failed.length > 0) {
+    findings.push(finding('D-setup-failed', 'issue', 'owner-paste', `the last install could not install: ${state.failed.join('; ')}`,
+      `Check ${logPath()}; usually a wrong name in SKF_SKILLS, a wrong SKF_REF or a network block. Fix the declaration and start a new thread.`));
+  }
+  for (const [file, hash] of Object.entries(state.files)) {
+    const bytes = fs.existsSync(file) ? fs.readFileSync(file) : null;
+    if (bytes === null || hashBytes(bytes) !== hash) {
+      findings.push(finding('D-setup-tampered', 'issue', 'owner-paste', `${file} is ${bytes === null ? 'missing' : 'changed'} since install`,
+        'Start a new thread (the setup snapshot restores it); if it persists, re-save the setup script to rebuild the snapshot.'));
+    }
+  }
+  return state;
+}
+
+/** Compares the pinned versions with the registry's `main`, so a Project learns its SKF_REF is behind. */
+async function checkRefBehind(findings, state, offline) {
+  if (offline || !state?.ref || Object.keys(state.versions).length === 0) return;
+  let latest;
+  try {
+    latest = JSON.parse((await fetchBytes(state.base, 'main', 'registry.json', AbortSignal.timeout(FETCH_TIMEOUT_MS))).toString('utf8'));
+  } catch (error) {
+    findings.push(finding('D-ref-unchecked', 'note', 'thread', `could not read the registry's main branch (${error.message})`, 'Re-run doctor with network access, or pass --offline.'));
+    return;
+  }
+  const current = (key) => {
+    const [kind, name] = key.split(':');
+    if (kind === 'skill') return (latest.skills || []).find((entry) => entry.name === name)?.version;
+    if (kind === 'rules') return (latest.instructionVariants || []).find((entry) => entry.name === name)?.version;
+    if (kind === 'agents') return (latest.managedSubagents || []).find((entry) => entry.scope === name)?.version;
+    return undefined;
+  };
+  const behind = Object.entries(state.versions)
+    .filter(([key, version]) => typeof version === 'string' && current(key) && current(key) !== version)
+    .map(([key, version]) => `${key} ${version} -> ${current(key)}`);
+  if (behind.length > 0) {
+    findings.push(finding('D-ref-behind', 'note', 'owner-paste', `the pinned SKF_REF is behind the registry: ${behind.join(', ')}`,
+      'Update SKF_REF in the setup script to the registry\'s current main commit (the steward drafts it), then start a new thread.'));
+  }
+}
+
+function checkRepos(findings, repos, state) {
+  const envSkills = new Set(listDir(path.join(claudeDir(), 'skills')));
+  const envAgents = new Set(listDir(path.join(claudeDir(), 'agents')).filter((name) => name.endsWith('.md')));
+  const declaredByRepos = new Map();
+  const sectionOwners = new Map();
+  let profiles = 0;
+
+  for (const repo of repos) {
+    const loaded = loadedRepoText(repo.dir);
+    const agentsText = readText(path.join(repo.dir, 'AGENTS.md'));
+    if (loaded.claude === null) {
+      if (agentsText !== null) {
+        findings.push(finding('D-repo-no-claude-md', 'issue', 'thread-pr', `${repo.name} has AGENTS.md but no CLAUDE.md, so threads load none of it`,
+          `PR in ${repo.name}: add CLAUDE.md containing the single line @AGENTS.md (into the default branch, or the branch the Project instructions name).`));
+      }
+    } else if (agentsText !== null && !loaded.importsAgents) {
+      findings.push(finding('D-repo-claude-no-import', 'issue', 'thread-pr', `${repo.name}/CLAUDE.md does not import AGENTS.md`,
+        `PR in ${repo.name}: add the line @AGENTS.md to CLAUDE.md.`));
+    }
+    const text = loaded.text;
+    const prose = withoutManagedBlocks(text);
+    if (BLOCK_BEGIN.test(text)) {
+      findings.push(finding('D-repo-managed-block', state ? 'issue' : 'note', 'thread-pr', `${repo.name} carries a Skill Forge managed instructions block, which repeats the environment's workflow rules`,
+        `PR in ${repo.name}: remove the block and the "instructions" variant keys in skill-forge.json, and keep only ${repo.name}'s own facts.`));
+    }
+    const phrases = WORKSTATION_PHRASES.filter((pattern) => pattern.test(prose));
+    if (phrases.length > 0) {
+      findings.push(finding('D-repo-restates-rules', 'note', 'thread-pr', `${repo.name} instructions mention workstation-only workflow (${phrases.map(String).join(', ')})`,
+        `PR in ${repo.name}: drop workflow rules the environment already carries; keep repository facts.`));
+    }
+    if (Buffer.byteLength(text) > REPO_BYTES_BUDGET) {
+      findings.push(finding('D-repo-size', 'issue', 'thread-pr', `${repo.name} loads ${Buffer.byteLength(text)} bytes of instructions in every thread (budget ${REPO_BYTES_BUDGET})`,
+        `PR in ${repo.name}: shorten CLAUDE.md and its imports to repository facts; every repo's files load in every thread.`));
+    }
+    // An AGENTS.md that is not loaded yet (no CLAUDE.md) will be once the import is added.
+    for (const { heading, body } of sections(loaded.claude === null ? withoutManagedBlocks(agentsText ?? '') : prose)) {
+      const key = `${heading}\n${body}`;
+      if (!sectionOwners.has(key)) sectionOwners.set(key, []);
+      sectionOwners.get(key).push(repo.name);
+    }
+    for (const name of listDir(path.join(repo.dir, '.claude', 'skills'))) {
+      if (envSkills.has(name)) {
+        findings.push(finding('D-repo-vendored-skill', 'note', 'thread-pr', `${repo.name} commits skill ${name}, which the environment also installs; threads list it again as ${repo.name}:${name} (the environment copy runs)`,
+          `Optional PR in ${repo.name}: stop committing ${name}.`));
+      }
+    }
+    for (const name of listDir(path.join(repo.dir, '.claude', 'agents'))) {
+      if (envAgents.has(name)) {
+        findings.push(finding('D-repo-agent-shadow', 'issue', 'thread-pr', `${repo.name}/.claude/agents/${name} overrides the environment's ${name} (project agents win)`,
+          `PR in ${repo.name}: remove .claude/agents/${name}, or rename it if it is meant to differ.`));
+      }
+    }
+    const profile = readJsonFile(path.join(repo.dir, 'skill-forge.json'));
+    if (profile) profiles += 1;
+    for (const name of Object.keys(profile?.skills?.dependencies || {})) {
+      if (!declaredByRepos.has(name)) declaredByRepos.set(name, []);
+      declaredByRepos.get(name).push(repo.name);
+    }
+  }
+
+  for (const [key, owners] of sectionOwners) {
+    if (owners.length > 1) {
+      findings.push(finding('D-repo-duplicate-section', 'issue', 'thread-pr', `section "${key.split('\n')[0]}" appears in ${owners.join(', ')}; every repo's instructions load in every thread`,
+        'Keep it once: Project-wide rules go in the Project instructions, the rest in one repo.'));
+    }
+  }
+  if (!state) return;
+  for (const [name, owners] of declaredByRepos) {
+    const repoHasIt = owners.some((owner) => fs.existsSync(path.join(repos.find((repo) => repo.name === owner).dir, '.claude', 'skills', name)));
+    if (owners.length > 1 && !envSkills.has(name)) {
+      findings.push(finding('D-skill-shared-not-installed', 'note', 'owner-paste', `skill ${name} is declared by ${owners.join(', ')} but not installed by the environment`,
+        `Add ${name} to SKF_SKILLS in the setup script.`));
+    } else if (!envSkills.has(name) && !repoHasIt) {
+      findings.push(finding('D-skill-missing', 'issue', 'owner-paste', `skill ${name} is declared by ${owners.join(', ')} but neither the environment nor the repo provides it`,
+        `Add ${name} to SKF_SKILLS, or commit it in ${owners[0]}.`));
+    }
+  }
+  if (profiles === 0) return;
+  for (const name of state.skills) {
+    if (!declaredByRepos.has(name) && !ALWAYS_USEFUL_SKILLS.includes(name)) {
+      findings.push(finding('D-skill-unused', 'note', 'owner-paste', `the environment installs ${name}, which no repo profile declares`,
+        `Drop ${name} from SKF_SKILLS unless threads need it.`));
+    }
+  }
+}
+
+function checkContext(findings, file) {
+  const text = readText(file);
+  if (text === null) {
+    findings.push(finding('D-context-unreadable', 'issue', 'thread', `cannot read ${file}`, 'Write the Project instructions text to a file and pass it with --context.'));
+    return;
+  }
+  if (text.length > PROJECT_INSTRUCTIONS_LIMIT) {
+    findings.push(finding('D-context-size', 'issue', 'owner-paste', `Project instructions are ${text.length} characters (limit ${PROJECT_INSTRUCTIONS_LIMIT})`, 'Shorten them to Project-level rules.'));
+  }
+  const namesBase = text.split('\n').some((line) => line.length < 2000 && /\b(PRs?|pull requests?)\b.*\binto\s+`?[\w./-]+/i.test(line));
+  if (!namesBase) {
+    findings.push(finding('D-context-pr-base', 'issue', 'owner-paste', 'the Project instructions name no pull-request base branch; threads then use the repo default',
+      'Add a line such as: Pull requests go into `dev`.'));
+  }
+  const phrases = WORKSTATION_PHRASES.filter((pattern) => pattern.test(text));
+  if (phrases.length > 0 || /\b(risk tiers?|Tier 1|Quality Gates)\b/.test(text)) {
+    findings.push(finding('D-context-restates-rules', 'note', 'owner-paste', 'the Project instructions restate engineering workflow rules the environment already carries',
+      'Keep only Project-level rules there (repo ownership, thread scope, approvals, PR base).'));
+  }
+}
+
+async function runDoctor(args) {
+  const option = (name) => {
+    const index = args.indexOf(name);
+    return index >= 0 ? args[index + 1] : undefined;
+  };
+  const reposDir = option('--repos-dir') || process.env.SKF_REPOS_DIR || '/home/user';
+  const findings = [];
+  const state = checkSetup(findings);
+  await checkRefBehind(findings, state, args.includes('--offline'));
+  const repos = findRepos(reposDir);
+  checkRepos(findings, repos, state);
+  const context = option('--context');
+  if (context) checkContext(findings, context);
+  const report = { version: 1, ref: state?.ref ?? null, repos: repos.map((repo) => repo.name), findings };
+
+  if (args.includes('--json')) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    const out = [`skf-cloud doctor: ref ${report.ref ?? 'none'}, repos ${report.repos.join(', ') || 'none'}`];
+    if (findings.length === 0) out.push('No findings.');
+    for (const owner of OWNERS) {
+      const group = findings.filter((entry) => entry.owner === owner);
+      if (group.length === 0) continue;
+      out.push('', `[${owner}]`);
+      for (const entry of group) out.push(`- ${entry.severity.toUpperCase()} ${entry.id}: ${entry.evidence}`, `  fix: ${entry.fix}`);
+    }
+    process.stdout.write(`${out.join('\n')}\n`);
+  }
+  if (args.includes('--check') && findings.some((entry) => entry.severity === 'issue')) process.exitCode = 1;
+}
+
+process.stdout.on('error', () => {});
+const [command, ...rest] = process.argv.slice(2);
+if (command === 'install') {
+  await runInstall();
+} else if (command === 'doctor') {
+  await runDoctor(rest);
+} else {
+  process.stderr.write('usage: skf-cloud.mjs install | doctor [--repos-dir <dir>] [--context <file>] [--offline] [--json] [--check]\n');
+  process.exitCode = 2;
+}

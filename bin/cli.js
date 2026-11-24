@@ -900,6 +900,13 @@ async function validateInstructionVariants(registry, errors) {
     if (seen.has(variant.name)) reportValidationError(errors, `${label} is declared twice`);
     seen.add(variant.name);
     if (!SEMVER_PATTERN.test(variant.version)) reportValidationError(errors, `${label} has invalid version "${variant.version}"`);
+    if (variant.requiresClaude !== undefined && typeof variant.requiresClaude !== 'boolean') {
+      reportValidationError(errors, `${label} has a non-boolean requiresClaude`);
+    }
+    if (variant.requiresClaude === true && !variant.claude) reportValidationError(errors, `${label} sets requiresClaude but has no claude block`);
+    if (variant.maxLines !== undefined && !(Number.isInteger(variant.maxLines) && variant.maxLines > 0)) {
+      reportValidationError(errors, `${label} has an invalid maxLines (a positive integer)`);
+    }
     const files = [variant.core, ...(variant.claude ? [variant.claude] : [])];
     const missing = [];
     for (const relPath of files) {
@@ -913,6 +920,11 @@ async function validateInstructionVariants(registry, errors) {
     const unresolved = findUnresolvedPlaceholders(`${rendered.agents}\n${rendered.claude ?? ''}`);
     if (unresolved.length > 0) {
       reportValidationError(errors, `${label} has unresolved placeholders: ${unresolved.map((name) => `{{${name}}}`).join(', ')}; add them to its vars in registry.json`);
+    }
+    // The budget covers what a session loads: the AGENTS.md block plus the CLAUDE.md block.
+    if (Number.isInteger(variant.maxLines)) {
+      const lines = rendered.agents.split('\n').length + (rendered.claude === null ? 0 : rendered.claude.split('\n').length);
+      if (lines > variant.maxLines) reportValidationError(errors, `${label} renders ${lines} lines; its budget (maxLines) is ${variant.maxLines}`);
     }
   }
 }
@@ -1124,7 +1136,8 @@ async function resolveManagedInstructions(registry, manifest) {
     version: variant.version,
     begin: blockBegin(variant.name, variant.version),
     agents: rendered.agents,
-    claude: rendered.claude
+    claude: rendered.claude,
+    requiresClaude: variant.requiresClaude === true
   };
 }
 
@@ -1497,6 +1510,9 @@ async function planInstructionFile({ label, text, base, block, storedSha, isLeft
  */
 async function computeManagedState(projectRoot, { manifest, managed, storedLock }) {
   const state = { active: false, files: [], warnings: [], settings: null, excludes: [], issues: [] };
+  if (managed?.requiresClaude && !hasClaudeShim(manifest)) {
+    throw new Error(`Instructions variant "${managed.variant}" is for Claude Code sessions and needs the ${CLAUDE_SHIM} shim; run "${CLI_NAME} project instructions use ${managed.variant}" to add it.`);
+  }
   const agentsPath = path.join(projectRoot, 'AGENTS.md');
   const claudePath = path.join(projectRoot, 'CLAUDE.md');
   const stored = storedLock?.instructions?.sha256;
@@ -1787,6 +1803,8 @@ async function computeProjectState(projectRoot) {
 }
 
 async function syncProject(projectRoot) {
+  // Persist a schemaVersion 1 manifest's migration, so the old shape is rewritten
+  // once rather than re-derived on every read.
   // Persist a schemaVersion 1 manifest's migration, so the old shape is rewritten
   // once rather than re-derived on every read.
   const rawManifest = await fs.readJson(projectManifestPath(projectRoot)).catch(() => null);
@@ -3009,6 +3027,7 @@ async function runInstructionsUse(projectRoot, spec) {
   }
   const before = await fs.readFile(projectManifestPath(projectRoot), 'utf8');
   const next = { ...manifest, instructions: { ...manifest.instructions } };
+  let addedShim = false;
 
   if (spec === 'none') {
     delete next.instructions.variant;
@@ -3025,6 +3044,10 @@ async function runInstructionsUse(projectRoot, spec) {
     }
     next.instructions.variant = name;
     next.instructions.version = range;
+    if (variant.requiresClaude === true && !hasClaudeShim(next)) {
+      next.skills = { ...next.skills, shims: [...(next.skills?.shims || []), CLAUDE_SHIM] };
+      addedShim = true;
+    }
   }
   if (Object.keys(next.instructions).length === 0) delete next.instructions;
 
@@ -3037,6 +3060,7 @@ async function runInstructionsUse(projectRoot, spec) {
     throw error;
   }
   const chosen = next.instructions?.variant;
+  if (addedShim) console.log(chalk.yellow(`Added the ${CLAUDE_SHIM} shim: variant "${chosen}" is for Claude Code sessions, which read CLAUDE.md and .claude/.`));
   console.log(chalk.green(chosen
     ? `Instructions: ${chosen}@${getInstructionVariant(registry, chosen).version} (${next.instructions.version}).`
     : 'Instructions: none (managed blocks removed).'));

@@ -143,6 +143,10 @@ own copy and skip the others. Sync edits only the text between its markers, so
 the rest of those files stays user prose and `sync --check` never reports it.
 The global installs below still exist while consumers migrate.
 
+Since 2026-11-24 the `cloud` variant (`requiresClaude`, `maxLines: 150`) is the
+compact core for repositories worked by Claude Code cloud sessions, which read
+only the repository (`tasks/spec-cloud-sessions.md`).
+
 The rest of this section is the original reasoning, which still holds for
 subagents and hooks. Before 2026-11-12, managed agent instructions, subagents,
 and hooks all remained global per-tool installs:
@@ -153,7 +157,8 @@ and hooks all remained global per-tool installs:
   wholesale, and subagent role sets are always relevant.
 - Tools already offer native project-level overrides (repo
   `CLAUDE.md`/`AGENTS.md`, project agents directories) if a repository ever
-  needs a delta; Skill Forge does not edit those files. It does check two of
+  needs a delta; Skill Forge edits them only when a profile opts in (marked
+  instruction blocks). It does check two of
   them: `skf project instructions` reports, read-only, whether a session root
   has `AGENTS.md` and, with the `claude-code` shim, a `CLAUDE.md` that imports
   it. `skf project scaffold` only creates a missing one from a placeholder
@@ -696,3 +701,5 @@ any new component.
 | 2026-11-12 | Managed instructions ship per project as opt-in variants (`instructionVariants`; `skf project instructions use`); partly reverses 2026-07-19 | Comparing instruction variants needs projects that load only their own copy; cloud sessions and Claude Projects threads read only the repository, never `~/.claude`. Delivered as marked blocks in `AGENTS.md`/`CLAUDE.md`, the precedent being the shell-rc block, so user prose stays outside `sync --check`. Claude Code stacks ancestor `CLAUDE.md` files and sandboxing does not change what loads, so sync excludes skf ancestors with `claudeMdExcludes` in the untracked `settings.local.json`; those absolute paths are recomputed per checkout, never put in the tracked lock. `$HOME` never gets a block (it would load in every project). Phase 1 ships `full` (today's text, global files untouched); slim, the eval and global removal follow (`tasks/spec-project-instructions.md`) |
 | 2026-11-07 | Enforcement hooks for Claude Code: `git-guard` (PreToolUse/Bash) and `staleness` (SessionStart) | Principle 4: what must happen reliably is a hook, not an instruction. The guard denies commit/push outside the session's project and answers **ask**, not deny, for main/master and for commands it cannot resolve: the harness's own permission prompt is the one thing a relayed peer message can never satisfy, so the hook does not have to judge who approved what. Grok deferred (not in recent use); its docs confirm the same reply format would work. |
 | 2026-11-13 | Every consumer root declares the whole `$HOME` skill set (baseline, `umbrella-workspace`, `session-roles`, `role-*`) on top of its stack skills; extends 2026-07-20 | A repo opened in a Claude Project, cloud session or another machine gets only what it commits. Owner: "whole $HOME set to every root". Cost: project-over-home shadowing, bounded by syncing every root after each registry change and widening pins everywhere together (`umbrella-workspace`, `skill-forge-project`) |
+| 2026-11-24 | A compact `cloud` instructions variant (`requiresClaude`, `maxLines`) and "skipped is not passed" in the core gate rules | Deploybot's cloud threads saw none of the workflow rules and merged migrations whose database tests had skipped themselves. `full` is ~650 lines with workstation-only parts (the `tasks/` ledger, external workers, podman); a separate short core is easier to follow and to evaluate than flags in one text. Project-scoped subagent vendoring was built and dropped before release: Project threads get subagents from the cloud environment's setup script instead (`tasks/spec-project-thread-setup.md`) |
+| 2026-11-25 | Claude Project threads get Skill Forge from the cloud environment's setup script through `bin/skf-cloud.mjs` (install + read-only doctor) and manage their own setup with the `claude-project-steward` skill | Threads load `~/.claude` written by the setup script (tested: rules, skills and agents all load), but no `~/.claude` of the owner's and no repo branch other than the default. One environment layer gives every thread one copy of the workflow rules, subagents and shared skills, independent of any repo branch; repos keep only their facts. The file is dependency-free and fetched pinned from the public registry because a Project may exist only in claude.ai; the owner pastes what claude.ai has no API for, and threads diagnose and fix repos by PR (`tasks/spec-project-thread-setup.md`) |

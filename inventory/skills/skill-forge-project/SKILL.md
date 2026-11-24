@@ -26,7 +26,7 @@ not used here).
 
 **Do not use this skill for:** authoring or versioning registry skills under
 `inventory/skills/` (that's `skill-forge-authoring`), or installing managed
-agents/subagents/hooks (`skf agent|subagent|hook install`).
+agents/subagents/hooks globally (`skf agent|subagent|hook install`).
 
 ## Decision workflow
 
@@ -258,6 +258,7 @@ skf sync --check                       # read-only staleness check (exit non-zer
 skf project instructions [--check]     # read-only: AGENTS.md present, CLAUDE.md imports it; not part of sync
 skf project scaffold [--role <r>]      # create a missing AGENTS.md / CLAUDE.md, never overwrite; --dry-run first
 skf project doctor [--check]           # one read-only gate: profile + instructions + role-aware layout
+skf project instructions use <variant>  # managed instructions block (full; cloud for cloud sessions/Project threads, adds the claude-code shim)
 ```
 
 ## Anti-patterns

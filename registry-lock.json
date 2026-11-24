@@ -52,6 +52,17 @@
         "SKILL.md": "sha256-1Gtuhm5xLMfpfNJtvRtzQTvNmPmS7RuZAKgVk7mF56g="
       }
     },
+    "inventory/skills/claude-project-steward": {
+      "name": "claude-project-steward",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-J4+3ROqQ6Y06fFAiWYJEC/qZOk9q1/meTaReOfTfvWE=",
+      "files": {
+        "SKILL.md": "sha256-o0GFCajEiTiMbv6PVaP93xD5iQLDaNmw+d8IjMJGAWI="
+      }
+    },
     "inventory/skills/code-quality": {
       "name": "code-quality",
       "version": "0.1.1",
@@ -425,13 +436,13 @@
     },
     "inventory/skills/skill-forge-project": {
       "name": "skill-forge-project",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-ZbC1NkbtmDrG+Y4JJQWRAG4ifOHs0K7bYj24hw6OMP8=",
+      "integrity": "sha256-JvsWN9s8gEnrBSuOC2ZLzfm0TXhaDfgHw0Z2atArDjM=",
       "files": {
-        "SKILL.md": "sha256-WioLQVnh9mujPgD01ksZlxghu1V41XqBW+D26tdfpqw="
+        "SKILL.md": "sha256-FngENeR9l7bNT9J80vGkqQlg9vhz1TA7phgWa7xrBQY="
       }
     },
     "inventory/skills/supabase-postgres": {
@@ -447,13 +458,13 @@
     },
     "inventory/skills/testing-strategy": {
       "name": "testing-strategy",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-6Y54DGWfZBWdFuJ5WRh4GFaHAsIh0Ll28xK/K+n9UAE=",
+      "integrity": "sha256-ttm+uOQxKSfznAiLdZ9IKUi0CdTuXVheC2fmc3sFvks=",
       "files": {
-        "SKILL.md": "sha256-2dDN3MFs+5L0SCkdFkrpYp7Dv9AMtr+Bm0KjpRJCpk8="
+        "SKILL.md": "sha256-5EQq1VxIMOIKAJjTVMwsw4yuGaemzno6RWAiA1tfp7U="
       }
     },
     "inventory/skills/ui-portability-baseline": {
@@ -492,19 +503,19 @@
     },
     "inventory/agents": {
       "name": "agents-core",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-MGrwiWlC5hnqL2ETptGRu6VPRDOFL684XERTvlVIN+A=",
+      "integrity": "sha256-YKVZcE7lCQvGcMmn7k3AcUXh6zTjTvMvIx4zpWBo2m4=",
       "files": {
-        "core.md": "sha256-Ht8MSBLvoyU+sjPh0qPB46n7iW7MCLyc1OrmkDnDz0Q="
+        "core.md": "sha256-BI7U/4oUs9CAXw9nr0JSE/cqBUmA/rVFPxZlcc7wD78="
       },
       "sourceOnly": true
     },
     "inventory/agents/codex": {
       "name": "codex-agents",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "type": "agents",
       "scope": "codex",
       "installable": false,
@@ -516,7 +527,7 @@
     },
     "inventory/agents/copilot-cli": {
       "name": "copilot-cli-agents",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "type": "agents",
       "scope": "copilot-cli",
       "installable": false,
@@ -528,7 +539,7 @@
     },
     "inventory/agents/claude-code": {
       "name": "claude-code-agents",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "type": "agents",
       "scope": "claude-code",
       "installable": false,
@@ -540,7 +551,7 @@
     },
     "inventory/agents/grok": {
       "name": "grok-agents",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "type": "agents",
       "scope": "grok",
       "installable": false,
@@ -643,12 +654,22 @@
     },
     "instructions:full": {
       "name": "full",
+      "version": "0.1.1",
+      "type": "instructions",
+      "integrity": "sha256-eMH21ylCkMr8eWQzgY4+SRY1a28gw5ZYesvNO+C74TI=",
+      "files": {
+        "AGENTS.md": "sha256-iRJrkKTTSbw1gAtvBZ2GS/MfS53K7VwAstd/LuV3qTo=",
+        "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
+      }
+    },
+    "instructions:cloud": {
+      "name": "cloud",
       "version": "0.1.0",
       "type": "instructions",
-      "integrity": "sha256-AKKJkMkMQDZOLnRzS//yrjdF57CFftJBclRKnUrgZWI=",
+      "integrity": "sha256-t3oafUPVxZQzkZ49OR79HRPwdZU06WsWfJDXTB2eA28=",
       "files": {
-        "AGENTS.md": "sha256-2bFr6mZQCqFW5F5NVgflJw9E1SCmNaY3G3x3FZMcp5M=",
-        "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
+        "AGENTS.md": "sha256-TqUcm8NpI/Evhi7rLaQ4yfDQeWXr/cu33NlG7J6QFcU=",
+        "CLAUDE.md": "sha256-n+BCpqmGhu0T5tYS/UcnllCmAe1fzUaXgyF2EQvY3zc="
       }
     }
   }

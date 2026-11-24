@@ -365,3 +365,16 @@ test('doctor: import checks, shared skills, notes-only --check, context size and
   const ahead = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...env } });
   assert.ok(!JSON.parse(ahead.stdout).findings.some((entry) => entry.id === 'D-ref-behind'));
 });
+
+test('doctor does not mistake a host name such as grok-bot-box for the Grok workflow', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'one/.git/HEAD': 'x\n',
+    'one/CLAUDE.md': '@AGENTS.md\n',
+    'one/AGENTS.md': '# one\n\nnodes.json: grok-bot-box has systemd false.\n'
+  });
+  assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-repo-restates-rules'));
+  await fs.writeFile(path.join(reposDir, 'one/AGENTS.md'), '# one\n\nNo Grok or external workers.\n');
+  assert.ok(ids(await doctor(homeDir, reposDir)).includes('D-repo-restates-rules'));
+});

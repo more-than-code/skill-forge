@@ -475,6 +475,15 @@ function checkSetup(findings) {
   return state;
 }
 
+/** Whether semver `a` is newer than `b` (numeric major.minor.patch; anything else is never newer). */
+function isNewer(a, b) {
+  const parse = (version) => (/^\d+\.\d+\.\d+$/.test(version) ? version.split('.').map(Number) : null);
+  const [x, y] = [parse(a), parse(b)];
+  if (!x || !y) return false;
+  for (let i = 0; i < 3; i += 1) if (x[i] !== y[i]) return x[i] > y[i];
+  return false;
+}
+
 /** Compares the pinned versions with the registry's `main`, so a Project learns its SKF_REF is behind. */
 async function checkRefBehind(findings, state, offline) {
   if (offline || !state?.ref || Object.keys(state.versions).length === 0) return;
@@ -493,7 +502,7 @@ async function checkRefBehind(findings, state, offline) {
     return undefined;
   };
   const behind = Object.entries(state.versions)
-    .filter(([key, version]) => typeof version === 'string' && current(key) && current(key) !== version)
+    .filter(([key, version]) => typeof version === 'string' && isNewer(current(key), version))
     .map(([key, version]) => `${key} ${version} -> ${current(key)}`);
   if (behind.length > 0) {
     findings.push(finding('D-ref-behind', 'note', 'owner-paste', `the pinned SKF_REF is behind the registry: ${behind.join(', ')}`,

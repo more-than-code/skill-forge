@@ -358,4 +358,10 @@ test('doctor: import checks, shared skills, notes-only --check, context size and
   const { stdout } = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...env } });
   const behind = JSON.parse(stdout).findings.find((entry) => entry.id === 'D-ref-behind');
   assert.match(behind.evidence, /skill:alpha 0\.1\.0 -> 0\.2\.0/);
+
+  // A pin ahead of main (main lags the integration branch) is not "behind".
+  registry.skills[0].version = '0.0.9';
+  await fs.writeFile(path.join(mainDir, 'registry.json'), JSON.stringify(registry));
+  const ahead = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...env } });
+  assert.ok(!JSON.parse(ahead.stdout).findings.some((entry) => entry.id === 'D-ref-behind'));
 });

@@ -6,9 +6,16 @@
 //
 //   install  Write the declared rules, subagents and skills into ~/.claude. Reads the
 //            declaration from SKF_REF, SKF_RULES, SKF_AGENTS, SKF_SKILLS and
-//            SKF_PROJECT_RULES_FILE. Logs to ~/skf-setup.log and always exits 0: a failing
-//            setup script would stop threads from starting. A name or file that cannot be
-//            installed is recorded as failed; everything else still installs.
+//            SKF_PROJECT_RULES_FILE, then the skill-forge.json of every repository cloned in
+//            SKF_REPOS_DIR (default: the working directory, /home/user in a setup script) and
+//            installs each registry skill they declare once, unless SKF_SKILLS already provides
+//            it (SKF_FROM_REPOS=0 turns that off). Logs to ~/skf-setup.log and always exits 0: a
+//            failing setup script would stop threads from starting. A name or file that cannot
+//            be installed is recorded as failed; everything else still installs.
+//   install --top-up [--repos-dir <dir>]
+//            Inside a running thread: re-read the repositories' skill-forge.json and add the
+//            registry skills they declare that are not installed yet. Removes and replaces
+//            nothing. Exits 1 when something could not be added.
 //   doctor   Read-only. Checks the setup, the cloned repositories and (optionally) the
 //            Project-instructions text, and prints findings with who fixes them and how.
 //
@@ -19,7 +26,8 @@
 // validated before use. Skill scripts are written without an executable bit: run them through
 // their interpreter (`node x.mjs`, `python3 x.py`).
 //
-// Spec: tasks/spec-project-thread-setup.md in the skill-forge repository.
+// Specs: tasks/spec-project-thread-setup.md and tasks/spec-manifest-skill-install.md in the
+// skill-forge repository.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -27,7 +35,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 const DEFAULT_BASE = 'https://raw.githubusercontent.com/more-than-code/skill-forge';
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
+const MANIFEST_NAME = 'skill-forge.json';
+const MANIFEST_LOCK_NAME = 'skill-forge.lock.json';
+const DEFAULT_REPOS_DIR = '/home/user';
 const FETCH_TIMEOUT_MS = 20000;
 const INSTALL_DEADLINE_MS = Number(process.env.SKF_DEADLINE_MS) || 90000;
 const PROCESS_SKILLS = ['coding-discipline', 'security-baseline', 'code-quality', 'testing-strategy'];
@@ -74,14 +85,123 @@ function readState() {
     if (isOwnedDest(dest) && typeof hash === 'string') files[dest] = hash;
   }
   const strings = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
+  const object = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+  const skills = strings(raw.skills);
+  // Version 1 state has no sources: everything it installed came from SKF_SKILLS.
+  const skillSources = {};
+  for (const name of skills) skillSources[name] = 'env';
+  for (const [name, source] of Object.entries(object(raw.skillSources))) {
+    if (!isSafeName(name)) continue;
+    if (source === 'env') skillSources[name] = 'env';
+    else if (strings(source).length > 0) skillSources[name] = strings(source);
+  }
+  const skipped = {};
+  for (const [name, entry] of Object.entries(object(raw.skipped))) {
+    if (isSafeName(name) && typeof entry?.reason === 'string') {
+      skipped[name] = {
+        reason: entry.reason,
+        repos: strings(entry.repos),
+        detail: typeof entry.detail === 'string' ? entry.detail : '',
+        version: typeof entry.version === 'string' ? entry.version : null
+      };
+    }
+  }
   return {
     ref: typeof raw.ref === 'string' ? raw.ref : null,
     base: typeof raw.base === 'string' ? raw.base : DEFAULT_BASE,
-    skills: strings(raw.skills),
+    rules: typeof raw.rules === 'string' ? raw.rules : null,
+    skills,
+    fromRepos: raw.fromRepos === true,
+    skillSources,
+    skipped,
     failed: strings(raw.failed),
-    versions: raw.versions && typeof raw.versions === 'object' ? raw.versions : {},
+    versions: object(raw.versions),
     files
   };
+}
+
+/** Same rule as lib/skill-helpers.js satisfiesRange ("x.y.z", "^x.y.z", "~x.y.z"); null for a malformed range. */
+function satisfiesRange(version, range) {
+  const parse = (text) => (/^\d+\.\d+\.\d+$/.test(text) ? text.split('.').map(Number) : null);
+  const trimmed = String(range).trim();
+  const op = trimmed.startsWith('^') ? '^' : trimmed.startsWith('~') ? '~' : '';
+  const base = parse(op ? trimmed.slice(1) : trimmed);
+  const actual = parse(String(version));
+  if (!base) return null;
+  if (!actual) return false;
+  const compare = (actual[0] - base[0]) || (actual[1] - base[1]) || (actual[2] - base[2]);
+  if (op === '') return compare === 0;
+  if (compare < 0) return false;
+  if (op === '~') return actual[0] === base[0] && actual[1] === base[1];
+  if (base[0] > 0) return actual[0] === base[0];
+  if (base[1] > 0) return actual[0] === 0 && actual[1] === base[1];
+  return actual[0] === 0 && actual[1] === 0 && actual[2] === base[2];
+}
+
+/** Whether a recorded skip still holds for the ranges the repos declare now (a range can be fixed by PR). */
+function stillSkipped(skip, wants) {
+  if (skip.reason !== 'range' || !skip.version) return true;
+  return wants.some((want) => !satisfiesRange(skip.version, want.range));
+}
+
+/**
+ * Repo-sourced skills with a failed fetch, hash check or write are dropped from the sources, so
+ * top-up retries them instead of treating them as installed. SKF_SKILLS names stay: they are
+ * the environment's, and D-setup-failed reports them.
+ */
+function dropFailedRepoSkills(skillSources, failed) {
+  for (const [name, source] of Object.entries(skillSources)) {
+    if (source !== 'env' && failed.some((entry) => entry.includes(`/skills/${name}/`))) delete skillSources[name];
+  }
+  return skillSources;
+}
+
+/**
+ * A repository file parsed as JSON: undefined when absent, null when it is not a regular file
+ * (a symlink, FIFO or device could leak or hang a root setup) or not valid JSON. Capped by readText.
+ */
+function readRepoJson(dir, name) {
+  const file = path.join(dir, name);
+  const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (!stat) return undefined;
+  if (!stat.isFile()) return null;
+  try {
+    return JSON.parse(readText(file) ?? '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Registry skills the repositories declare: name -> [{ repo, range }]. `skills.local` entries are
+ * the repository's own source and are left out. A missing manifest is normal; a malformed one,
+ * a bad name or a bad range is logged and skipped so the other repositories still count.
+ */
+function readRepoNeeds(repos, log) {
+  const needs = new Map();
+  for (const repo of repos) {
+    const manifest = readRepoJson(repo.dir, MANIFEST_NAME);
+    if (manifest === undefined) continue;
+    if (manifest === null) {
+      log(`skipped ${repo.name}/${MANIFEST_NAME}: not a regular file of valid JSON`);
+      continue;
+    }
+    const dependencies = manifest?.skills?.dependencies;
+    if (dependencies === undefined) continue;
+    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
+      log(`skipped ${repo.name}/${MANIFEST_NAME}: skills.dependencies is not an object`);
+      continue;
+    }
+    for (const [name, range] of Object.entries(dependencies)) {
+      if (!isSafeName(name) || typeof range !== 'string' || satisfiesRange('0.0.0', range) === null) {
+        log(`skipped ${repo.name} dependency ${String(name).slice(0, 80)}: bad name or range`);
+        continue;
+      }
+      if (!needs.has(name)) needs.set(name, []);
+      needs.get(name).push({ repo: repo.name, range });
+    }
+  }
+  return needs;
 }
 
 // --- install ---
@@ -109,7 +229,9 @@ function readDeclaration(env) {
     rules: env.SKF_RULES || '',
     agents: env.SKF_AGENTS || '',
     skills: list(env.SKF_SKILLS),
-    projectRulesFile: env.SKF_PROJECT_RULES_FILE || ''
+    projectRulesFile: env.SKF_PROJECT_RULES_FILE || '',
+    fromRepos: env.SKF_FROM_REPOS !== '0',
+    reposDir: env.SKF_REPOS_DIR || process.cwd()
   };
 }
 
@@ -125,7 +247,7 @@ function renderVariant(variant, sources) {
  * an unreadable registry throws; anything narrower lands in `failed` (with the destinations it
  * covers in `failedDests`, so a file installed earlier is kept rather than removed).
  */
-async function planInstall(decl, previous, log) {
+async function planInstall(decl, previous, log, repoNeeds = new Map(), higher = new Set(decl.skills)) {
   if (!/^[0-9a-f]{40}$/.test(decl.ref)) throw new Error('SKF_REF must be a full 40-character registry commit sha');
   const deadline = AbortSignal.timeout(INSTALL_DEADLINE_MS);
   const get = (rel) => fetchBytes(decl.base, decl.ref, rel, deadline);
@@ -197,21 +319,61 @@ async function planInstall(decl, previous, log) {
     }
   }
 
-  for (const name of decl.skills) {
-    const safe = isSafeName(name);
-    const skill = safe ? (registry.skills || []).find((entry) => entry.name === name) : null;
+  const lookupSkill = (name) => {
+    const skill = isSafeName(name) ? (registry.skills || []).find((entry) => entry.name === name) : null;
     const locked = skill && skill.path === `inventory/skills/${name}` ? packages[skill.path] : null;
-    const kept = safe ? ownedUnder(path.join(claudeDir(), 'skills', name)) : [];
-    if (!locked || skill.installable === false) {
-      fail(`skill ${String(name).slice(0, 80)}`, 'unknown or not installable', kept);
-    } else if ((skill.tags || []).includes('workstation-only') || skill.workstationOnly === true) {
-      fail(`skill ${name}`, 'workstation-only; it does not belong in a cloud environment', kept);
-    } else {
-      versions[`skill:${name}`] = skill.version;
-      for (const [rel, expected] of lockedFiles(skill.path, locked)) {
-        await verified(`${skill.path}/${rel}`, expected, path.join(claudeDir(), 'skills', name, rel), `skill ${name}`);
-      }
+    if (!locked || skill.installable === false) return { problem: 'unknown or not installable' };
+    if ((skill.tags || []).includes('workstation-only') || skill.workstationOnly === true) return { skill, problem: 'workstation-only' };
+    return { skill, locked };
+  };
+  const planSkill = async ({ skill, locked }) => {
+    versions[`skill:${skill.name}`] = skill.version;
+    for (const [rel, expected] of lockedFiles(skill.path, locked)) {
+      await verified(`${skill.path}/${rel}`, expected, path.join(claudeDir(), 'skills', skill.name, rel), `skill ${skill.name}`);
     }
+  };
+
+  const skillSources = {};
+  for (const name of decl.skills) {
+    const found = lookupSkill(name);
+    const kept = isSafeName(name) ? ownedUnder(path.join(claudeDir(), 'skills', name)) : [];
+    skillSources[name] = 'env';
+    if (found.problem === 'workstation-only') {
+      fail(`skill ${name}`, 'workstation-only; it does not belong in a cloud environment', kept);
+    } else if (found.problem) {
+      fail(`skill ${String(name).slice(0, 80)}`, found.problem, kept);
+    } else {
+      await planSkill(found);
+    }
+  }
+
+  // Repo-declared skills a higher level does not provide: one copy each, at the version pinned
+  // by SKF_REF, only when it satisfies every declaring repo's range. A skip is not a failure:
+  // the repos asked for something this environment cannot give, and doctor says who fixes it.
+  const skipped = {};
+  for (const [name, wants] of [...repoNeeds].sort(([a], [b]) => a.localeCompare(b))) {
+    if (higher.has(name)) continue;
+    const repos = wants.map((want) => want.repo);
+    const found = lookupSkill(name);
+    const outside = found.skill ? wants.filter((want) => !satisfiesRange(found.skill.version, want.range)) : [];
+    let reason = null;
+    let detail = '';
+    if (found.problem === 'workstation-only') {
+      reason = 'workstation-only';
+    } else if (found.problem) {
+      reason = 'not-in-registry';
+      detail = 'not an installable registry skill at SKF_REF';
+    } else if (outside.length > 0) {
+      reason = 'range';
+      detail = `SKF_REF has ${found.skill.version}; ${outside.map((want) => `${want.repo} wants ${want.range}`).join(', ')}`;
+    }
+    if (reason) {
+      skipped[name] = { reason, repos, detail, version: found.skill?.version ?? null };
+      log(`skipped skill ${name} (${reason}${detail ? `: ${detail}` : ''})`);
+      continue;
+    }
+    skillSources[name] = repos;
+    await planSkill(found);
   }
 
   if (decl.projectRulesFile) {
@@ -222,7 +384,7 @@ async function planInstall(decl, previous, log) {
       fail('project rules', error.code || error.message, [dest]);
     }
   }
-  return { planned, failed, failedDests, versions };
+  return { planned, failed, failedDests, versions, skillSources, skipped };
 }
 
 /** Refuses a destination whose path below ~/.claude runs through a symlink (we never write through links). */
@@ -317,12 +479,23 @@ async function runInstall() {
   const lines = [];
   const log = (line) => lines.push(line);
   const decl = readDeclaration(process.env);
-  log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'}`);
+  log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'} from-repos=${decl.fromRepos ? decl.reposDir : 'off'}`);
   try {
     const previous = readState();
-    const plan = await planInstall(decl, previous, log);
+    let needs = new Map();
+    if (decl.fromRepos) {
+      try {
+        const repos = findRepos(decl.reposDir);
+        log(`repos: ${repos.map((repo) => repo.name).join(', ') || 'none'}`);
+        needs = readRepoNeeds(repos, log);
+      } catch (error) {
+        log(`FAILED reading repositories (installing the declaration only): ${error.code || error.message}`);
+      }
+    }
+    const plan = await planInstall(decl, previous, log, needs);
     const applied = applyInstall(plan.planned, previous, plan.failedDests, log);
     const failed = [...plan.failed, ...applied.failed];
+    dropFailedRepoSkills(plan.skillSources, failed);
     const state = {
       version: STATE_VERSION,
       ref: decl.ref,
@@ -330,6 +503,9 @@ async function runInstall() {
       rules: decl.rules || null,
       agents: decl.agents || null,
       skills: decl.skills,
+      fromRepos: decl.fromRepos,
+      skillSources: plan.skillSources,
+      skipped: plan.skipped,
       projectRules: Boolean(decl.projectRulesFile),
       versions: plan.versions,
       failed,
@@ -355,6 +531,75 @@ async function runInstall() {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
+/**
+ * Adds the registry skills the repositories declare now but the setup did not install (a
+ * manifest changed after the environment snapshot was built). Uses the recorded SKF_REF, so it
+ * adds what a fresh setup would; everything already installed counts as the higher level, so
+ * nothing is replaced or removed.
+ */
+async function runTopUp(args) {
+  const lines = [];
+  const log = (line) => lines.push(line);
+  const index = args.indexOf('--repos-dir');
+  const reposDir = (index >= 0 ? args[index + 1] : undefined) || process.env.SKF_REPOS_DIR || DEFAULT_REPOS_DIR;
+  const state = readState();
+  log(`skf-cloud install --top-up ${new Date().toISOString()} repos-dir=${reposDir}`);
+  let failed = [];
+  if (!state?.ref) {
+    failed = ['no install recorded'];
+    log(`FAILED top-up: no ${statePath()}; the environment's setup script has not run install`);
+  } else {
+    try {
+      const repos = findRepos(reposDir);
+      const needs = readRepoNeeds(repos, log);
+      const higher = new Set(Object.keys(state.skillSources));
+      const missing = [...needs].filter(([name, wants]) => !higher.has(name)
+        && !(Object.hasOwn(state.skipped, name) && stillSkipped(state.skipped[name], wants)));
+      if (!state.fromRepos) {
+        log('nothing changed: this environment does not install repo-declared skills (SKF_FROM_REPOS=0, or a setup from before that feature)');
+      } else if (missing.length === 0) {
+        log('nothing to add: every declared skill is installed');
+      } else {
+        // The source is the environment's (SKF_BASE) or the public registry, never state.json's.
+        const decl = { ref: state.ref, base: process.env.SKF_BASE || DEFAULT_BASE, rules: '', agents: '', skills: [], projectRulesFile: '' };
+        const plan = await planInstall(decl, null, log, new Map(missing), higher);
+        const applied = applyInstall(plan.planned, null, new Set(), log);
+        failed = [...plan.failed, ...applied.failed];
+        const added = Object.keys(dropFailedRepoSkills(plan.skillSources, failed));
+        const skillSources = { ...state.skillSources, ...plan.skillSources };
+        for (const [name, source] of Object.entries(skillSources)) {
+          if (source !== 'env' && needs.has(name)) skillSources[name] = needs.get(name).map((want) => want.repo);
+        }
+        // Skips are kept only for names still declared; a name added now is no longer skipped.
+        const skipped = Object.fromEntries(Object.entries({ ...state.skipped, ...plan.skipped })
+          .filter(([name]) => needs.has(name) && !added.includes(name)));
+        const earlier = state.failed.filter((entry) => !added.some((name) => entry.includes(`/skills/${name}/`)));
+        const next = {
+          ...readJsonFile(statePath()),
+          version: STATE_VERSION,
+          skillSources,
+          skipped,
+          versions: { ...state.versions, ...plan.versions },
+          failed: [...new Set([...earlier, ...failed])],
+          files: { ...state.files, ...applied.files }
+        };
+        writeAtomic(statePath(), `${JSON.stringify(next, null, 2)}\n`);
+        log(`added: ${added.join(', ') || 'none'}${Object.keys(plan.skipped).length > 0 ? `; skipped: ${Object.keys(plan.skipped).join(', ')}` : ''}`);
+      }
+    } catch (error) {
+      failed = [error.message];
+      log(`FAILED top-up: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
+    }
+  }
+  try {
+    fs.appendFileSync(logPath(), `${lines.join('\n')}\n`);
+  } catch {
+    // The output below still reports it.
+  }
+  process.stdout.write(`${lines.join('\n')}\n`);
+  if (failed.length > 0) process.exitCode = 1;
+}
+
 // --- doctor ---
 
 const OWNERS = ['owner-paste', 'owner-account', 'thread-pr', 'thread', 'skill-forge'];
@@ -375,8 +620,13 @@ function findRepos(reposDir) {
   return entries
     .filter((entry) => {
       const dir = path.join(root, entry.name);
-      return (entry.isDirectory() || (entry.isSymbolicLink() && fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()))
-        && fs.existsSync(path.join(dir, '.git'));
+      let linkedDir = false;
+      try {
+        linkedDir = entry.isSymbolicLink() && fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory();
+      } catch {
+        // A looping or unreadable link is not a repository.
+      }
+      return (entry.isDirectory() || linkedDir) && fs.existsSync(path.join(dir, '.git'));
     })
     .map((entry) => ({ name: entry.name, dir: path.join(root, entry.name) }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -551,10 +801,13 @@ function checkRepos(findings, repos, state) {
       if (!sectionOwners.has(key)) sectionOwners.set(key, []);
       sectionOwners.get(key).push(repo.name);
     }
+    const profile = readRepoJson(repo.dir, MANIFEST_NAME);
+    const ownSkills = profile?.skills?.local && typeof profile.skills.local === 'object' ? profile.skills.local : {};
     for (const name of listDir(path.join(repo.dir, '.claude', 'skills'))) {
-      if (envSkills.has(name)) {
-        findings.push(finding('D-repo-vendored-skill', 'note', 'thread-pr', `${repo.name} commits skill ${name}, which the environment also installs; threads list it again as ${repo.name}:${name} (the environment copy runs)`,
-          `Optional PR in ${repo.name}: stop committing ${name}.`));
+      if (envSkills.has(name) && !Object.hasOwn(ownSkills, name)) {
+        // Under the explicit-list setup (SKF_FROM_REPOS=0 or an older one) a copy may be the only source a local session has.
+        findings.push(finding('D-repo-vendored-skill', state?.fromRepos ? 'issue' : 'note', 'thread-pr', `${repo.name} commits skill ${name}, which the environment also installs; threads list it again as ${repo.name}:${name} (the environment copy runs)`,
+          `PR in ${repo.name}: delete .claude/skills/${name}/ (and .agents/skills/${name}/), add both paths to .gitignore, keep ${MANIFEST_NAME} and its lock; a local skf sync still writes the copies, now ignored.`));
       }
     }
     for (const name of listDir(path.join(repo.dir, '.claude', 'agents'))) {
@@ -563,13 +816,27 @@ function checkRepos(findings, repos, state) {
           `PR in ${repo.name}: remove .claude/agents/${name}, or rename it if it is meant to differ.`));
       }
     }
-    const profile = readJsonFile(path.join(repo.dir, 'skill-forge.json'));
     if (profile) profiles += 1;
-    for (const name of Object.keys(profile?.skills?.dependencies || {})) {
-      if (!declaredByRepos.has(name)) declaredByRepos.set(name, []);
-      declaredByRepos.get(name).push(repo.name);
+    if (!state) continue;
+    const variant = profile?.instructions?.variant;
+    if (typeof variant === 'string' && isSafeName(variant) && state.rules && variant !== state.rules) {
+      findings.push(finding('D-rules-variant-differs', 'note', 'thread-pr', `${repo.name} declares instructions variant ${variant}; threads load the environment's ${state.rules} instead`,
+        `Nothing to do for threads. If ${repo.name} is only worked on in this Project, a PR can declare ${state.rules} so local sessions match.`));
+    }
+    const locked = readRepoJson(repo.dir, MANIFEST_LOCK_NAME)?.skills;
+    for (const [name, entry] of Object.entries(locked && typeof locked === 'object' ? locked : {})) {
+      const installed = Object.hasOwn(state.versions, `skill:${name}`) ? state.versions[`skill:${name}`] : undefined;
+      if (isSafeName(name) && entry?.source === 'registry' && typeof entry.version === 'string' && /^\d+\.\d+\.\d+$/.test(entry.version)
+        && typeof installed === 'string' && entry.version !== installed) {
+        findings.push(finding('D-skill-version-drift', 'note', 'thread-pr', `${repo.name} locks ${name} ${entry.version}; threads run ${installed} (from SKF_REF)`,
+          `Usually nothing: the version satisfies ${repo.name}'s range. To match, a PR in ${repo.name} re-locks with skf sync, or the owner moves SKF_REF.`));
+      }
     }
   }
+
+  // The same validated reading install uses, so doctor and install agree on what is declared.
+  const wants = readRepoNeeds(repos, () => {});
+  for (const [name, list] of wants) declaredByRepos.set(name, [...new Set(list.map((want) => want.repo))]);
 
   for (const [key, owners] of sectionOwners) {
     if (owners.length > 1) {
@@ -579,11 +846,28 @@ function checkRepos(findings, repos, state) {
   }
   if (!state) return;
   for (const [name, owners] of declaredByRepos) {
+    if (envSkills.has(name)) continue;
     const repoHasIt = owners.some((owner) => fs.existsSync(path.join(repos.find((repo) => repo.name === owner).dir, '.claude', 'skills', name)));
-    if (owners.length > 1 && !envSkills.has(name)) {
+    const recorded = state.fromRepos && Object.hasOwn(state.skipped, name) ? state.skipped[name] : undefined;
+    const skip = recorded && stillSkipped(recorded, wants.get(name) || []) ? recorded : undefined;
+    // Recorded as installed but absent: the install failed, and D-setup-failed already says so.
+    if (state.fromRepos && !skip && Object.hasOwn(state.skillSources, name)) continue;
+    if (skip?.reason === 'workstation-only') {
+      findings.push(finding('D-skill-workstation-only', 'note', 'thread-pr', `${owners.join(', ')} declare${owners.length === 1 ? 's' : ''} ${name}, which is workstation-only and not installed in threads`,
+        `Nothing to do: local sessions still use it. Drop it from ${MANIFEST_NAME} only if no local session needs it.`));
+    } else if (skip?.reason === 'not-in-registry') {
+      findings.push(finding('D-skill-range', 'issue', 'thread-pr', `skill ${name} declared by ${owners.join(', ')} is not installed: ${skip.detail}`,
+        `PR in ${owners.join(', ')}: correct the name in ${MANIFEST_NAME} or drop it; if it is a newer registry skill, the owner moves SKF_REF instead.`));
+    } else if (skip) {
+      findings.push(finding('D-skill-range', 'issue', 'owner-paste', `skill ${name} declared by ${owners.join(', ')} is not installed: ${skip.detail || skip.reason}`,
+        `Move SKF_REF to a registry commit whose ${name} satisfies every range (the steward drafts it), or a PR changes the range in the repo; then start a new thread.`));
+    } else if (state.fromRepos && !repoHasIt) {
+      findings.push(finding('D-skill-missing', 'issue', 'thread', `skill ${name} is declared by ${owners.join(', ')} but not installed (the manifest changed after the environment was built)`,
+        'Run: node ~/.claude/skill-forge/skf-cloud.mjs install --top-up. The next environment rebuild installs it for every thread.'));
+    } else if (!state.fromRepos && owners.length > 1) {
       findings.push(finding('D-skill-shared-not-installed', 'note', 'owner-paste', `skill ${name} is declared by ${owners.join(', ')} but not installed by the environment`,
         `Add ${name} to SKF_SKILLS in the setup script.`));
-    } else if (!envSkills.has(name) && !repoHasIt) {
+    } else if (!state.fromRepos && !repoHasIt) {
       findings.push(finding('D-skill-missing', 'issue', 'owner-paste', `skill ${name} is declared by ${owners.join(', ')} but neither the environment nor the repo provides it`,
         `Add ${name} to SKF_SKILLS, or commit it in ${owners[0]}.`));
     }
@@ -623,7 +907,7 @@ async function runDoctor(args) {
     const index = args.indexOf(name);
     return index >= 0 ? args[index + 1] : undefined;
   };
-  const reposDir = option('--repos-dir') || process.env.SKF_REPOS_DIR || '/home/user';
+  const reposDir = option('--repos-dir') || process.env.SKF_REPOS_DIR || DEFAULT_REPOS_DIR;
   const findings = [];
   const state = checkSetup(findings);
   await checkRefBehind(findings, state, args.includes('--offline'));
@@ -651,11 +935,13 @@ async function runDoctor(args) {
 
 process.stdout.on('error', () => {});
 const [command, ...rest] = process.argv.slice(2);
-if (command === 'install') {
+if (command === 'install' && rest.includes('--top-up')) {
+  await runTopUp(rest);
+} else if (command === 'install') {
   await runInstall();
 } else if (command === 'doctor') {
   await runDoctor(rest);
 } else {
-  process.stderr.write('usage: skf-cloud.mjs install | doctor [--repos-dir <dir>] [--context <file>] [--offline] [--json] [--check]\n');
+  process.stderr.write('usage: skf-cloud.mjs install [--top-up [--repos-dir <dir>]] | doctor [--repos-dir <dir>] [--context <file>] [--offline] [--json] [--check]\n');
   process.exitCode = 2;
 }

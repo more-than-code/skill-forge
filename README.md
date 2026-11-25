@@ -349,7 +349,7 @@ cat > /tmp/skf-project-rules.md <<'SKF_EOF'
 <Project rules threads need; optional, drop these lines and SKF_PROJECT_RULES_FILE if empty>
 SKF_EOF
 export SKF_REF=<40-char commit sha> SKF_RULES=cloud SKF_AGENTS=claude-code
-export SKF_SKILLS="coding-discipline security-baseline code-quality testing-strategy"
+export SKF_SKILLS="claude-project-steward"   # extras; repo-declared skills install on their own
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
   && node /tmp/skf-cloud.mjs install || true
@@ -367,10 +367,30 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   failed to fetch its replacement, and refuses skills tagged `workstation-only`. A bad name
   or file fails alone and is recorded; the run has a 90-second budget, logs to
   `~/skf-setup.log` and always exits 0 so a failure cannot stop threads from starting.
+- Repositories declare skills; the environment installs them. `install` also reads the
+  `skill-forge.json` of every repository cloned in its working directory (`/home/user` in a
+  setup script; `SKF_REPOS_DIR` overrides it) and installs each registry skill under
+  `skills.dependencies` **once**, unless `SKF_SKILLS` already provides it (the higher level
+  wins), at the version `SKF_REF` pins, and only if that version satisfies every declaring
+  repository's range. Otherwise that one skill is skipped and recorded (out of range, not in
+  the registry, or `workstation-only`), not failed. `skills.local` skills stay committed in
+  their repository and are not installed. So repositories commit `skill-forge.json` and its
+  lock but no registry skill copies, and `SKF_SKILLS` shrinks to environment extras.
+  `SKF_FROM_REPOS=0` installs exactly what the explicit-list setup did (same files) and
+  keeps doctor's explicit-list findings. Every repository cloned for the Project is trusted
+  to add registry skills for all of its threads. The repo reading needs this version of the
+  file: shrink `SKF_SKILLS` only in the same change that moves `SKF_REF` to it.
+- `install --top-up [--repos-dir <dir>]` (default `SKF_REPOS_DIR`, then `/home/user`, like
+  `doctor`) runs inside a thread when a repository declared a skill
+  after the environment snapshot was built (it is rebuilt when the setup script changes or
+  about weekly): it adds the missing skills at the recorded `SKF_REF` and replaces or removes
+  nothing. A skill added this way is usable in the same thread after a moment.
 - `doctor` (read-only; `--json`, `--check`, `--repos-dir`, `--context <file>`) checks the
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
   blocks, sections repeated across repos, always-loaded size, workstation-only rules,
-  duplicated skills, shadowing subagents, skills the profiles declare but nothing installs)
+  committed copies of installed skills, shadowing subagents, declared skills that are missing
+  (fixed by `--top-up`), out of range or workstation-only, lock versions that differ from the
+  installed ones, and an instructions variant other than the environment's)
   and, with `--context`, the Project-instructions text (length, missing PR base, restated
   workflow rules); it also reports when the pinned `SKF_REF` is behind the registry's `main`
   (`--offline` skips that). Each finding names who fixes it: an owner paste, an owner account
@@ -402,7 +422,10 @@ Skills are project-scoped. A repository declares its dependencies in
 `skill-forge.json`; `skf sync` resolves them against the registry, vendors
 exact copies into the repo, and pins versions and integrity hashes in
 `skill-forge.lock.json`. Manifest, lockfile, and vendored directories are
-committed together.
+committed together, except in repositories worked on in Claude Project threads:
+there the environment installs the declared skills, so the copies are
+`.gitignore`d and only the manifest and lockfile are committed (see Claude
+Project threads above; having `skf sync` manage that ignore block is planned).
 
 ```bash
 skf project init [--shims claude-code]  # default: every known shim

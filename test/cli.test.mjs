@@ -2383,3 +2383,280 @@ test('project doctor child: no AGENTS.md adds no layout issue, git is queried fo
   assert.equal(report.ok, true, 'a git failure never fails --check');
   assert.match(report.sections.layout.warnings.join(' '), /could not run git to check the ledger rule: git exited with 128/);
 });
+
+// --- "generated": "ignored" (tasks/spec-p2-generated-skills.md) ---
+
+const MINE_SKILL_MD = '---\nname: mine\ndescription: The repo\'s own skill.\n---\n\n# Mine\n';
+
+/** A git consumer with two registry skills and one repo skill, committed the old way; HOME is a temp dir. */
+async function generatedFixture() {
+  const fx = await projectFixture();
+  await fx.runWithStdin(['skill', 'write', 'extra-skill', '--set-version', '0.1.0', '--tags', 'demo'], EXTRA_SKILL_MD);
+  const home = await tempDir('skf-home-');
+  const env = { ...fx.env, ...OVERLAY_GIT_ENV, HOME: home };
+  const dir = fx.projectRoot;
+  const skf = (args, cwd = dir) => run('node', [CLI, ...args], { cwd, env });
+  const git = (args) => run('git', args, { cwd: dir, env });
+  await skf(['project', 'init', '--shims', 'claude-code']);
+  await skf(['project', 'add', 'demo-skill', 'extra-skill']);
+  await fs.mkdir(path.join(dir, '.agents/skills/mine'), { recursive: true });
+  await fs.writeFile(path.join(dir, '.agents/skills/mine/SKILL.md'), MINE_SKILL_MD);
+  const manifest = await fx.readManifest();
+  manifest.skills.local = { mine: '.agents/skills/mine' };
+  await fx.writeManifest(manifest);
+  await skf(['sync']);
+  await git(['init', '-q', '-b', 'main']);
+  await fs.writeFile(path.join(dir, '.gitignore'), 'node_modules/\n');
+  await git(['add', '-A']);
+  await git(['commit', '-q', '-m', 'profile']);
+  return {
+    ...fx, dir, home, env, skf, git,
+    porcelain: async () => (await git(['status', '--porcelain'])).stdout,
+    tracked: async () => (await git(['ls-files'])).stdout.split('\n').filter(Boolean),
+    gitignore: () => fs.readFile(path.join(dir, '.gitignore'), 'utf8').catch(() => null),
+    exists: (p) => fs.lstat(path.join(dir, p)).then(() => true, () => false)
+  };
+}
+const GENERATED_BLOCK = '# >>> skill-forge generated >>>\n/.agents/skills/*\n!/.agents/skills/mine/\n# <<< skill-forge generated <<<\n';
+
+test('a manifest without "generated" never touches .gitignore or git', async () => {
+  const fx = await generatedFixture();
+  assert.equal(await fx.gitignore(), 'node_modules/\n');
+  await fx.skf(['sync', '--check']);
+  await fx.skf(['sync']);
+  assert.equal(await fx.porcelain(), '');
+  assert.ok((await fx.tracked()).includes('.agents/skills/demo-skill/SKILL.md'));
+});
+
+test('project generated ignored: key, block, untracks only registry copies, commits nothing', async () => {
+  const fx = await generatedFixture();
+  const head = (await fx.git(['rev-parse', 'HEAD'])).stdout;
+  const { stdout } = await fx.skf(['project', 'generated', 'ignored']);
+  assert.match(stdout, /untracked from git's index \(nothing deleted by git\): \.agents\/skills\/demo-skill, \.agents\/skills\/extra-skill/);
+  assert.equal((await fx.readManifest()).generated, 'ignored');
+  assert.equal(await fx.gitignore(), `node_modules/\n\n${GENERATED_BLOCK}`, 'text outside the markers is kept');
+  assert.equal((await fx.git(['rev-parse', 'HEAD'])).stdout, head, 'nothing committed');
+  const tracked = await fx.tracked();
+  assert.ok(!tracked.some((file) => /\.agents\/skills\/(demo|extra)-skill\//.test(file)), 'registry copies untracked');
+  assert.ok(tracked.includes('.agents/skills/mine/SKILL.md') && tracked.includes('.claude/skills'), 'repo skill and link stay tracked');
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'), 'files stay on disk');
+  await fx.skf(['sync', '--check']);
+  await fx.git(['add', '-A']);
+  assert.doesNotMatch(await fx.porcelain(), /^A .*\.agents\/skills\/(demo|extra)-skill/m, 'git add -A does not re-add copies');
+});
+
+test('the block follows skills.local, is refused when malformed, and repo skills must sit at normal depth', async () => {
+  const fx = await generatedFixture();
+  await fx.skf(['project', 'generated', 'ignored']);
+  await fs.mkdir(path.join(fx.dir, '.agents/skills/zed'), { recursive: true });
+  await fs.writeFile(path.join(fx.dir, '.agents/skills/zed/SKILL.md'), '---\nname: zed\ndescription: Second repo skill.\n---\n');
+  const manifest = await fx.readManifest();
+  manifest.skills.local.zed = '.agents/skills/zed/';
+  await fx.writeManifest(manifest);
+  await assert.rejects(fx.skf(['sync', '--check']), /out-of-date/);
+  await fx.skf(['sync']);
+  assert.match(await fx.gitignore(), /^!\/\.agents\/skills\/mine\/\n!\/\.agents\/skills\/zed\/$/m, 'one line per repo skill, sorted; a trailing slash in the path is fine');
+  await fx.skf(['sync', '--check']);
+
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), `${await fx.gitignore()}# >>> skill-forge generated >>>\n`);
+  await assert.rejects(fx.skf(['sync']), /malformed/);
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), `node_modules/\n\n${GENERATED_BLOCK}`);
+
+  manifest.skills.local = { mine: 'skills/mine' };
+  await fx.writeManifest(manifest);
+  await assert.rejects(fx.skf(['sync']), /must live at \.agents\/skills\/mine/);
+});
+
+test('--check proves the ignore rules with git: re-included copy, ignored repo skill, undeclared folder, ignored link', async () => {
+  const fx = await generatedFixture();
+  await fx.skf(['project', 'generated', 'ignored']);
+  await fx.git(['add', '-A']);
+  await fx.git(['commit', '-q', '-m', 'ignored']);
+  await fx.skf(['sync', '--check']);
+  const base = await fx.gitignore();
+  const check = async (extra) => {
+    await fs.writeFile(path.join(fx.dir, '.gitignore'), `${base}${extra}`);
+    return fx.skf(['sync', '--check']).then(() => '', (error) => error.stderr);
+  };
+  assert.match(await check('!/.agents/skills/demo-skill/\n'), /\.agents\/skills\/demo-skill is not ignored by git/);
+  assert.match(await check('/.agents/skills/mine/\n'), /\.agents\/skills\/mine is a repo skill but git ignores it/);
+  assert.match(await check('/.claude/skills\n'), /\.claude\/skills is ignored by git, so threads/);
+  assert.equal(await check('/.agents/skills/demo-skill/\n'), '', 'a hand-written line that ignores the same copy passes');
+  assert.match(await check('/.agents/skills/\n'), /mine is a repo skill but git ignores it/, 'ignoring the whole folder by hand swallows the repo skill');
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), base);
+  await fs.mkdir(path.join(fx.dir, '.agents/skills/stray'));
+  assert.match(await check(''), /\.agents\/skills\/stray is not declared/);
+  await fs.rm(path.join(fx.dir, '.agents/skills/stray'), { recursive: true });
+
+  // A copy still tracked (switched by hand, without the command) is reported.
+  await fx.git(['add', '-f', '.agents/skills/demo-skill']);
+  assert.match(await check(''), /\.agents\/skills\/demo-skill is still tracked/);
+});
+
+test('outside git the checks are skipped with one notice', async () => {
+  const fx = await generatedFixture();
+  await fx.skf(['project', 'generated', 'ignored']);
+  await fs.rm(path.join(fx.dir, '.git'), { recursive: true });
+  const { stderr } = await fx.skf(['sync', '--check']);
+  assert.equal((stderr.match(/not a git work tree/g) || []).length, 1);
+});
+
+test('$HOME provides a skill: no project copy, status "home"; an out-of-range $HOME copy is reported; --no-home copies', async () => {
+  const fx = await generatedFixture();
+  await fs.writeFile(path.join(fx.home, 'skill-forge.json'), JSON.stringify({ schemaVersion: 2, skills: { dependencies: { 'demo-skill': '^0.1.0' }, shims: ['claude-code'] } }));
+  await fx.skf(['home', 'sync'], fx.home);
+  await fx.skf(['project', 'generated', 'ignored']);
+  assert.ok(!await fx.exists('.agents/skills/demo-skill'), 'the project copy is pruned');
+  await fx.skf(['sync', '--check']);
+  const status = JSON.parse((await fx.skf(['project', 'status', '--json'])).stdout);
+  assert.equal(status.skills.find((skill) => skill.name === 'demo-skill').state, 'home');
+
+  await assert.rejects(fx.skf(['sync', '--check', '--no-home']), /demo-skill is missing/);
+  await fx.skf(['sync', '--no-home']);
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'));
+  await assert.rejects(fx.skf(['sync', '--check']), /duplicates the \$HOME copy/);
+  await fx.skf(['sync']);
+
+  const manifest = await fx.readManifest();
+  manifest.skills.dependencies['demo-skill'] = '0.2.0';
+  await fx.writeManifest(manifest);
+  await fx.runWithStdin(['skill', 'write', 'demo-skill', '--set-version', '0.2.0', '--tags', 'demo'], DEMO_SKILL_MD);
+  await fx.skf(['sync']);
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'), 'out of range: copied');
+  await assert.rejects(fx.skf(['sync', '--check']), /\$HOME has demo-skill@0\.1\.0, outside this repo's range 0\.2\.0/);
+});
+
+test('project generated committed removes the block and copies everything again; a refusal changes nothing', async () => {
+  const fx = await generatedFixture();
+  await fx.skf(['project', 'generated', 'ignored']);
+  const { stdout } = await fx.skf(['project', 'generated', 'committed']);
+  assert.match(stdout, /git add \.agents\/skills/);
+  assert.equal(await fx.gitignore(), 'node_modules/\n');
+  assert.equal((await fx.readManifest()).generated, undefined);
+  await fx.skf(['sync', '--check']);
+
+  const manifest = await fx.readManifest();
+  manifest.skills.shims = [];
+  await fx.writeManifest(manifest);
+  const before = JSON.stringify(await fx.readManifest());
+  await assert.rejects(fx.skf(['project', 'generated', 'ignored']), /needs the claude-code shim/);
+  assert.equal(JSON.stringify(await fx.readManifest()), before, 'manifest unchanged after a refusal');
+});
+
+test('committed mode and $HOME never trip on a symlinked .gitignore or stray marker text', async () => {
+  const fx = await generatedFixture();
+  const real = path.join(await tempDir('skf-dotfiles-'), 'gitignore');
+  await fs.writeFile(real, '# >>> skill-forge generated >>>\nnot ours\n');
+  await fs.rm(path.join(fx.dir, '.gitignore'));
+  await fs.symlink(real, path.join(fx.dir, '.gitignore'));
+  await fx.skf(['sync']);
+  await fx.skf(['sync', '--check']);
+  assert.equal(await fs.readFile(real, 'utf8'), '# >>> skill-forge generated >>>\nnot ours\n', 'the link target is untouched');
+
+  await fs.symlink(real, path.join(fx.home, '.gitignore'));
+  await fs.writeFile(path.join(fx.home, 'skill-forge.json'), JSON.stringify({ schemaVersion: 2, skills: { dependencies: { 'demo-skill': '^0.1.0' }, shims: ['claude-code'] } }));
+  await fx.skf(['home', 'sync'], fx.home);
+  await fx.skf(['home', 'sync', '--check'], fx.home);
+});
+
+test('the block shrinks with skills.local and is replaced in place, keeping text on both sides', async () => {
+  const fx = await generatedFixture();
+  await fx.skf(['project', 'generated', 'ignored']);
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), `top/\n\n${GENERATED_BLOCK}bottom/\n`);
+  const manifest = await fx.readManifest();
+  delete manifest.skills.local;
+  await fx.writeManifest(manifest);
+  await fs.rm(path.join(fx.dir, '.agents/skills/mine'), { recursive: true });
+  await fx.skf(['sync']);
+  assert.equal(await fx.gitignore(), 'top/\n\n# >>> skill-forge generated >>>\n/.agents/skills/*\n# <<< skill-forge generated <<<\nbottom/\n');
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), `${GENERATED_BLOCK}${GENERATED_BLOCK}`);
+  await assert.rejects(fx.skf(['sync']), /malformed/);
+});
+
+test('generated committed brings back a copy the $HOME profile had provided', async () => {
+  const fx = await generatedFixture();
+  await fs.writeFile(path.join(fx.home, 'skill-forge.json'), JSON.stringify({ schemaVersion: 2, skills: { dependencies: { 'demo-skill': '^0.1.0' }, shims: ['claude-code'] } }));
+  await fx.skf(['home', 'sync'], fx.home);
+  await fx.skf(['project', 'generated', 'ignored']);
+  assert.ok(!await fx.exists('.agents/skills/demo-skill'));
+  await fx.skf(['project', 'generated', 'committed']);
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'));
+  await fx.skf(['sync', '--check']);
+});
+
+test('SKF_NO_HOME=1, a $HOME copy without the Claude shim or with edits, and a differing project copy', async () => {
+  const fx = await generatedFixture();
+  await fs.writeFile(path.join(fx.home, 'skill-forge.json'), JSON.stringify({ schemaVersion: 2, skills: { dependencies: { 'demo-skill': '^0.1.0' }, shims: ['claude-code'] } }));
+  await fx.skf(['home', 'sync'], fx.home);
+  await run('node', [CLI, 'project', 'generated', 'ignored'], { cwd: fx.dir, env: { ...fx.env, SKF_NO_HOME: '1' } });
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'), 'SKF_NO_HOME copies');
+
+  // An edited project copy is never pruned silently.
+  await fs.appendFile(path.join(fx.dir, '.agents/skills/demo-skill/SKILL.md'), 'edited\n');
+  await assert.rejects(fx.skf(['sync']), /differs from demo-skill@0\.1\.0, and the \$HOME profile provides it/);
+  await fx.skf(['sync', '--no-home']);
+
+  // Without ~/.claude/skills, or with an edited $HOME copy, $HOME provides nothing.
+  await fs.rm(path.join(fx.home, '.claude/skills'));
+  await fx.skf(['sync']);
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'), 'no Claude shim in $HOME: keep the project copy');
+  await fx.skf(['home', 'sync'], fx.home);
+  await fs.appendFile(path.join(fx.home, '.agents/skills/demo-skill/SKILL.md'), 'edited\n');
+  await fx.skf(['sync']);
+  assert.ok(await fx.exists('.agents/skills/demo-skill/SKILL.md'), 'edited $HOME copy: keep the project copy');
+  const status = JSON.parse((await fx.skf(['project', 'status', '--json'])).stdout);
+  assert.equal(status.skills.find((skill) => skill.name === 'demo-skill').state, 'clean');
+});
+
+test('a project in a subdirectory of the git work tree, and an overlay, work with ignored copies', async () => {
+  const fx = await generatedFixture();
+  const outer = await tempDir('skf-outer-');
+  const inner = path.join(outer, 'svc');
+  await fs.cp(fx.dir, inner, { recursive: true, verbatimSymlinks: true });
+  await fs.rm(path.join(inner, '.git'), { recursive: true });
+  const git = (args) => run('git', args, { cwd: outer, env: fx.env });
+  await git(['init', '-q', '-b', 'main']);
+  await git(['add', '-A']);
+  await git(['commit', '-q', '-m', 'outer']);
+  const skf = (args) => run('node', [CLI, ...args], { cwd: inner, env: fx.env });
+  await skf(['project', 'generated', 'ignored']);
+  const tracked = (await git(['ls-files'])).stdout;
+  assert.doesNotMatch(tracked, /svc\/\.agents\/skills\/demo-skill\//);
+  assert.match(tracked, /svc\/\.agents\/skills\/mine\/SKILL\.md/);
+  await skf(['sync', '--check']);
+
+  await skf(['project', 'add', 'extra-skill', '--overlay']).catch(() => {});
+  await fs.writeFile(path.join(inner, 'skill-forge.local.json'), JSON.stringify({ schemaVersion: 1, skills: { dependencies: {} } }));
+  await skf(['sync']);
+  await skf(['sync', '--check']);
+});
+
+test('a symlinked .agents/skills is refused before sync writes or removes anything', async () => {
+  const fx = await generatedFixture();
+  const elsewhere = await tempDir('skf-elsewhere-');
+  await fs.writeFile(path.join(elsewhere, 'keep.txt'), 'keep\n');
+  await fs.cp(path.join(fx.dir, '.agents/skills/mine'), path.join(elsewhere, 'mine'), { recursive: true });
+  await fs.rm(path.join(fx.dir, '.agents/skills'), { recursive: true });
+  await fs.symlink(elsewhere, path.join(fx.dir, '.agents/skills'));
+  await assert.rejects(fx.skf(['sync']), /is a symlink or resolves outside this project/);
+  assert.deepEqual((await fs.readdir(elsewhere)).sort(), ['keep.txt', 'mine']);
+});
+
+test('generated takes only committed or ignored, and repo skill names must be plain', async () => {
+  const fx = await generatedFixture();
+  await assert.rejects(fx.skf(['project', 'generated', 'bogus']), /Mode must be one of committed, ignored/);
+  const manifest = await fx.readManifest();
+  await fx.writeManifest({ ...manifest, generated: 'bogus' });
+  await assert.rejects(fx.skf(['sync']), /"generated" must be one of committed, ignored/);
+  await fx.writeManifest({ ...manifest, generated: 'ignored', skills: { ...manifest.skills, local: { 'B*x': '.agents/skills/B*x' } } });
+  await assert.rejects(fx.skf(['sync']), /name must be lowercase words joined by hyphens/);
+});
+
+test('bin/skf-cloud.mjs prints the same .gitignore block markers that skf writes', async () => {
+  const cli = await fs.readFile(CLI, 'utf8');
+  const cloud = await fs.readFile(path.join(REPO_ROOT, 'bin', 'skf-cloud.mjs'), 'utf8');
+  for (const [cliName, cloudName] of [['GITIGNORE_BLOCK_START', 'GENERATED_BLOCK_START'], ['GITIGNORE_BLOCK_END', 'GENERATED_BLOCK_END']]) {
+    const value = (text, name) => text.match(new RegExp(`const ${name} = '([^']+)'`))[1];
+    assert.equal(value(cloud, cloudName), value(cli, cliName));
+  }
+});

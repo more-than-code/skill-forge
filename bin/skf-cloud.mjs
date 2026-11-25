@@ -39,6 +39,9 @@ const STATE_VERSION = 2;
 const MANIFEST_NAME = 'skill-forge.json';
 const MANIFEST_LOCK_NAME = 'skill-forge.lock.json';
 const DEFAULT_REPOS_DIR = '/home/user';
+// The managed .gitignore block of skf's "generated": "ignored" layout (bin/cli.js GITIGNORE_BLOCK_*).
+const GENERATED_BLOCK_START = '# >>> skill-forge generated >>>';
+const GENERATED_BLOCK_END = '# <<< skill-forge generated <<<';
 const FETCH_TIMEOUT_MS = 20000;
 const INSTALL_DEADLINE_MS = Number(process.env.SKF_DEADLINE_MS) || 90000;
 const PROCESS_SKILLS = ['coding-discipline', 'security-baseline', 'code-quality', 'testing-strategy'];
@@ -779,7 +782,9 @@ function linkedSkillsTarget(repoDir, skillsDir) {
     const repoReal = fs.realpathSync(repoDir);
     const real = fs.realpathSync(skillsDir);
     if (!real.startsWith(repoReal + path.sep)) return undefined;
-    return path.relative(repoReal, real).split(path.sep).join('/');
+    const target = path.relative(repoReal, real).split(path.sep).join('/');
+    // The resolved folder goes into a suggested command and a .gitignore block: plain names only.
+    return /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/.test(target) ? target : undefined;
   } catch {
     return undefined;
   }
@@ -836,10 +841,20 @@ function checkRepos(findings, repos, state) {
     const copySeverity = state?.fromRepos ? 'issue' : 'note';
     if (target && copies.length > 0) {
       // skf sync's claude-code shim: one committed link to the vendored folder, so one finding with one fix.
-      const onlyCopies = listed.length === copies.length;
-      const fix = onlyCopies
-        ? `PR in ${repo.name}: git rm the .claude/skills symlink and ${target}/, and add "/.claude/skills" and "/${target}/" to .gitignore; keep ${MANIFEST_NAME} and its lock. After pulling it, a workstation checkout runs skf sync once to get its local copies back (then ignored).`
-        : `PR in ${repo.name}: keep the .claude/skills symlink (${target}/ also holds skills the environment does not install); git rm ${copies.map((name) => `${target}/${name}/`).join(', ')} and add each, with a leading /, to .gitignore; keep ${MANIFEST_NAME} and its lock.`;
+      const own = Object.keys(ownSkills).filter(isSafeName).sort();
+      const leftovers = listed.filter((name) => !copies.includes(name) && !own.includes(name)).sort();
+      const skfLayout = target === '.agents/skills' && Object.entries(ownSkills)
+        .every(([name, rel]) => isSafeName(name) && String(rel).replace(/\/+$/, '') === `${target}/${name}`);
+      let fix;
+      if (skfLayout) {
+        // Skill Forge's "generated": "ignored" layout, written out because a thread has no skf.
+        const lines = [GENERATED_BLOCK_START, `/${target}/*`, ...own.map((name) => `!/${target}/${name}/`), GENERATED_BLOCK_END];
+        fix = `PR in ${repo.name}: set "generated": "ignored" in ${MANIFEST_NAME}; append these lines to .gitignore, one per line, exactly: ${lines.map((line) => `"${line}"`).join(', ')}; untrack the registry copies with git rm -r --cached -- ${copies.map((name) => `${target}/${name}`).join(' ')}; keep the .claude/skills link, ${MANIFEST_LOCK_NAME} and the repo's own skills${own.length > 0 ? ` (${own.join(', ')})` : ''}.${leftovers.length > 0 ? ` Also settle ${leftovers.map((name) => `${target}/${name}`).join(', ')}: declare each in skills.local at that path, or remove it (the block would ignore it).` : ''} A workstation checkout then runs skf sync once (skf with "generated" support).`;
+      } else if (listed.length === copies.length) {
+        fix = `PR in ${repo.name}: git rm the .claude/skills symlink and ${target}/, and add "/.claude/skills" and "/${target}/" to .gitignore; keep ${MANIFEST_NAME} and its lock. After pulling it, a workstation checkout runs skf sync once to get its local copies back (then ignored).`;
+      } else {
+        fix = `PR in ${repo.name}: keep the .claude/skills symlink (${target}/ also holds skills the environment does not install); git rm -r -- ${copies.map((name) => `${target}/${name}/`).join(' ')} and add each, with a leading /, to .gitignore; keep ${MANIFEST_NAME} and its lock.`;
+      }
       findings.push(finding('D-repo-vendored-skill', copySeverity, 'thread-pr', `${repo.name} commits .claude/skills as a symlink to ${target}/, so threads list ${copies.length} skill(s) the environment also installs again as ${repo.name}:<name> (the environment copy runs): ${copies.join(', ')}`, fix));
     } else {
       for (const name of copies) {

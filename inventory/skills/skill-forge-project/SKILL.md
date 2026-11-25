@@ -55,13 +55,15 @@ agents/subagents/hooks globally (`skf agent|subagent|hook install`).
 
      Overlap does **not** double-load. Observed 2026-09-22 on two tools
      independently: names present in both the project and `$HOME` trees
-     surfaced exactly once each, resolved project-over-home. The at-rest cost
+     surfaced exactly once each. Which copy wins depends on the tool: Codex,
+     Copilot and Grok resolve project-over-home; Claude Code prefers the
+     personal (`~/.claude/skills`) copy. The at-rest cost
      of an overlapping name is zero, because only frontmatter is read at
      discovery and that name was already being read.
 
-     The cost that is real is **shadowing**: the project copy wins
-     unconditionally, so once the repo's pin lags a `$HOME` bump, the stale
-     project copy is what loads — and `sync --check` passes at both levels,
+     The cost that is real is **shadowing**: whichever copy the tool prefers
+     loads, so once one level lags the other, a stale copy can be what loads —
+     and `sync --check` passes at both levels,
      because each is internally consistent. Now that every repo declares the
      `$HOME` set, re-sync every root after each registry change, not only
      `$HOME`. Widen a pin in every root and in `$HOME` together.
@@ -117,10 +119,27 @@ skf project status --json     # this repo's resolved versions
 cat ~/skill-forge.json        # the machine-wide ranges
 ```
 
-   A name in both loads the **project** copy, always. So a project pinned
-   `^0.8.0` against a `$HOME` at `^0.9.0` silently serves the older skill to
-   every session rooted here, and nothing in either profile is wrong on its own
-   terms.
+   A name in both loads the project copy in Codex, Copilot and Grok, and the
+   `$HOME` copy in Claude Code. So a project pinned `^0.8.0` against a `$HOME`
+   at `^0.9.0` serves different versions to different tools, and nothing in
+   either profile is wrong on its own terms.
+
+**Repos with `"generated": "ignored"` in `skill-forge.json`.** Such a repo commits its
+manifest, lock and its own skills, but not the registry copies (one managed block in
+`.gitignore` keeps them out). After a clone, or after pulling the switch, `sync --check`
+reports every copy missing: that is normal, run `skf sync` first, then check. Sync also
+skips, and prunes an unedited project copy of, a skill the `$HOME` profile installs at a
+version this repo's range accepts, unedited, with its `~/.claude/skills` shim
+(`skf project status --json` shows it as `"state": "home"`), and `--check` reports a `$HOME`
+copy outside the range, so check 2 above is done for you for range skew there. Every tool then
+sees one copy, the `$HOME` one. `sync --no-home` (or `SKF_NO_HOME=1` for any command, status
+and doctor included) copies everything for a session that must not use `$HOME`; use it
+consistently, or `--check` reports the extra copy. A repo's own skill must sit at
+`.agents/skills/<name>` and be declared in `skills.local`; `--check` fails on an undeclared
+folder, an ignored repo skill, or (when the repo has its own skills) an ignored
+`.claude/skills` link. Switch a repo with
+`skf project generated ignored` (it untracks the copies and never commits) and back with
+`skf project generated committed`.
 
 **Triage before you shout — "stale" has three severities, and only two matter.**
 A consumer's lockfile records the *registry's* commit, so **any** registry change

@@ -422,10 +422,41 @@ Skills are project-scoped. A repository declares its dependencies in
 `skill-forge.json`; `skf sync` resolves them against the registry, vendors
 exact copies into the repo, and pins versions and integrity hashes in
 `skill-forge.lock.json`. Manifest, lockfile, and vendored directories are
-committed together, except in repositories worked on in Claude Project threads:
-there the environment installs the declared skills, so the copies are
-`.gitignore`d and only the manifest and lockfile are committed (see Claude
-Project threads above; having `skf sync` manage that ignore block is planned).
+committed together by default.
+
+A repository can instead commit only what it owns: `skf project generated ignored`
+sets `"generated": "ignored"`, writes one managed block to `.gitignore`
+
+```gitignore
+# >>> skill-forge generated >>>
+/.agents/skills/*
+!/.agents/skills/<each skills.local name>/
+# <<< skill-forge generated <<<
+```
+
+and untracks the registry copies (index only; it never commits). The manifest,
+lockfile, the `.claude/skills` link and the repository's own skills stay
+committed; `skf sync` installs the registry copies locally, like `npm install`,
+and Claude Project threads and cloud sessions get them from `skf-cloud install`.
+A Defect Drainer job has no such installer yet (planned), so a repo DD works on
+should stay committed until then. In this mode:
+
+- a `skills.local` skill must sit at `.agents/skills/<name>` (Claude Code does
+  not find skills nested deeper), and the `claude-code` shim is required;
+- `sync` skips (and prunes an unedited project copy of) a registry skill the
+  `$HOME` profile installs, unedited and with its `~/.claude/skills` shim, at a
+  version every range here accepts (`project status` shows `home`); `sync
+  --no-home`, or `SKF_NO_HOME=1` for any command, copies everything; use it
+  consistently or `--check` reports the extra copy;
+- `sync --check` asks git (`check-ignore --no-index`, `ls-files`) whether every
+  copy is ignored and untracked, every repo skill (and, when there are any,
+  the link) is not ignored, and no undeclared folder sits under
+  `.agents/skills/`; a git failure only skips these checks, with a note; it also
+  reports a `$HOME` copy outside a range. After a fresh clone it reports the
+  copies missing: run `skf sync` first.
+
+`skf project generated committed` removes the block and copies everything
+again.
 
 ```bash
 skf project init [--shims claude-code]  # default: every known shim
@@ -434,6 +465,7 @@ skf project add <skill>... --overlay   # this checkout only, never committed (be
 skf project overlay [--clear]
 skf sync [--check]               # vendor + lock; --check is the CI drift gate
 skf project status [--json]
+skf project generated ignored|committed  # keep registry copies out of git, or commit them
 ```
 
 Skills are stored **once**, in `.agents/skills/`. There is no per-tool

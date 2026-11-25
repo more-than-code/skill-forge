@@ -16,5 +16,6 @@
     "shims": [
       "claude-code"
     ]
-  }
+  },
+  "generated": "ignored"
 }

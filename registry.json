@@ -282,7 +282,7 @@
     {
       "type": "skill",
       "name": "skill-forge-project",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "scope": "custom",
       "path": "inventory/skills/skill-forge-project",
       "installable": true,
@@ -556,7 +556,7 @@
     {
       "type": "skill",
       "name": "claude-project-steward",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "scope": "custom",
       "path": "inventory/skills/claude-project-steward",
       "installable": true,
@@ -634,7 +634,7 @@
   "instructionVariants": [
     {
       "name": "full",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Today's full process instructions (core.md) for AGENTS.md, plus the Claude Code overlay for CLAUDE.md; delivered per project by skf sync.",
       "core": "inventory/agents/core.md",
       "claude": "inventory/agents/claude-code/CLAUDE.md",

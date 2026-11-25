@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import inquirer from 'inquirer';
@@ -98,6 +98,11 @@ const OVERLAY_EXCLUDE_END = '# <<< skill-forge overlay';
 const PROJECT_NEUTRAL_SKILL_DIR = path.join('.agents', 'skills');
 const SKILL_COMPAT_SHIMS = { 'claude-code': path.join('.claude', 'skills') };
 const KNOWN_SHIMS = Object.keys(SKILL_COMPAT_SHIMS);
+// "generated": "ignored" — the repo commits its manifest, lock and own skills; registry copies are
+// installed locally by sync and kept out of git by one managed .gitignore block.
+const GENERATED_MODES = ['committed', 'ignored'];
+const GITIGNORE_BLOCK_START = '# >>> skill-forge generated >>>';
+const GITIGNORE_BLOCK_END = '# <<< skill-forge generated <<<';
 
 const program = new Command();
 
@@ -1082,6 +1087,9 @@ async function readProjectManifest(projectRoot) {
       throw new Error(`${PROJECT_MANIFEST_NAME} "skills.${section}" must be an object.`);
     }
   }
+  if (manifest.generated !== undefined && !GENERATED_MODES.includes(manifest.generated)) {
+    throw new Error(`${PROJECT_MANIFEST_NAME} "generated" must be one of ${GENERATED_MODES.join(', ')}; got ${JSON.stringify(manifest.generated)}.`);
+  }
   const shims = manifest.skills?.shims;
   if (shims !== undefined && !Array.isArray(shims)) {
     throw new Error(`${PROJECT_MANIFEST_NAME} "skills.shims" must be an array of shim names.`);
@@ -1287,6 +1295,126 @@ async function dropTrackedFromOverlayExcludes(git, trackedNames) {
   return [...removed].sort();
 }
 
+function assertGeneratedShim(manifest) {
+  if (!hasClaudeShim(manifest)) {
+    throw new Error(`"generated": "ignored" needs the claude-code shim (.claude/skills -> ../.agents/skills), so threads find the repo's own skills; add "claude-code" to skills.shims or remove "generated".`);
+  }
+}
+
+function generatedMode(manifest) {
+  return manifest.generated ?? 'committed';
+}
+
+const toPosix = (relPath) => relPath.split(path.sep).join('/');
+
+/** The managed .gitignore block's lines for a repo with ignored copies: every copy out, each repo skill back in. */
+function gitignoreBlockLines(locals) {
+  const dir = toPosix(PROJECT_NEUTRAL_SKILL_DIR);
+  return [`/${dir}/*`, ...locals.map(({ name }) => name).sort().map((name) => `!/${dir}/${escapeGitignore(name)}/`)];
+}
+
+/**
+ * What .gitignore should hold: `lines` is the block, or null for no block. Returns the current
+ * and next text and whether they differ. Refuses a symlinked .gitignore and malformed markers;
+ * text outside the markers is never changed.
+ */
+async function planGitignore(projectRoot, lines) {
+  const file = path.join(projectRoot, '.gitignore');
+  const stat = await fs.lstat(file).catch(() => null);
+  const unchanged = (text) => ({ file, current: text, next: text, changed: false, hadBlock: false });
+  // A repo that wants no block is only ever cleaned of one sync wrote: a link, or a file without
+  // the marker, is left exactly as it is (committed-mode repos and $HOME never change).
+  if (!lines && (!stat || stat.isSymbolicLink())) return unchanged(null);
+  if (stat?.isSymbolicLink()) throw new Error(`.gitignore is a symlink; Skill Forge does not write through links.`);
+  const current = stat ? await fs.readFile(file, 'utf8') : null;
+  if (!lines && !(current ?? '').includes(GITIGNORE_BLOCK_START)) return unchanged(current);
+  const all = (current ?? '').split('\n');
+  const starts = all.flatMap((line, index) => (line.trimEnd() === GITIGNORE_BLOCK_START ? [index] : []));
+  const ends = all.flatMap((line, index) => (line.trimEnd() === GITIGNORE_BLOCK_END ? [index] : []));
+  if (starts.length > 1 || ends.length > 1 || starts.length !== ends.length || (starts.length === 1 && ends[0] < starts[0])) {
+    // A repo that never opted in is not blocked by stray marker text; it just gets no block handling.
+    if (!lines) return unchanged(current);
+    throw new Error(`.gitignore has a malformed "${GITIGNORE_BLOCK_START}" block; fix or remove its markers, then re-run "${CLI_NAME} sync".`);
+  }
+  const block = lines ? [GITIGNORE_BLOCK_START, ...lines, GITIGNORE_BLOCK_END] : [];
+  let nextText;
+  if (starts.length === 1 && lines) {
+    nextText = [...all.slice(0, starts[0]), ...block, ...all.slice(ends[0] + 1)].join('\n');
+  } else if (starts.length === 1) {
+    // Removing the block also drops the blank line sync put before it; a file that held only the block goes.
+    const before = all.slice(0, starts[0] > 0 && all[starts[0] - 1] === '' ? starts[0] - 1 : starts[0]);
+    const rest = [...before, ...all.slice(ends[0] + 1)].join('\n');
+    nextText = rest.trim() === '' ? null : rest;
+  } else if (lines) {
+    const kept = current === null ? [] : [...all];
+    while (kept.length > 0 && kept[kept.length - 1] === '') kept.pop();
+    nextText = `${[...kept, ...(kept.length > 0 ? [''] : []), ...block].join('\n')}\n`;
+  } else {
+    nextText = current;
+  }
+  return { file, current, next: nextText, changed: nextText !== current, hadBlock: starts.length === 1 };
+}
+
+/** The paths git would ignore by the rules alone (tracked or not); empty when none. */
+async function gitIgnoredPaths(projectRoot, relPaths) {
+  if (relPaths.length === 0) return new Set();
+  // NUL-separated on both sides, so odd names are matched exactly (git quotes them otherwise).
+  try {
+    const stdout = execFileSync('git', ['-C', projectRoot, 'check-ignore', '-z', '--stdin', '--no-index'], {
+      env: gitEnvironment(), input: `${relPaths.join('\0')}\0`, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe']
+    });
+    return new Set(stdout.split('\0').filter(Boolean));
+  } catch (error) {
+    if (error.status === 1) return new Set();
+    throw new Error(`git check-ignore failed: ${error.code === 'ENOENT' ? 'git was not found' : `git exited with ${error.status}`}`);
+  }
+}
+
+/** The given paths that have tracked files in git's index. */
+async function gitTrackedPaths(projectRoot, relPaths) {
+  const tracked = new Set();
+  if (relPaths.length === 0) return tracked;
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync('git', ['-C', projectRoot, 'ls-files', '-z', '--', ...relPaths], { env: gitEnvironment(), maxBuffer: 64 * 1024 * 1024 }));
+  } catch (error) {
+    throw new Error(`git ls-files failed: ${describeGitFailure(error)}`);
+  }
+  const files = stdout.split('\0').filter(Boolean);
+  for (const relPath of relPaths) {
+    if (files.some((file) => file === relPath || file.startsWith(`${relPath}/`))) tracked.add(relPath);
+  }
+  return tracked;
+}
+
+/**
+ * Registry skills the $HOME profile already installs at a version every range of this repo
+ * accepts: with ignored copies, the project needs no second copy (Claude Code prefers the
+ * personal one anyway). `conflicts` are $HOME copies outside a range, which would win anyway.
+ * SKF_NO_HOME=1 (sync --no-home) turns it off.
+ */
+async function homeProvidedSkills(projectRoot, resolution, noHome) {
+  const provided = new Map();
+  const conflicts = [];
+  const home = os.homedir();
+  if (noHome || path.resolve(projectRoot) === path.resolve(home)) return { provided, conflicts };
+  const homeLock = await fs.readJson(projectLockPath(home)).catch(() => null);
+  for (const { name, ranges } of resolution.resolved) {
+    const entry = homeLock?.skills?.[name];
+    if (entry?.source !== 'registry' || typeof entry.version !== 'string') continue;
+    const homeCopy = path.join(home, PROJECT_NEUTRAL_SKILL_DIR, name);
+    if (!await fs.pathExists(homeCopy)) continue;
+    // Claude Code reads ~/.claude/skills: a $HOME profile without its shim provides nothing there.
+    if (!await fs.pathExists(path.join(home, SKILL_COMPAT_SHIMS['claude-code'], name))) continue;
+    // An edited or damaged $HOME copy is not a substitute: the project then installs its own.
+    if ((await hashTree(homeCopy)).integrity !== entry.integrity) continue;
+    const version = printableOnly(entry.version);
+    if (ranges.every((range) => satisfiesRange(entry.version, range))) provided.set(name, version);
+    else conflicts.push({ name, version, ranges });
+  }
+  return { provided, conflicts };
+}
+
 function resolveProjectProfile(registry, manifest) {
   const rangesByName = new Map();
   const addRange = (name, range, origin) => {
@@ -1311,7 +1439,17 @@ function resolveProjectProfile(registry, manifest) {
     if (rangesByName.has(name)) {
       throw new Error(`"${name}" is declared as both a dependency and a local skill; pick one.`);
     }
-    locals.push({ name, relPath: assertSafeRelativePath(relPath, `skills.local["${name}"]`) });
+    const safePath = assertSafeRelativePath(relPath, `skills.local["${name}"]`);
+    // Claude Code finds a skill only directly under its skills folder, and nothing installs repo
+    // skills in threads or DD jobs: with ignored copies they must sit where the clone is read.
+    if (generatedMode(manifest) === 'ignored' && !SKILL_NAME_PATTERN.test(name)) {
+      throw new Error(`skills.local has the name ${JSON.stringify(printableOnly(name))}; with "generated": "ignored" a repo skill's name must be lowercase words joined by hyphens (it becomes a .gitignore line).`);
+    }
+    const expectedPath = path.join(PROJECT_NEUTRAL_SKILL_DIR, name);
+    if (generatedMode(manifest) === 'ignored' && path.normalize(safePath).replace(/[\\/]+$/, '') !== expectedPath) {
+      throw new Error(`skills.local["${name}"] is ${JSON.stringify(printableOnly(String(relPath)))}; with "generated": "ignored" a repo skill must live at ${toPosix(expectedPath)} (move it there and update the path).`);
+    }
+    locals.push({ name, relPath: safePath });
   }
 
   const resolved = [];
@@ -1325,7 +1463,7 @@ function resolveProjectProfile(registry, manifest) {
         throw new Error(`Skill "${name}"@${skill.version} does not satisfy range "${range}" (${origin}). Update the range or the registry.`);
       }
     }
-    resolved.push({ name, skill });
+    resolved.push({ name, skill, ranges: ranges.map(({ range }) => range) });
   }
   return { resolved, locals };
 }
@@ -1648,7 +1786,7 @@ function comparableProjectLock(lock) {
   return JSON.stringify({ ...lock, registry: { ...lock.registry, commit: null } }, null, 2);
 }
 
-async function computeProjectState(projectRoot) {
+async function computeProjectState(projectRoot, { noHome = process.env.SKF_NO_HOME === '1' } = {}) {
   const registry = await readRegistry();
   const manifest = await readProjectManifest(projectRoot);
   const resolution = resolveProjectProfile(registry, manifest);
@@ -1660,6 +1798,10 @@ async function computeProjectState(projectRoot) {
   const lockPath = projectLockPath(projectRoot);
   const storedLock = await fs.pathExists(lockPath) ? await fs.readJson(lockPath) : null;
   const managedState = await computeManagedState(projectRoot, { manifest, managed, storedLock });
+  const ignoredMode = generatedMode(manifest) === 'ignored';
+  if (ignoredMode) assertGeneratedShim(manifest);
+  const home = ignoredMode ? await homeProvidedSkills(projectRoot, resolution, noHome) : { provided: new Map(), conflicts: [] };
+  const gitignore = await planGitignore(projectRoot, ignoredMode ? gitignoreBlockLines(resolution.locals) : null);
 
   const overlay = await readOverlayManifest(projectRoot);
   const overlayResolved = resolveOverlay(registry, overlay, resolution);
@@ -1686,7 +1828,11 @@ async function computeProjectState(projectRoot) {
     const expected = expectedLock.skills[name];
     for (const dir of [realDir]) {
       const destPath = path.join(projectRoot, dir, name);
-      if (!await fs.pathExists(destPath)) {
+      if (home.provided.has(name)) {
+        const duplicate = await fs.pathExists(destPath);
+        vendored.push({ name, dir, status: duplicate ? 'home-duplicate' : 'home' });
+        if (duplicate) issues.push(`${path.join(dir, name)} duplicates the $HOME copy (${name}@${home.provided.get(name)}); run "${CLI_NAME} sync" to prune it.`);
+      } else if (!await fs.pathExists(destPath)) {
         vendored.push({ name, dir, status: 'missing' });
         issues.push(`${path.join(dir, name)} is missing; run "${CLI_NAME} sync".`);
       } else {
@@ -1741,7 +1887,7 @@ async function computeProjectState(projectRoot) {
   }
 
   const staleNames = Object.entries(storedLock?.skills || {})
-    .filter(([name, entry]) => entry.source === 'registry' && !resolvedNames.has(name))
+    .filter(([name, entry]) => entry.source === 'registry' && !resolvedNames.has(name) && SKILL_NAME_PATTERN.test(name))
     .map(([name]) => name);
   for (const name of staleNames) {
     for (const dir of [realDir]) {
@@ -1796,13 +1942,80 @@ async function computeProjectState(projectRoot) {
 
   issues.push(...managedState.issues);
 
+  const notices = [];
+  if (gitignore.changed) {
+    issues.push(ignoredMode
+      ? `.gitignore ${gitignore.hadBlock ? 'has an out-of-date' : 'lacks the'} "${GITIGNORE_BLOCK_START}" block; run "${CLI_NAME} sync".`
+      : `.gitignore still has the "${GITIGNORE_BLOCK_START}" block, but "generated" is not "ignored"; run "${CLI_NAME} sync" to remove it.`);
+  }
+  if (ignoredMode) {
+    for (const { name, version, ranges } of home.conflicts) {
+      issues.push(`$HOME has ${name}@${version}, outside this repo's range ${ranges.join(', ')}; Claude Code prefers the personal copy, so update the $HOME profile ("${CLI_NAME} home sync") or this range.`);
+    }
+    const tree = git ?? await gitWorkTreeInfo(projectRoot);
+    if (!tree) {
+      notices.push('not a git work tree: the git checks for "generated": "ignored" were skipped.');
+    } else try {
+      const dir = toPosix(realDir);
+      for (const relPath of await gitTrackedPaths(projectRoot, resolution.resolved.map(({ name }) => `${dir}/${name}`))) {
+        issues.push(`${relPath} is still tracked; run "${CLI_NAME} project generated ignored" (it untracks the copies; the files stay).`);
+      }
+      // Ignore rules are judged against the block sync would write; with the block stale they would only repeat that issue.
+      if (!gitignore.changed) {
+        const copies = [];
+        for (const { name } of resolution.resolved) {
+          if (!home.provided.has(name) && await fs.pathExists(path.join(projectRoot, realDir, name, 'SKILL.md'))) copies.push(`${dir}/${name}/SKILL.md`);
+        }
+        const localFiles = resolution.locals.map(({ relPath }) => `${toPosix(path.normalize(relPath))}/SKILL.md`);
+        const link = toPosix(linkDirs.find((entry) => entry === SKILL_COMPAT_SHIMS['claude-code']));
+        const ignored = await gitIgnoredPaths(projectRoot, [...copies, ...localFiles, ...(localFiles.length > 0 ? [link] : [])]);
+        for (const file of copies.filter((entry) => !ignored.has(entry))) {
+          issues.push(`${path.posix.dirname(file)} is not ignored by git, though the block ignores it; a later .gitignore rule re-includes it.`);
+        }
+        for (const file of localFiles.filter((entry) => ignored.has(entry))) {
+          issues.push(`${path.posix.dirname(file)} is a repo skill but git ignores it; fix .gitignore so it stays committed.`);
+        }
+        if (ignored.has(link)) {
+          issues.push(`${link} is ignored by git, so threads and DD jobs cannot see this repo's own skills; remove that ignore line.`);
+        }
+      }
+      const declared = new Set([
+        ...resolvedNames, ...overlayNames, ...staleNames, ...overlayStaleNames,
+        ...resolution.locals.map(({ relPath }) => path.basename(relPath))
+      ]);
+      const entries = await fs.readdir(path.join(projectRoot, realDir), { withFileTypes: true }).catch(() => []);
+      for (const entry of entries.filter((item) => item.isDirectory() && !declared.has(item.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+        issues.push(`${dir}/${printableOnly(entry.name)} is not declared; add it to skills.local or remove it (git ignores it, so it would never be committed).`);
+      }
+    } catch (error) {
+      // Like project doctor's layout rules: a git failure is reported, it never fails sync.
+      notices.push(`the git checks for "generated": "ignored" were skipped (${error.message}).`);
+    }
+  }
+
   return {
     registry, manifest, resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, staleNames, orphaned, inactiveLinks, vendored, issues,
-    overlay, overlayResolved, expectedOverlayLock, storedOverlayLock, overlayStaleNames, overlayExclude, git, managed, managedState
+    overlay, overlayResolved, expectedOverlayLock, storedOverlayLock, overlayStaleNames, overlayExclude, git, managed, managedState,
+    ignoredMode, home, gitignore, notices
   };
 }
 
-async function syncProject(projectRoot) {
+/**
+ * Sync writes and removes under the skills folder, so it must be this project's own folder: a
+ * committed symlink there could point sync's removals at another tree (for example $HOME's skills).
+ */
+async function assertRealSkillDirInside(projectRoot, realDir) {
+  const dir = path.join(projectRoot, realDir);
+  const stat = await fs.lstat(dir).catch(() => null);
+  if (!stat) return;
+  const root = await fs.realpath(projectRoot);
+  const real = await fs.realpath(dir).catch(() => null);
+  if (stat.isSymbolicLink() || !real || !real.startsWith(root + path.sep)) {
+    throw new Error(`${toPosix(realDir)} is a symlink or resolves outside this project; Skill Forge only writes its own folder. Replace it with a real directory.`);
+  }
+}
+
+async function syncProject(projectRoot, options = {}) {
   // Persist a schemaVersion 1 manifest's migration, so the old shape is rewritten
   // once rather than re-derived on every read.
   // Persist a schemaVersion 1 manifest's migration, so the old shape is rewritten
@@ -1813,8 +2026,9 @@ async function syncProject(projectRoot) {
     console.log(chalk.yellow(`  migrated ${PROJECT_MANIFEST_NAME} to schemaVersion 2 ("tools" -> "skills.shims")`));
   }
 
-  const state = await computeProjectState(projectRoot);
+  const state = await computeProjectState(projectRoot, options);
   const { resolution, realDir, linkDirs, targetDirs, expectedLock, storedLock, overlayResolved, expectedOverlayLock, storedOverlayLock } = state;
+  await assertRealSkillDirInside(projectRoot, realDir);
 
   // One real copy, in the tool-neutral directory. A copy either lock owns may be replaced:
   // a skill can move between the tracked profile and the overlay.
@@ -1833,7 +2047,24 @@ async function syncProject(projectRoot) {
     await fs.copy(sourcePath, destPath);
     console.log(chalk.green(`  ${name}@${skill.version} -> ${targetDirs.join(', ')}${label}`));
   };
-  for (const entry of resolution.resolved) await vendor(entry, expectedLock, '');
+  for (const entry of resolution.resolved) {
+    if (!state.home.provided.has(entry.name)) {
+      await vendor(entry, expectedLock, '');
+      continue;
+    }
+    const destPath = path.join(projectRoot, realDir, entry.name);
+    const exists = await fs.pathExists(destPath);
+    // Only a copy that is byte-for-byte the resolved skill goes; anything else is the user's to settle.
+    if (exists && (await hashTree(destPath)).integrity !== expectedLock.skills[entry.name].integrity) {
+      throw new Error(`${path.join(realDir, entry.name)} differs from ${entry.name}@${entry.skill.version}, and the $HOME profile provides it; remove the folder, or sync with --no-home to keep a project copy.`);
+    }
+    if (exists) {
+      await fs.remove(destPath);
+      console.log(chalk.yellow(`  pruned ${path.join(realDir, entry.name)}: the $HOME profile provides ${entry.name}@${state.home.provided.get(entry.name)}`));
+    } else {
+      console.log(chalk.green(`  ${entry.name}: using the $HOME copy (${state.home.provided.get(entry.name)})`));
+    }
+  }
   for (const entry of overlayResolved) await vendor(entry, expectedOverlayLock, ' (overlay)');
 
   // Every tool directory is a link to that copy. Done after the copies exist so
@@ -1892,6 +2123,11 @@ async function syncProject(projectRoot) {
   }
 
   await applyManagedState(state.managedState);
+  if (state.gitignore.changed) {
+    if (state.gitignore.next === null) await fs.remove(state.gitignore.file);
+    else await fs.writeFile(state.gitignore.file, state.gitignore.next);
+    console.log(chalk.green(`  .gitignore: ${state.ignoredMode ? 'wrote' : 'removed'} the skill-forge generated block`));
+  }
 
   await fs.writeJson(projectLockPath(projectRoot), expectedLock, { spaces: 2 });
   if (expectedOverlayLock) {
@@ -1910,6 +2146,7 @@ async function syncProject(projectRoot) {
 
   const overlayCount = state.overlay ? `, ${overlayResolved.length} overlay` : '';
   console.log(chalk.green(`Wrote ${PROJECT_LOCK_NAME} (${resolution.resolved.length} registry, ${resolution.locals.length} local skill(s)${overlayCount}).`));
+  for (const notice of state.notices) console.log(chalk.gray(`  note: ${notice}`));
 }
 
 program
@@ -2762,6 +2999,60 @@ homeCommand
     }
   });
 
+/**
+ * Switch a repo between committing registry copies and ignoring them. Validates the new manifest
+ * before writing it, syncs, then (ignored, in git) untracks the registry copies from the index only.
+ * Never commits.
+ */
+async function runProjectGenerated(projectRoot, mode) {
+  if (!GENERATED_MODES.includes(mode)) throw new Error(`Mode must be one of ${GENERATED_MODES.join(', ')}.`);
+  const manifest = await readProjectManifest(projectRoot);
+  const next = { ...manifest };
+  if (mode === 'committed') delete next.generated;
+  else next.generated = mode;
+  // Everything that can refuse is checked before the manifest is written, so a refusal changes nothing.
+  const resolution = resolveProjectProfile(await readRegistry(), next);
+  if (mode === 'ignored') assertGeneratedShim(next);
+  await planGitignore(projectRoot, mode === 'ignored' ? gitignoreBlockLines(resolution.locals) : null);
+  await writeProjectManifest(projectRoot, next);
+  console.log(chalk.green(`${PROJECT_MANIFEST_NAME}: generated = ${mode}`));
+  try {
+    await syncProject(projectRoot);
+  } catch (error) {
+    await writeProjectManifest(projectRoot, manifest);
+    throw new Error(`${error.message} (${PROJECT_MANIFEST_NAME} was put back as it was)`);
+  }
+
+  const git = await gitWorkTreeInfo(projectRoot);
+  const dir = toPosix(PROJECT_NEUTRAL_SKILL_DIR);
+  if (!git) {
+    console.log(chalk.gray('  note: not a git work tree; nothing to untrack.'));
+    return;
+  }
+  if (mode === 'committed') {
+    console.log(`Copies are on disk again. Track them and commit: git add ${dir} .gitignore ${PROJECT_MANIFEST_NAME}`);
+    return;
+  }
+  const tracked = [...await gitTrackedPaths(projectRoot, resolution.resolved.map(({ name }) => `${dir}/${name}`))];
+  if (tracked.length > 0) {
+    await execFileAsync('git', ['-C', projectRoot, 'rm', '-r', '--cached', '--quiet', '--', ...tracked], { env: gitEnvironment() });
+    console.log(chalk.yellow(`  untracked from git's index (nothing deleted by git): ${tracked.join(', ')}`));
+  }
+  console.log(`Nothing was committed. Review "git status", then commit ${PROJECT_MANIFEST_NAME}, .gitignore${tracked.length > 0 ? ' and the untracked copies' : ''}.`);
+}
+
+projectCommand
+  .command('generated <mode>')
+  .description('Commit registry skill copies ("committed", the default) or keep them out of git ("ignored": sync installs them locally, one managed .gitignore block)')
+  .action(async (mode) => {
+    try {
+      await runProjectGenerated(process.cwd(), mode);
+    } catch (error) {
+      console.error(chalk.red('Error setting generated:'), error.message);
+      process.exitCode = 1;
+    }
+  });
+
 projectCommand
   .command('overlay')
   .description(`List the untracked ${PROJECT_OVERLAY_NAME} skills for this checkout; --clear removes the overlay entirely`)
@@ -3407,8 +3698,10 @@ projectCommand
   });
 
 async function runSyncCommand(projectRoot, options) {
+  const stateOptions = options.home === false ? { noHome: true } : {};
   if (options.check) {
-    const state = await computeProjectState(projectRoot);
+    const state = await computeProjectState(projectRoot, stateOptions);
+    for (const notice of state.notices) console.error(chalk.gray(`note: ${notice}`));
     if (state.issues.length === 0) {
       console.log(chalk.green('Project profile is in sync.'));
       return;
@@ -3417,13 +3710,14 @@ async function runSyncCommand(projectRoot, options) {
     process.exitCode = 1;
     return;
   }
-  await syncProject(projectRoot);
+  await syncProject(projectRoot, stateOptions);
 }
 
 program
   .command('sync')
   .description(`Make this repository match its declared profile: vendor skills and write ${PROJECT_LOCK_NAME}`)
   .option('--check', 'Read-only; exit non-zero when manifest, lockfile, or vendored copies are stale')
+  .option('--no-home', 'With "generated": "ignored", copy every skill even when the $HOME profile provides it (same as SKF_NO_HOME=1)')
   .action(async (options) => {
     try {
       await runSyncCommand(process.cwd(), options);

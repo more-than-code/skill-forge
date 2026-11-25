@@ -125,16 +125,28 @@ One PR per repo, into the base the Project instructions name, on your own branch
 - move Project-wide sections out of repos (into the Project-instructions draft); keep one copy;
 - shorten each repo's always-loaded text to its own facts, naming the repo;
 - remove `.claude/agents/<name>.md` that shadow the environment's subagents;
-- stop committing registry skill copies, but only for names doctor reports as
-  `D-repo-vendored-skill` (installed by the environment): delete `.claude/skills/<name>/` and
-  `.agents/skills/<name>/`, and add those paths to `.gitignore` (a workstation `skf sync` still
-  writes them, now ignored). A name doctor reports as skipped (`D-skill-range`,
-  `D-skill-workstation-only`) keeps its copy until that is resolved. Keep `skill-forge.json`,
-  `skill-forge.lock.json` and every `skills.local` skill. When `.claude/skills` is a committed
-  symlink (the `skf sync` claude-code shim, usually to `../.agents/skills`), doctor reports it
-  once per repo: remove the link and the registry copies behind it and ignore both, or, if the
-  repo has its own `skills.local` skills there, keep the link and remove only the registry copies.
-  Say in the PR that a workstation checkout runs `skf sync` once after pulling it.
+- stop committing registry skill copies, for the names doctor reports as
+  `D-repo-vendored-skill` (installed by the environment). When `.claude/skills` is a committed
+  symlink (the `skf sync` claude-code shim, the usual layout), doctor's fix is Skill Forge's
+  `"generated": "ignored"` layout, spelled out because a thread has no `skf`: set the key in
+  `skill-forge.json`, append the lines doctor quotes to `.gitignore`, one per line, which for a
+  repo with one own skill `my-skill` is
+
+  ```gitignore
+  # >>> skill-forge generated >>>
+  /.agents/skills/*
+  !/.agents/skills/my-skill/
+  # <<< skill-forge generated <<<
+  ```
+
+  then `git rm -r --cached --` the registry copies it names, and keep the `.claude/skills` link,
+  the lock and the repo's own skills. A repo's own skill must sit at `.agents/skills/<name>` and
+  be declared in `skills.local` (`skf` refuses anything else); a folder doctor says to settle is
+  either declared that way or removed. Never ignore the whole skills folder by hand: it
+  swallows the repo's own skills. For a real `.claude/skills` folder, delete the
+  named copies and ignore those paths. A name doctor reports as skipped (`D-skill-range`,
+  `D-skill-workstation-only`) keeps its copy until that is resolved. Say in the PR that a
+  workstation checkout runs `skf sync` once after pulling it.
 
 Never edit a `skill-forge.lock.json` by hand.
 

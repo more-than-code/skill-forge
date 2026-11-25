@@ -654,9 +654,13 @@ test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one fi
   assert.deepEqual(vendored.map((entry) => entry.evidence.split(' ')[0]), ['one', 'three', 'two'], 'one finding per repo; none for abs, out or dangle');
   const [one, three, two] = vendored;
   assert.match(one.evidence, /^one commits \.claude\/skills as a symlink to \.agents\/skills\/,.*: alpha, beta$/);
-  assert.match(one.fix, /git rm the \.claude\/skills symlink and \.agents\/skills\/,.*"\/\.claude\/skills" and "\/\.agents\/skills\/"/);
+  const block = (own) => ['# >>> skill-forge generated >>>', '/.agents/skills/*', ...own.map((name) => `!/.agents/skills/${name}/`), '# <<< skill-forge generated <<<'].map((line) => `"${line}"`).join(', ');
+  assert.ok(one.fix.includes('set "generated": "ignored"') && one.fix.includes(`one per line, exactly: ${block([])};`), one.fix);
+  assert.match(one.fix, /git rm -r --cached -- \.agents\/skills\/alpha \.agents\/skills\/beta;/);
+  assert.match(one.fix, /keep the \.claude\/skills link/);
   assert.match(two.evidence, /: alpha$/, 'the repo\'s own skill is not a duplicate');
-  assert.match(two.fix, /keep the \.claude\/skills symlink.*git rm \.agents\/skills\/alpha\//);
-  assert.match(three.fix, /keep the \.claude\/skills symlink.*git rm \.agents\/skills\/alpha\/ and/, 'an undeclared skill behind the link is kept');
-  assert.doesNotMatch(three.fix, /\/\//, 'a trailing slash in the link does not double up');
+  assert.ok(two.fix.includes(`exactly: ${block(['mine'])};`) && /own skills \(mine\)/.test(two.fix), two.fix);
+  assert.match(three.fix, /git rm -r --cached -- \.agents\/skills\/alpha;/, 'an undeclared skill behind the link is not removed');
+  assert.match(three.fix, /Also settle \.agents\/skills\/handmade: declare each in skills\.local/);
+  assert.doesNotMatch(three.fix, /skills\/\//, 'a trailing slash in the link does not double up');
 });

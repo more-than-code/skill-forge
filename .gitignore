@@ -35,3 +35,7 @@ Thumbs.db
 tasks/
 site/
 otel/data/
+
+# >>> skill-forge generated >>>
+/.agents/skills/*
+# <<< skill-forge generated <<<

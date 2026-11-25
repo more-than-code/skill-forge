@@ -176,8 +176,8 @@ shows per-project role variation matters.
   versions, integrity hashes, and registry provenance.
 - There is no `.skill-forge/` project directory. Sync writes only committed
   artifacts (manifest, lockfile, vendored skill bodies, managed instruction
-  blocks; a repository worked on in Claude Project threads ignores its vendored
-  registry skills instead, see the 2026-11-25 decision row), plus, where managed instructions exclude skf ancestors, one
+  blocks; a repository with `"generated": "ignored"` commits only its own skills
+  and a managed `.gitignore` block instead, see the 2026-11-25 decision rows), plus, where managed instructions exclude skf ancestors, one
   machine-local file: Claude Code's own untracked `.claude/settings.local.json`,
   kept out of git through `info/exclude` and recomputed on every sync rather
   than locked.
@@ -372,7 +372,9 @@ Behavior:
   lockfile, or vendored copies disagree. Because the only machine-local state
   sync produces is the untracked Claude settings file, recomputed from the
   checkout's location, this is a complete check in CI, not just on developer
-  machines.
+  machines. A repo with `"generated": "ignored"` keeps its registry copies
+  machine-local too: CI runs `skf sync` before `--check`, which also consults
+  `$HOME` unless `--no-home` or `SKF_NO_HOME=1` is set.
 - `skf project status` is the human-facing view: which skills are active, which
   came from which profile, which are local overrides, and what is stale. It
   absorbs what a separate `diff-project` command would report — two commands
@@ -705,3 +707,4 @@ any new component.
 | 2026-11-24 | A compact `cloud` instructions variant (`requiresClaude`, `maxLines`) and "skipped is not passed" in the core gate rules | Deploybot's cloud threads saw none of the workflow rules and merged migrations whose database tests had skipped themselves. `full` is ~650 lines with workstation-only parts (the `tasks/` ledger, external workers, podman); a separate short core is easier to follow and to evaluate than flags in one text. Project-scoped subagent vendoring was built and dropped before release: Project threads get subagents from the cloud environment's setup script instead (`tasks/spec-project-thread-setup.md`) |
 | 2026-11-25 | Claude Project threads get Skill Forge from the cloud environment's setup script through `bin/skf-cloud.mjs` (install + read-only doctor) and manage their own setup with the `claude-project-steward` skill | Threads load `~/.claude` written by the setup script (tested: rules, skills and agents all load), but no `~/.claude` of the owner's and no repo branch other than the default. One environment layer gives every thread one copy of the workflow rules, subagents and shared skills, independent of any repo branch; repos keep only their facts. The file is dependency-free and fetched pinned from the public registry because a Project may exist only in claude.ai; the owner pastes what claude.ai has no API for, and threads diagnose and fix repos by PR (`tasks/spec-project-thread-setup.md`) |
 | 2026-11-25 | A thread's skills come from the repos' `skill-forge.json`: `skf-cloud install` installs each declared registry skill once into `~/.claude/skills` unless `SKF_SKILLS` (the higher level) provides it, at the `SKF_REF` version when it satisfies every declaring range; repos commit the manifest and lock, not copies; `install --top-up` adds skills declared after the snapshot was built | One list instead of two (the setup script's and the repos'), one copy per name in every thread, no committed copies listed again as `<repo>:<name>`. One registry snapshot plus ranges, not each repo's exact lock, so two repos never need two copies of one name. The resolver is designed to take a target, repo dirs and a higher-level set (built so far: repo dirs and the higher-level set; the target is still `~/.claude`), so repo-rooted sessions (target `<repo>/.claude`, `$HOME` higher) and DD jobs (target `<handoff>/.claude`, no higher level) reuse it later (`tasks/spec-manifest-skill-install.md`) |
+| 2026-11-25 | A repo can commit only what it owns: `"generated": "ignored"` keeps registry copies out of git through one `.gitignore` block skf maintains (`/.agents/skills/*` plus a `!` line per `skills.local` name), repo skills stay committed at normal depth, and project sync skips skills the `$HOME` profile provides at a satisfying version | Like npm: the manifest and lock are the record, `skf sync` (or the environment's installer) installs. Normal depth because Claude Code does not discover nested skills (probe) and nothing installs repo skills in threads or DD jobs. A per-name exception list for the repo's own skills, written by skf, instead of ignoring the whole folder, which silently swallows a new repo skill; `--check` proves the rules with `git check-ignore`. Opt-in, because flipping the default would rewrite 36 repos with copies still tracked (`tasks/spec-p2-generated-skills.md`) |

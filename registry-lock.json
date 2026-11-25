@@ -54,13 +54,13 @@
     },
     "inventory/skills/claude-project-steward": {
       "name": "claude-project-steward",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-HTtYGlNsLf33CVQaY5gDI62QNCQ64vMIl3E+zDMBP8Q=",
+      "integrity": "sha256-D79QJDdakTwU1A/4Y/EL2vlWpAn0AoO96DdgHCCKYC0=",
       "files": {
-        "SKILL.md": "sha256-plnD4q8ZfyVQ5RYASwCmZeHradMm/jjBwyp7Jos7dNM="
+        "SKILL.md": "sha256-pEJdeD6k6RhDpYB/FuxaCHCqgCfbL2TFH8JgDBknGxc="
       }
     },
     "inventory/skills/code-quality": {
@@ -436,13 +436,13 @@
     },
     "inventory/skills/skill-forge-project": {
       "name": "skill-forge-project",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-JvsWN9s8gEnrBSuOC2ZLzfm0TXhaDfgHw0Z2atArDjM=",
+      "integrity": "sha256-ugPrDZ2nllSsLeXmMdyOvviWtHLDEZAQRPEQu+UrVyk=",
       "files": {
-        "SKILL.md": "sha256-FngENeR9l7bNT9J80vGkqQlg9vhz1TA7phgWa7xrBQY="
+        "SKILL.md": "sha256-ZF34C1NxS6yZlcNwZdvnHzFzhBbmdU72pd8vgvCbVA0="
       }
     },
     "inventory/skills/supabase-postgres": {
@@ -507,9 +507,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-YKVZcE7lCQvGcMmn7k3AcUXh6zTjTvMvIx4zpWBo2m4=",
+      "integrity": "sha256-WHqVF2ap3X8IBPscH1XMJIktIqVZtSmLgpCuvPX3ybc=",
       "files": {
-        "core.md": "sha256-BI7U/4oUs9CAXw9nr0JSE/cqBUmA/rVFPxZlcc7wD78="
+        "core.md": "sha256-kQ7CGmWgSK7GjJ7jG67my5ZaFj6pnhoRcpOxlm+ZZQA="
       },
       "sourceOnly": true
     },
@@ -654,11 +654,11 @@
     },
     "instructions:full": {
       "name": "full",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "type": "instructions",
-      "integrity": "sha256-eMH21ylCkMr8eWQzgY4+SRY1a28gw5ZYesvNO+C74TI=",
+      "integrity": "sha256-3kpqoZO8gnkmf8XDtr5KNwp33Dq1du/56beauRGnO+I=",
       "files": {
-        "AGENTS.md": "sha256-iRJrkKTTSbw1gAtvBZ2GS/MfS53K7VwAstd/LuV3qTo=",
+        "AGENTS.md": "sha256-86wZcMIp70wlClfGeTggK06vwUJLePDhqsAQyEwR/vA=",
         "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
       }
     },

@@ -616,3 +616,47 @@ test('an old (version 1) state: doctor keeps the explicit-list findings and top-
   assert.match((await run('node', [CLOUD, 'install', '--top-up'], { env })).stdout, /nothing changed/);
   assert.equal(await read(statePath), JSON.stringify(v1), 'state untouched');
 });
+
+test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one finding with a fix for the link', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'one/.git/HEAD': 'x\n',
+    'one/skill-forge.json': manifest({ alpha: '^0.1.0', beta: '^0.1.0' }),
+    'one/.agents/skills/alpha/SKILL.md': SKILL_A,
+    'one/.agents/skills/beta/SKILL.md': SKILL_B,
+    'two/.git/HEAD': 'x\n',
+    'two/skill-forge.json': manifest({ alpha: '^0.1.0' }, { local: { mine: '.agents/skills/mine' } }),
+    'two/.agents/skills/alpha/SKILL.md': SKILL_A,
+    'two/.agents/skills/mine/SKILL.md': '---\nname: mine\ndescription: Mine.\n---\nMine.\n',
+    'three/.git/HEAD': 'x\n',
+    'three/skill-forge.json': manifest({ alpha: '^0.1.0' }),
+    'three/.agents/skills/alpha/SKILL.md': SKILL_A,
+    'three/.agents/skills/handmade/SKILL.md': '---\nname: handmade\ndescription: Not declared.\n---\nH.\n',
+    'abs/.git/HEAD': 'x\n', 'abs/.claude/.keep': '',
+    'out/.git/HEAD': 'x\n', 'out/.claude/.keep': '',
+    'dangle/.git/HEAD': 'x\n', 'dangle/.claude/.keep': ''
+  });
+  await fs.mkdir(path.join(reposDir, 'one/.claude'));
+  await fs.mkdir(path.join(reposDir, 'two/.claude'));
+  await fs.symlink('../.agents/skills', path.join(reposDir, 'one/.claude/skills'));
+  await fs.symlink('../.agents/skills', path.join(reposDir, 'two/.claude/skills'));
+  await fs.mkdir(path.join(reposDir, 'three/.claude'));
+  await fs.symlink('../.agents/skills/', path.join(reposDir, 'three/.claude/skills'));
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: '', SKF_REPOS_DIR: reposDir });
+  // Links that leave the repo or dangle commit no copies: no finding, and nothing is listed through them.
+  await fs.symlink(path.join(homeDir, '.claude/skills'), path.join(reposDir, 'abs/.claude/skills'));
+  await fs.symlink('../../one/.agents/skills', path.join(reposDir, 'out/.claude/skills'));
+  await fs.symlink('../nowhere', path.join(reposDir, 'dangle/.claude/skills'));
+
+  const vendored = (await doctor(homeDir, reposDir)).findings.filter((entry) => entry.id === 'D-repo-vendored-skill');
+  assert.deepEqual(vendored.map((entry) => entry.evidence.split(' ')[0]), ['one', 'three', 'two'], 'one finding per repo; none for abs, out or dangle');
+  const [one, three, two] = vendored;
+  assert.match(one.evidence, /^one commits \.claude\/skills as a symlink to \.agents\/skills\/,.*: alpha, beta$/);
+  assert.match(one.fix, /git rm the \.claude\/skills symlink and \.agents\/skills\/,.*"\/\.claude\/skills" and "\/\.agents\/skills\/"/);
+  assert.match(two.evidence, /: alpha$/, 'the repo\'s own skill is not a duplicate');
+  assert.match(two.fix, /keep the \.claude\/skills symlink.*git rm \.agents\/skills\/alpha\//);
+  assert.match(three.fix, /keep the \.claude\/skills symlink.*git rm \.agents\/skills\/alpha\/ and/, 'an undeclared skill behind the link is kept');
+  assert.doesNotMatch(three.fix, /\/\//, 'a trailing slash in the link does not double up');
+});

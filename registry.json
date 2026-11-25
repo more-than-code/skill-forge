@@ -556,7 +556,7 @@
     {
       "type": "skill",
       "name": "claude-project-steward",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "scope": "custom",
       "path": "inventory/skills/claude-project-steward",
       "installable": true,

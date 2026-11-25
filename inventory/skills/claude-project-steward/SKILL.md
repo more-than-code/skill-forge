@@ -130,7 +130,11 @@ One PR per repo, into the base the Project instructions name, on your own branch
   `.agents/skills/<name>/`, and add those paths to `.gitignore` (a workstation `skf sync` still
   writes them, now ignored). A name doctor reports as skipped (`D-skill-range`,
   `D-skill-workstation-only`) keeps its copy until that is resolved. Keep `skill-forge.json`,
-  `skill-forge.lock.json` and every `skills.local` skill.
+  `skill-forge.lock.json` and every `skills.local` skill. When `.claude/skills` is a committed
+  symlink (the `skf sync` claude-code shim, usually to `../.agents/skills`), doctor reports it
+  once per repo: remove the link and the registry copies behind it and ignore both, or, if the
+  repo has its own `skills.local` skills there, keep the link and remove only the registry copies.
+  Say in the PR that a workstation checkout runs `skf sync` once after pulling it.
 
 Never edit a `skill-forge.lock.json` by hand.
 

@@ -761,6 +761,30 @@ async function checkRefBehind(findings, state, offline) {
   }
 }
 
+/**
+ * For a committed `.claude/skills` symlink, the repo-relative folder it points at ("" is never
+ * returned). null: not a symlink (a real folder, or absent). undefined: a link that is absolute,
+ * leaves the repository, dangles or has unusual characters; doctor never lists through it.
+ */
+function linkedSkillsTarget(repoDir, skillsDir) {
+  let link;
+  try {
+    if (!fs.lstatSync(skillsDir).isSymbolicLink()) return null;
+    link = fs.readlinkSync(skillsDir);
+  } catch {
+    return null;
+  }
+  if (link.length > 200 || !/^[A-Za-z0-9._/-]+$/.test(link) || path.isAbsolute(link)) return undefined;
+  try {
+    const repoReal = fs.realpathSync(repoDir);
+    const real = fs.realpathSync(skillsDir);
+    if (!real.startsWith(repoReal + path.sep)) return undefined;
+    return path.relative(repoReal, real).split(path.sep).join('/');
+  } catch {
+    return undefined;
+  }
+}
+
 function checkRepos(findings, repos, state) {
   const envSkills = new Set(listDir(path.join(claudeDir(), 'skills')));
   const envAgents = new Set(listDir(path.join(claudeDir(), 'agents')).filter((name) => name.endsWith('.md')));
@@ -803,10 +827,23 @@ function checkRepos(findings, repos, state) {
     }
     const profile = readRepoJson(repo.dir, MANIFEST_NAME);
     const ownSkills = profile?.skills?.local && typeof profile.skills.local === 'object' ? profile.skills.local : {};
-    for (const name of listDir(path.join(repo.dir, '.claude', 'skills'))) {
-      if (envSkills.has(name) && !Object.hasOwn(ownSkills, name)) {
-        // Under the explicit-list setup (SKF_FROM_REPOS=0 or an older one) a copy may be the only source a local session has.
-        findings.push(finding('D-repo-vendored-skill', state?.fromRepos ? 'issue' : 'note', 'thread-pr', `${repo.name} commits skill ${name}, which the environment also installs; threads list it again as ${repo.name}:${name} (the environment copy runs)`,
+    const skillsDir = path.join(repo.dir, '.claude', 'skills');
+    const target = linkedSkillsTarget(repo.dir, skillsDir);
+    // A link that leaves the repo (or cannot be read) commits no copies; never list through it.
+    const listed = target === undefined ? [] : listDir(skillsDir);
+    const copies = listed.filter((name) => envSkills.has(name) && !Object.hasOwn(ownSkills, name));
+    // Under the explicit-list setup (SKF_FROM_REPOS=0 or an older one) a copy may be the only source a local session has.
+    const copySeverity = state?.fromRepos ? 'issue' : 'note';
+    if (target && copies.length > 0) {
+      // skf sync's claude-code shim: one committed link to the vendored folder, so one finding with one fix.
+      const onlyCopies = listed.length === copies.length;
+      const fix = onlyCopies
+        ? `PR in ${repo.name}: git rm the .claude/skills symlink and ${target}/, and add "/.claude/skills" and "/${target}/" to .gitignore; keep ${MANIFEST_NAME} and its lock. After pulling it, a workstation checkout runs skf sync once to get its local copies back (then ignored).`
+        : `PR in ${repo.name}: keep the .claude/skills symlink (${target}/ also holds skills the environment does not install); git rm ${copies.map((name) => `${target}/${name}/`).join(', ')} and add each, with a leading /, to .gitignore; keep ${MANIFEST_NAME} and its lock.`;
+      findings.push(finding('D-repo-vendored-skill', copySeverity, 'thread-pr', `${repo.name} commits .claude/skills as a symlink to ${target}/, so threads list ${copies.length} skill(s) the environment also installs again as ${repo.name}:<name> (the environment copy runs): ${copies.join(', ')}`, fix));
+    } else {
+      for (const name of copies) {
+        findings.push(finding('D-repo-vendored-skill', copySeverity, 'thread-pr', `${repo.name} commits skill ${name}, which the environment also installs; threads list it again as ${repo.name}:${name} (the environment copy runs)`,
           `PR in ${repo.name}: delete .claude/skills/${name}/ (and .agents/skills/${name}/), add both paths to .gitignore, keep ${MANIFEST_NAME} and its lock; a local skf sync still writes the copies, now ignored.`));
       }
     }

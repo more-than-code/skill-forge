@@ -431,6 +431,7 @@ test('install adds repo-declared skills once each, after SKF_SKILLS, and skips l
   const report = await doctor(homeDir, reposDir);
   const found = ids(report);
   assert.ok(found.includes('D-skill-workstation-only'), found.join(', '));
+  assert.match(report.findings.find((entry) => entry.id === 'D-skill-workstation-only').evidence, /^one declares 1 workstation-only skill\(s\), not installed in threads: podman$/);
   for (const id of ['D-skill-missing', 'D-skill-unused', 'D-skill-shared-not-installed', 'D-setup-failed']) assert.ok(!found.includes(id), `unexpected ${id}`);
   assert.ok(!report.findings.some((entry) => /\bmine\b/.test(entry.evidence)), 'a skills.local skill raises nothing');
 });
@@ -623,9 +624,10 @@ test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one fi
   const reposDir = await tempDir('skf-cloud-repos-');
   await writeFiles(reposDir, {
     'one/.git/HEAD': 'x\n',
-    'one/skill-forge.json': manifest({ alpha: '^0.1.0', beta: '^0.1.0' }),
+    'one/skill-forge.json': manifest({ alpha: '^0.1.0', beta: '^0.1.0', podman: '^0.1.0' }),
     'one/.agents/skills/alpha/SKILL.md': SKILL_A,
     'one/.agents/skills/beta/SKILL.md': SKILL_B,
+    'one/.agents/skills/podman/SKILL.md': '---\nname: podman\ndescription: Mac only.\n---\nPodman.\n',
     'two/.git/HEAD': 'x\n',
     'two/skill-forge.json': manifest({ alpha: '^0.1.0' }, { local: { mine: '.agents/skills/mine' } }),
     'two/.agents/skills/alpha/SKILL.md': SKILL_A,
@@ -656,7 +658,8 @@ test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one fi
   assert.match(one.evidence, /^one commits \.claude\/skills as a symlink to \.agents\/skills\/,.*: alpha, beta$/);
   const block = (own) => ['# >>> skill-forge generated >>>', '/.agents/skills/*', ...own.map((name) => `!/.agents/skills/${name}/`), '# <<< skill-forge generated <<<'].map((line) => `"${line}"`).join(', ');
   assert.ok(one.fix.includes('set "generated": "ignored"') && one.fix.includes(`one per line, exactly: ${block([])};`), one.fix);
-  assert.match(one.fix, /git rm -r --cached -- \.agents\/skills\/alpha \.agents\/skills\/beta;/);
+  assert.match(one.fix, /git rm -r --cached -- \.agents\/skills\/alpha \.agents\/skills\/beta \.agents\/skills\/podman;/, 'a declared workstation-only copy is generated too');
+  assert.doesNotMatch(one.fix, /Also settle/, 'declared dependencies are never leftovers');
   assert.match(one.fix, /keep the \.claude\/skills link/);
   assert.match(two.evidence, /: alpha$/, 'the repo\'s own skill is not a duplicate');
   assert.ok(two.fix.includes(`exactly: ${block(['mine'])};`) && /own skills \(mine\)/.test(two.fix), two.fix);

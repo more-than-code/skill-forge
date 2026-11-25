@@ -842,14 +842,18 @@ function checkRepos(findings, repos, state) {
     if (target && copies.length > 0) {
       // skf sync's claude-code shim: one committed link to the vendored folder, so one finding with one fix.
       const own = Object.keys(ownSkills).filter(isSafeName).sort();
-      const leftovers = listed.filter((name) => !copies.includes(name) && !own.includes(name)).sort();
+      // Registry copies the repo declares (installed in threads or not, such as workstation-only ones)
+      // are generated like the rest; only a folder that is neither declared nor the repo's own needs a decision.
+      const deps = profile?.skills?.dependencies && typeof profile.skills.dependencies === 'object' ? profile.skills.dependencies : {};
+      const generated = listed.filter((name) => (copies.includes(name) || Object.hasOwn(deps, name)) && !own.includes(name)).sort();
+      const leftovers = listed.filter((name) => !generated.includes(name) && !own.includes(name)).sort();
       const skfLayout = target === '.agents/skills' && Object.entries(ownSkills)
         .every(([name, rel]) => isSafeName(name) && String(rel).replace(/\/+$/, '') === `${target}/${name}`);
       let fix;
       if (skfLayout) {
         // Skill Forge's "generated": "ignored" layout, written out because a thread has no skf.
         const lines = [GENERATED_BLOCK_START, `/${target}/*`, ...own.map((name) => `!/${target}/${name}/`), GENERATED_BLOCK_END];
-        fix = `PR in ${repo.name}: set "generated": "ignored" in ${MANIFEST_NAME}; append these lines to .gitignore, one per line, exactly: ${lines.map((line) => `"${line}"`).join(', ')}; untrack the registry copies with git rm -r --cached -- ${copies.map((name) => `${target}/${name}`).join(' ')}; keep the .claude/skills link, ${MANIFEST_LOCK_NAME} and the repo's own skills${own.length > 0 ? ` (${own.join(', ')})` : ''}.${leftovers.length > 0 ? ` Also settle ${leftovers.map((name) => `${target}/${name}`).join(', ')}: declare each in skills.local at that path, or remove it (the block would ignore it).` : ''} A workstation checkout then runs skf sync once (skf with "generated" support).`;
+        fix = `PR in ${repo.name}: set "generated": "ignored" in ${MANIFEST_NAME}; append these lines to .gitignore, one per line, exactly: ${lines.map((line) => `"${line}"`).join(', ')}; untrack the registry copies with git rm -r --cached -- ${generated.map((name) => `${target}/${name}`).join(' ')}; keep the .claude/skills link, ${MANIFEST_LOCK_NAME} and the repo's own skills${own.length > 0 ? ` (${own.join(', ')})` : ''}.${leftovers.length > 0 ? ` Also settle ${leftovers.map((name) => `${target}/${name}`).join(', ')}: declare each in skills.local at that path, or remove it (the block would ignore it).` : ''} A workstation checkout then runs skf sync once (skf with "generated" support).`;
       } else if (listed.length === copies.length) {
         fix = `PR in ${repo.name}: git rm the .claude/skills symlink and ${target}/, and add "/.claude/skills" and "/${target}/" to .gitignore; keep ${MANIFEST_NAME} and its lock. After pulling it, a workstation checkout runs skf sync once to get its local copies back (then ignored).`;
       } else {
@@ -897,6 +901,7 @@ function checkRepos(findings, repos, state) {
     }
   }
   if (!state) return;
+  const workstationOnly = new Map();
   for (const [name, owners] of declaredByRepos) {
     if (envSkills.has(name)) continue;
     const repoHasIt = owners.some((owner) => fs.existsSync(path.join(repos.find((repo) => repo.name === owner).dir, '.claude', 'skills', name)));
@@ -905,8 +910,9 @@ function checkRepos(findings, repos, state) {
     // Recorded as installed but absent: the install failed, and D-setup-failed already says so.
     if (state.fromRepos && !skip && Object.hasOwn(state.skillSources, name)) continue;
     if (skip?.reason === 'workstation-only') {
-      findings.push(finding('D-skill-workstation-only', 'note', 'thread-pr', `${owners.join(', ')} declare${owners.length === 1 ? 's' : ''} ${name}, which is workstation-only and not installed in threads`,
-        `Nothing to do: local sessions still use it. Drop it from ${MANIFEST_NAME} only if no local session needs it.`));
+      const key = owners.join(', ');
+      if (!workstationOnly.has(key)) workstationOnly.set(key, []);
+      workstationOnly.get(key).push(name);
     } else if (skip?.reason === 'not-in-registry') {
       findings.push(finding('D-skill-range', 'issue', 'thread-pr', `skill ${name} declared by ${owners.join(', ')} is not installed: ${skip.detail}`,
         `PR in ${owners.join(', ')}: correct the name in ${MANIFEST_NAME} or drop it; if it is a newer registry skill, the owner moves SKF_REF instead.`));
@@ -923,6 +929,12 @@ function checkRepos(findings, repos, state) {
       findings.push(finding('D-skill-missing', 'issue', 'owner-paste', `skill ${name} is declared by ${owners.join(', ')} but neither the environment nor the repo provides it`,
         `Add ${name} to SKF_SKILLS, or commit it in ${owners[0]}.`));
     }
+  }
+  // One note per declaring set of repos, not one per skill: a workstation profile can list many.
+  for (const [key, names] of workstationOnly) {
+    const plural = !key.includes(', ');
+    findings.push(finding('D-skill-workstation-only', 'note', 'thread-pr', `${key} declare${plural ? 's' : ''} ${names.length} workstation-only skill(s), not installed in threads: ${names.sort().join(', ')}`,
+      `Nothing to do: local sessions still use them. Drop one from ${MANIFEST_NAME} only if no local session needs it.`));
   }
   if (profiles === 0) return;
   for (const name of state.skills) {

@@ -53,8 +53,9 @@ const OWNED_KINDS = ['rules', 'agents', 'skills'];
 const BLOCK_BEGIN = /^<!-- >>> skill-forge instructions [A-Za-z0-9._-]+@\d+\.\d+\.\d+ >>> -->\r?$/m;
 const MANAGED_BLOCK = /<!-- >>> skill-forge instructions[^\n]*\n[\s\S]*?<!-- <<< skill-forge instructions <<< -->/g;
 // Phrases from the workstation (`full`) rules that contradict or repeat the cloud rules. A name
-// such as `grok-bot-box` (a host) is a repository fact, not the Grok workflow, so it does not match.
-const WORKSTATION_PHRASES = [/tasks\/todo\.md/, /tasks\/lessons\.md/, /external[- ]worker/i, /\bgrok\b(?![-.\w])/i, /podman/i, /skf sync --check/];
+// such as `grok-bot-box` (a host) or a product's `grok` agent adapter is a repository fact, not the
+// Grok workflow, so only Grok as a worker or build harness matches.
+const WORKSTATION_PHRASES = [/tasks\/todo\.md/, /tasks\/lessons\.md/, /external[- ]worker/i, /\bgrok(?:-build-harness\b|[ -](?:workers?|build)\b)/i, /podman/i, /skf sync --check/];
 
 const hashBytes = (bytes) => `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
 const withoutManagedBlocks = (text) => text.replace(MANAGED_BLOCK, '');

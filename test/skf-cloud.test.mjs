@@ -369,17 +369,20 @@ test('doctor: import checks, shared skills, notes-only --check, context size and
   assert.ok(!JSON.parse(ahead.stdout).findings.some((entry) => entry.id === 'D-ref-behind'));
 });
 
-test('doctor does not mistake a host name such as grok-bot-box for the Grok workflow', async () => {
+test('doctor flags Grok only as a workflow, not a host name or a product\'s agent adapter', async () => {
   const homeDir = await tempDir('skf-cloud-home-');
   const reposDir = await tempDir('skf-cloud-repos-');
-  await writeFiles(reposDir, {
-    'one/.git/HEAD': 'x\n',
-    'one/CLAUDE.md': '@AGENTS.md\n',
-    'one/AGENTS.md': '# one\n\nnodes.json: grok-bot-box has systemd false.\n'
-  });
-  assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-repo-restates-rules'));
-  await fs.writeFile(path.join(reposDir, 'one/AGENTS.md'), '# one\n\nNo Grok or external workers.\n');
-  assert.ok(ids(await doctor(homeDir, reposDir)).includes('D-repo-restates-rules'));
+  await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/CLAUDE.md': '@AGENTS.md\n' });
+  const flagged = async (text) => {
+    await fs.writeFile(path.join(reposDir, 'one/AGENTS.md'), `# one\n\n${text}\n`);
+    return ids(await doctor(homeDir, reposDir)).includes('D-repo-restates-rules');
+  };
+  assert.equal(await flagged('nodes.json: grok-bot-box has systemd false.'), false, 'a host name');
+  assert.equal(await flagged('Coding-agent adapters: `grok` (default), `claude`, `antigravity`; `start_fix`+`grok` is the worker path.'), false, 'a product adapter');
+  assert.equal(await flagged('Delegate builds to Grok workers.'), true);
+  assert.equal(await flagged('Use the grok-build-harness skill.'), true);
+  assert.equal(await flagged('Run a Grok build for bulk edits.'), true);
+  assert.equal(await flagged('No external workers.'), true);
 });
 
 // --- Repo manifests drive skill installs (tasks/spec-manifest-skill-install.md) ---

@@ -345,6 +345,17 @@
         "SKILL.md": "sha256-hoA12WYCsn+PYTm5kcB+5B616uOi1qy9XKxGmadlrtg="
       }
     },
+    "inventory/skills/review-checklist": {
+      "name": "review-checklist",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-zy4DfSus6NwjPfLfiRWkj8B1gfQ1R9R0xSRp+qdiXZM=",
+      "files": {
+        "SKILL.md": "sha256-FUzNa7upjnwijk6xF9QliPLXCflubtfArkMERy8pYq4="
+      }
+    },
     "inventory/skills/role-end-user": {
       "name": "role-end-user",
       "version": "0.1.1",
@@ -563,61 +574,61 @@
     },
     "inventory/subagents/codex": {
       "name": "codex-subagents",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "subagents",
       "scope": "codex",
       "installable": false,
       "runtimeTarget": "~/.codex/agents",
-      "integrity": "sha256-bNPoCamdsoXt02lJJfMarTKp8lFraFt1S2qNbvSwFhk=",
+      "integrity": "sha256-kNUGK8hMJOi1E51KdfCQwtJrJt7tjaCx9/skStxApgY=",
       "files": {
         "bulk_worker.toml": "sha256-fLIWcsmn+TOg/7cFpbfxQCAoFir9fMBvWmN56kE44tY=",
         "planner.toml": "sha256-X3VuB+De4xTsZHn4AGiUmMp4QvgocdFqX4ZE/eSgU5A=",
         "researcher.toml": "sha256-Le8cTdVbzMDGNvYhSAyBL+K01ZoNTMxP8fKp18PvB9w=",
-        "reviewer.toml": "sha256-d6T6ObMmL1c3EUMlnSomA8nlKkExOwp7p1b3QAqN9Og=",
+        "reviewer.toml": "sha256-L1KikCLel6ZjUCHMderV0+TYO5X2RInxLAho4voPsRg=",
         "validator.toml": "sha256-296lsnWHrGwz14ZjVJE/7YfRN/5EcySrN69paZ8tzOI="
       }
     },
     "inventory/subagents/copilot-cli": {
       "name": "copilot-cli-subagents",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "type": "subagents",
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/agents",
-      "integrity": "sha256-StNohxCFxYHbsbJVv5Uudr9+nlXwZRgVbbGo4nbJmPs=",
+      "integrity": "sha256-BDMUGNNQWDllbtqDDafVnkFLxJN3vbrPxy5VHOjRVKM=",
       "files": {
         "bulk-worker.agent.md": "sha256-CeTE02+SzMWWOj39GvrTM5oDJhxxx4MivER3/wNbKCM=",
         "planner.agent.md": "sha256-bNqGg6A5Q5sAR6H9lQL9E07xnWWO82kRcD7ddtoyF2k=",
         "researcher.agent.md": "sha256-I1cK3Dk3fuVY55A5olUN0K48eVE+KHo/vijtAh/T/0g=",
-        "reviewer.agent.md": "sha256-hVvqd9K4gwHyCpJHe7tDjsD79Mhc+lG/my6wuuDI064=",
+        "reviewer.agent.md": "sha256-ukTha5SX4534125MCxMldL18LzsLNU2y1I6Y8h4mV+8=",
         "validator.agent.md": "sha256-gzyK8o0A71A1aiHlNYOoTB7hQ7A+8JZzDNPxCXNXoSE="
       }
     },
     "inventory/subagents/claude-code": {
       "name": "claude-code-subagents",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "subagents",
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents",
-      "integrity": "sha256-3p3St3MajTKx7VYWH5kpG2TU7wyUkY9LwebW64iCzGc=",
+      "integrity": "sha256-xcNoJnXpaqx4GfLPumxLWZvYTSIivU/hYhQTWQPApgs=",
       "files": {
         "bulk-worker.md": "sha256-tDFMAiWupFJ1W9m2Wr2oPfFkGvnErpRZuPI4noT+yTA=",
-        "reviewer.md": "sha256-+PcLQ4L2G37kqhp06tVf57S+FIH1Kc9zIbR54gXIFvQ=",
+        "reviewer.md": "sha256-eUgRAupTnz6Qdho+yUoPwyBILHBwl1Ue35D5L8JbJpg=",
         "validator.md": "sha256-4y7nORTzUMyGkoc6iMzvvyHdCya3XyuC3duMv8geKZA="
       }
     },
     "inventory/subagents/grok": {
       "name": "grok-subagents",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "subagents",
       "scope": "grok",
       "installable": false,
       "runtimeTarget": "~/.grok/agents",
-      "integrity": "sha256-JBkAhWQKRKSRTHGU+l3vNz+CpFlzIZ7WlQq5IpddTqo=",
+      "integrity": "sha256-QXuKxPjJSsEbNksFyhodK5C+p+yNrjsk7NxsQL12fsw=",
       "files": {
         "bulk-worker.md": "sha256-6II8dmnNEHl6j/AFdhz/N4rsXcZnNyClRK31WChyy7M=",
-        "reviewer.md": "sha256-1bJo/gP5kH/v0tNzwUJdYssTg8uIoWuWFPHRQj+g9M0=",
+        "reviewer.md": "sha256-YqS0RPwlqIUrSOlZPxxMJ1qKSZtCFh+BBHDZZ1M2C2s=",
         "validator.md": "sha256-Ptovh9016SAMFtM4CbfSWbsFh7sRdEHzjt0p6nHBVTo="
       }
     },

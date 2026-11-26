@@ -130,6 +130,17 @@
         "SKILL.md": "sha256-JTOxAG25sbF75yX3Eea3rpOnTlCbneRQrwT01+SLr9Y="
       }
     },
+    "inventory/skills/defect-drainer-workflow": {
+      "name": "defect-drainer-workflow",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-43AvBB4kqngcKNfkwD9s7Jiw4HamQYsn3ly5aTZZaXE=",
+      "files": {
+        "SKILL.md": "sha256-qQNMD4DrqXSMGAlBq/UhPOGuXm0s01cJsPeZax1Ypfw="
+      }
+    },
     "inventory/skills/deployment-strategy": {
       "name": "deployment-strategy",
       "version": "0.1.0",

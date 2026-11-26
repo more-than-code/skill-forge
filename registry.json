@@ -566,6 +566,20 @@
         "setup",
         "diagnosis"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "defect-drainer-workflow",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/defect-drainer-workflow",
+      "installable": true,
+      "tags": [
+        "defects",
+        "workflow",
+        "mcp",
+        "claude-projects"
+      ]
     }
   ],
   "managedAgents": [

@@ -351,9 +351,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-zy4DfSus6NwjPfLfiRWkj8B1gfQ1R9R0xSRp+qdiXZM=",
+      "integrity": "sha256-YSIXV2pBJ4yuNtnRjJkkbPxG1PxEh+5wzZxK94ItOJ8=",
       "files": {
-        "SKILL.md": "sha256-FUzNa7upjnwijk6xF9QliPLXCflubtfArkMERy8pYq4="
+        "SKILL.md": "sha256-ehP9clgjoCSSHBELkKRC6d/cpNlB2pFrymNk28IvBGY="
       }
     },
     "inventory/skills/role-end-user": {
@@ -579,12 +579,12 @@
       "scope": "codex",
       "installable": false,
       "runtimeTarget": "~/.codex/agents",
-      "integrity": "sha256-kNUGK8hMJOi1E51KdfCQwtJrJt7tjaCx9/skStxApgY=",
+      "integrity": "sha256-3inPGin/TieiKivBKo1B9iU4QpGKG7l70f7Pc8IUv+4=",
       "files": {
         "bulk_worker.toml": "sha256-fLIWcsmn+TOg/7cFpbfxQCAoFir9fMBvWmN56kE44tY=",
         "planner.toml": "sha256-X3VuB+De4xTsZHn4AGiUmMp4QvgocdFqX4ZE/eSgU5A=",
         "researcher.toml": "sha256-Le8cTdVbzMDGNvYhSAyBL+K01ZoNTMxP8fKp18PvB9w=",
-        "reviewer.toml": "sha256-L1KikCLel6ZjUCHMderV0+TYO5X2RInxLAho4voPsRg=",
+        "reviewer.toml": "sha256-FaH9uSWKYixHdJX/I1vl8EBXTsz0Bw5K3fgl1ac3Er8=",
         "validator.toml": "sha256-296lsnWHrGwz14ZjVJE/7YfRN/5EcySrN69paZ8tzOI="
       }
     },
@@ -595,12 +595,12 @@
       "scope": "copilot-cli",
       "installable": false,
       "runtimeTarget": "~/.copilot/agents",
-      "integrity": "sha256-BDMUGNNQWDllbtqDDafVnkFLxJN3vbrPxy5VHOjRVKM=",
+      "integrity": "sha256-3NrKOEBTmXIAgFPySnsrm4eMg4XEL/shG9aqpwrLWl4=",
       "files": {
         "bulk-worker.agent.md": "sha256-CeTE02+SzMWWOj39GvrTM5oDJhxxx4MivER3/wNbKCM=",
         "planner.agent.md": "sha256-bNqGg6A5Q5sAR6H9lQL9E07xnWWO82kRcD7ddtoyF2k=",
         "researcher.agent.md": "sha256-I1cK3Dk3fuVY55A5olUN0K48eVE+KHo/vijtAh/T/0g=",
-        "reviewer.agent.md": "sha256-ukTha5SX4534125MCxMldL18LzsLNU2y1I6Y8h4mV+8=",
+        "reviewer.agent.md": "sha256-FFolmePcG36DWpKV/d/ccO4TPsA8Ec5qyNzQhNtbPFU=",
         "validator.agent.md": "sha256-gzyK8o0A71A1aiHlNYOoTB7hQ7A+8JZzDNPxCXNXoSE="
       }
     },
@@ -611,10 +611,10 @@
       "scope": "claude-code",
       "installable": false,
       "runtimeTarget": "~/.claude/agents",
-      "integrity": "sha256-xcNoJnXpaqx4GfLPumxLWZvYTSIivU/hYhQTWQPApgs=",
+      "integrity": "sha256-4/U8Jn40qb/TaQJCQFqAs2kzCunS7sI8OEU2S022jE4=",
       "files": {
         "bulk-worker.md": "sha256-tDFMAiWupFJ1W9m2Wr2oPfFkGvnErpRZuPI4noT+yTA=",
-        "reviewer.md": "sha256-eUgRAupTnz6Qdho+yUoPwyBILHBwl1Ue35D5L8JbJpg=",
+        "reviewer.md": "sha256-JChs7c60OIK2TuA7jFSmkGc1gzKHpMCX6f0faxrZzbk=",
         "validator.md": "sha256-4y7nORTzUMyGkoc6iMzvvyHdCya3XyuC3duMv8geKZA="
       }
     },
@@ -625,10 +625,10 @@
       "scope": "grok",
       "installable": false,
       "runtimeTarget": "~/.grok/agents",
-      "integrity": "sha256-QXuKxPjJSsEbNksFyhodK5C+p+yNrjsk7NxsQL12fsw=",
+      "integrity": "sha256-da/Da79GoglK5Ac4pfo4/cmLUBXHD5l8QKX/I3P9t1M=",
       "files": {
         "bulk-worker.md": "sha256-6II8dmnNEHl6j/AFdhz/N4rsXcZnNyClRK31WChyy7M=",
-        "reviewer.md": "sha256-YqS0RPwlqIUrSOlZPxxMJ1qKSZtCFh+BBHDZZ1M2C2s=",
+        "reviewer.md": "sha256-GE9IstFMSdvHr1IYMgfSj1wAThGDhQQycl0oXwmer1w=",
         "validator.md": "sha256-Ptovh9016SAMFtM4CbfSWbsFh7sRdEHzjt0p6nHBVTo="
       }
     },

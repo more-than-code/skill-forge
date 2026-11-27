@@ -75,6 +75,10 @@ confirm the finding is gone, and tell the owner the next environment rebuild mak
 for every thread. If it exits non-zero, report the `FAILED` lines from `~/skf-setup.log`
 (usually the network or the `SKF_REF`) instead of retrying.
 
+`D-skill-suggest` lists registry skills that nothing installs or declares; its fix is a prompt.
+Follow it: match them against each repo's stack, read the plausible ones, and open a PR adding
+only clear fits to that repo's `skill-forge.json` (in another Project's repo, tell the owner).
+
 `D-skill-range` has two causes. A repo wants a version the pinned `SKF_REF` does not have: the
 owner's fix, so draft a newer `SKF_REF`, or a PR that changes the repo's range. A name that is
 not in the registry (a typo, or a skill newer than the pin): a PR that corrects or drops it,

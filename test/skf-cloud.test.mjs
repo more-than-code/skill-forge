@@ -387,6 +387,43 @@ test('doctor flags Grok only as a workflow, not a host name or a product\'s agen
   assert.equal(await flagged('No external workers.'), true);
 });
 
+test('doctor flags a repo line that forbids committing or pushing, which the cloud rules override for the thread branch', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/CLAUDE.md': '@AGENTS.md\n' });
+  const report = async (text) => {
+    await fs.writeFile(path.join(reposDir, 'one/AGENTS.md'), `# one\n\n${text}\n`);
+    return (await doctor(homeDir, reposDir)).findings.find((entry) => entry.id === 'D-repo-restates-rules');
+  };
+  const flagged = async (text) => Boolean((await report(text))?.evidence.includes('"do not commit / do not push"'));
+  for (const text of [
+    'Do not commit unless the user asks. Do not push.',
+    'Do not commit / do not push.',
+    "- Don't push.",
+    'Don\u2019t commit unless you are asked to.',
+    '**Do not commit** unless asked.',
+    'Do not commit or push without asking.',
+    'Do not commit/push.',
+    'Never push.',
+    'DO NOT COMMIT.'
+  ]) assert.equal(await flagged(text), true, text);
+  for (const text of [
+    'Never push to main; pull requests go into dev.',
+    'Do not commit generated files.',
+    'Do not commit without running tests.',
+    'Do not commit unless tests pass.',
+    'Do not commit:\n- .env\n- build output',
+    'Do not commit\ngenerated files.',
+    'Do not commit, e.g. build output.',
+    'Commits and pushes: cloud sessions and Project threads follow the shared workflow rules (Git and pull requests).',
+    '<!-- >>> skill-forge instructions cloud@0.1.1 >>> -->\nA repository\'s blanket "do not commit unless asked / do not push" default is for local sessions.\nDo not push.\n<!-- <<< skill-forge instructions <<< -->'
+  ]) assert.equal(await flagged(text), false, text);
+  const found = await report('Do not commit unless the user asks.');
+  assert.match(found.fix, /pointer to the shared workflow rules/);
+  assert.doesNotMatch(found.evidence, /\\b/, 'a label, not the pattern source');
+  assert.doesNotMatch((await report('No external workers.')).fix, /pointer/, 'the pointer hint only for a commit ban');
+});
+
 // --- Repo manifests drive skill installs (tasks/spec-manifest-skill-install.md) ---
 
 const manifest = (dependencies, extra = {}) => JSON.stringify({ schemaVersion: 2, skills: { dependencies, ...extra } });

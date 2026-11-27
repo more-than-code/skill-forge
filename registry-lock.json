@@ -54,13 +54,13 @@
     },
     "inventory/skills/claude-project-steward": {
       "name": "claude-project-steward",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-5S1uX1qJdkPuear2tIQWJ5riSzsF4lN65mHw4rf7jKg=",
+      "integrity": "sha256-FobniA35prwXH5hP2Pq9OtrUiYhpZ/1zQRJ5lrXDDKk=",
       "files": {
-        "SKILL.md": "sha256-HgNBZA+ojNz89SWEjGtgjZQ2kDTAfFcS/XMGaLuRoAg="
+        "SKILL.md": "sha256-6Xz87JXTCLZdpPUDXmYF24gTGUKwMY5ahMpDy0Fqyew="
       }
     },
     "inventory/skills/code-quality": {
@@ -529,9 +529,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-WHqVF2ap3X8IBPscH1XMJIktIqVZtSmLgpCuvPX3ybc=",
+      "integrity": "sha256-W98HkmTBGjiTx0qXXpMwVlvhH5rGolK1eV0HUoM/6Cg=",
       "files": {
-        "core.md": "sha256-kQ7CGmWgSK7GjJ7jG67my5ZaFj6pnhoRcpOxlm+ZZQA="
+        "core.md": "sha256-D8J4/oust6GX7TmeqNPhjMPYTcIN8FbWcZLBX9XXEzQ="
       },
       "sourceOnly": true
     },
@@ -676,21 +676,21 @@
     },
     "instructions:full": {
       "name": "full",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "type": "instructions",
-      "integrity": "sha256-3kpqoZO8gnkmf8XDtr5KNwp33Dq1du/56beauRGnO+I=",
+      "integrity": "sha256-Q+9+/6voxn71s1R77OmhnHEPg7Yu9EIOo+NLboqOwUA=",
       "files": {
-        "AGENTS.md": "sha256-86wZcMIp70wlClfGeTggK06vwUJLePDhqsAQyEwR/vA=",
+        "AGENTS.md": "sha256-4SeOvnzzUX4WbVQ0PMAm89z5vDNaZrtrCu8DTq7jVUM=",
         "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
       }
     },
     "instructions:cloud": {
       "name": "cloud",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "instructions",
-      "integrity": "sha256-t3oafUPVxZQzkZ49OR79HRPwdZU06WsWfJDXTB2eA28=",
+      "integrity": "sha256-tGDRmNZioJpB47W4lMkM32iCnX0aExbznYeLXCjaDQA=",
       "files": {
-        "AGENTS.md": "sha256-TqUcm8NpI/Evhi7rLaQ4yfDQeWXr/cu33NlG7J6QFcU=",
+        "AGENTS.md": "sha256-DwUOJcPughcYiUOx/1qQpTTtKA9tyrf2dmp2hW9KGQU=",
         "CLAUDE.md": "sha256-n+BCpqmGhu0T5tYS/UcnllCmAe1fzUaXgyF2EQvY3zc="
       }
     }

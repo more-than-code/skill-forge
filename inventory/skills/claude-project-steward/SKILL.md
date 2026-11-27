@@ -140,6 +140,10 @@ One PR per repo, into the base the Project instructions name, on your own branch
   same PR, or a workstation `skf sync` puts the block back (tell the owner a workstation
   checkout may keep stale `claudeMdExcludes` entries until its next `skf sync`);
 - move Project-wide sections out of repos (into the Project-instructions draft); keep one copy;
+- replace a blanket "do not commit / do not push" line (doctor names it in
+  `D-repo-restates-rules`) with: `Commits and pushes: local sessions commit only when asked;
+  cloud sessions and Project threads follow the shared workflow rules (Git and pull requests).`
+  Rules about shared branches (`main`, `dev`, protected branches) can stay;
 - shorten each repo's always-loaded text to its own facts, naming the repo;
 - remove `.claude/agents/<name>.md` that shadow the environment's subagents;
 - stop committing registry skill copies, for the names doctor reports as

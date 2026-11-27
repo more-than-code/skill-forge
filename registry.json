@@ -556,7 +556,7 @@
     {
       "type": "skill",
       "name": "claude-project-steward",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "scope": "custom",
       "path": "inventory/skills/claude-project-steward",
       "installable": true,
@@ -660,7 +660,7 @@
   "instructionVariants": [
     {
       "name": "full",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Today's full process instructions (core.md) for AGENTS.md, plus the Claude Code overlay for CLAUDE.md; delivered per project by skf sync.",
       "core": "inventory/agents/core.md",
       "claude": "inventory/agents/claude-code/CLAUDE.md",
@@ -671,7 +671,7 @@
     },
     {
       "name": "cloud",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Compact workflow rules (tiers, gates, independent review, git, security, docs-with-code) for repos worked by cloud sessions and Claude Project threads; no local-only facilities. Needs the claude-code shim.",
       "core": "inventory/agents/variants/cloud/core.md",
       "claude": "inventory/agents/variants/cloud/CLAUDE.md",

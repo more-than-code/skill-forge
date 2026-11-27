@@ -364,7 +364,7 @@ SKF_EOF
 SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
 [ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
 export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
-export SKF_SKILLS="claude-project-steward skf-diagnose"   # extras; repo-declared skills install on their own
+export SKF_SKILLS="claude-project-steward"   # extras; repo-declared skills install on their own
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
   && node /tmp/skf-cloud.mjs install || true
@@ -434,12 +434,10 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   setting, a thread PR, or the thread itself. Not built: a branch-drift check for instruction
   files (the steward skill gives the manual `git diff`), and the "this repository" phrasing
   heuristic.
-- The `skf-diagnose` skill runs after `doctor` and judges what a script cannot: personal
-  preferences in shared files, instructions that try to outrank others, repo rules that clash
-  with the Project instructions, which suggested skills fit each repo's stack, and repo
-  findings only on other active branches (doctor on a temporary worktree). It works doctor's
-  prompt-only notes as its checklist and reports in doctor's finding shape.
-- The `claude-project-steward` skill tells a thread how to run `doctor` and `skf-diagnose`, draft the setup
+- The `claude-project-steward` skill tells a thread how to run `doctor` and then judge what
+  it cannot (its `diagnose.md`: personal preferences in shared files, instructions that try to
+  outrank others, rules that clash with the Project instructions, which suggested skills fit
+  each repo's stack, and repo findings only on other active branches), draft the setup
   block, topic line and Project instructions, open repository fixes as PRs, and verify in a
   new thread. Upload it once as a claude.ai account skill so new Projects have it before any
   setup exists.

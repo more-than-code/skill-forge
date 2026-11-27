@@ -97,9 +97,10 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
      is no user copy): a **warning that names the copy, its version, the declared range
      and which copy wins**, shown to the user every session until fixed (hook
      `systemMessage`, and the steward repeats it); `--check` exits 1 for it. It is never
-     silently replaced: a user-level copy is the user's, and a repo copy cannot override it.
-     The one exception is a repo copy `ensure` itself installed: that one is reinstalled
-     at the pinned version, and the line says so.
+     silently replaced, wherever it is (repo, parent or user level): the steward asks the
+     user to upgrade that copy in place (option A below). Joe, 2026-11-27: two versions of
+     one skill are redundant either way, so the existing copy is upgraded, never joined by
+     a second one.
    - **Missing**, or a copy `ensure` owns with files missing on disk: install into
      `<repo>/.claude/skills/<name>/`.
 6. **Which version.** The registry commit in `skill-forge.lock.json`
@@ -219,11 +220,12 @@ it cannot serve existing repos).
 `staleness.mjs` stays as is. It serves workstations that have `skf` and the
 `.agents/skills` link, which `ensure` defers to; folding it in would mix two layouts.
 
-## Choice: an older copy at user level or in a parent folder
+## Decided: an older copy is upgraded in place, on the user's yes
 
-When the winning copy is older than the repo declares, there are three options:
+Joe chose A on 2026-11-27, for a copy at any level (repo, parent or user). The options
+were:
 
-- **A. Warn, and offer an upgrade of the shared copy in place** (recommended). No repo
+- **A. Warn, and offer an upgrade of the existing copy in place** (chosen). No repo
   duplicate. `ensure` warns (section 1, step 5); the steward offers to upgrade the
   older copy where it is, and does it only on the user's yes, through
   `ensure --upgrade <name>`. Before offering, it checks that the new version still fits
@@ -248,7 +250,6 @@ loads only in sessions started in that folder, not in sessions started inside th
 
 ## Open items for the owner
 
-- Older shared copy: option A above (recommended), B or C.
 
 - A copy only in a **parent** folder: report it and install nothing (default here, no
   duplicates), or install a repo copy so a session started inside the repo has it too?
@@ -260,7 +261,7 @@ loads only in sessions started in that folder, not in sessions started inside th
 | Surface | Before | After |
 |---|---|---|
 | `skf-cloud.mjs` commands | `install`, `install --top-up`, `doctor` | adds `ensure [--repo] [--ref] [--check] [--json] [--hook] [--write-hook]` |
-| `ensure --upgrade <name>` | — | upgrades a user-level or parent copy Skill Forge installed, in place, only when the steward asks after the user's yes (option A) |
+| `ensure --upgrade <name>` | — | upgrades the winning copy (repo, parent or user level) that Skill Forge installed, in place, only when the steward runs it after the user's yes |
 | `ensure --check --json` | — | new versioned JSON shape (`version: 1`), a public contract from release |
 | `install --top-up` | trusts `state.json`; a deleted folder is "nothing to add" | a recorded skill with no `SKILL.md` on disk is added again |
 | `~/.claude` layout, `state.json` | unchanged | unchanged |

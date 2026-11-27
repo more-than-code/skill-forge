@@ -539,6 +539,28 @@ test('install --top-up adds a newly declared skill and leaves every other file u
   assert.match(await read(path.join(homeDir, 'skf-setup.log')), /added: beta/, 'appends to the setup log');
 });
 
+test('doctor notes a repo-installed skill no repo declares any more, only when every recorded repo is cloned', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/skill-forge.json': manifest({ alpha: '^0.1.0', beta: '^0.1.0' }) });
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: '', SKF_REPOS_DIR: reposDir });
+  assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-skill-repo-leftover'));
+
+  // The repo stops declaring beta after the environment was built (or after a top-up).
+  await fs.writeFile(path.join(reposDir, 'one/skill-forge.json'), manifest({ alpha: '^0.1.0' }));
+  const leftovers = (await doctor(homeDir, reposDir)).findings.filter((entry) => entry.id === 'D-skill-repo-leftover');
+  assert.equal(leftovers.length, 1);
+  assert.equal(leftovers[0].severity, 'note');
+  assert.equal(leftovers[0].owner, 'thread');
+  assert.match(leftovers[0].evidence, /beta was installed for one, which no longer declares it/);
+  assert.match(leftovers[0].fix, /next environment rebuild/);
+
+  // A recorded repo that is not cloned here may still declare it: say nothing.
+  await fs.rename(path.join(reposDir, 'one'), path.join(reposDir, 'renamed'));
+  assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-skill-repo-leftover'));
+});
+
 test('doctor: committed copies are issues, and lock drift and a different variant are notes', async () => {
   const mirror = await registryMirror();
   const homeDir = await tempDir('skf-cloud-home-');

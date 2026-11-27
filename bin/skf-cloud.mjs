@@ -937,6 +937,14 @@ function checkRepos(findings, repos, state) {
     findings.push(finding('D-skill-workstation-only', 'note', 'thread-pr', `${key} declare${plural ? 's' : ''} ${names.length} workstation-only skill(s), not installed in threads: ${names.sort().join(', ')}`,
       `Nothing to do: local sessions still use them. Drop one from ${MANIFEST_NAME} only if no local session needs it.`));
   }
+  // A repo-sourced skill (installed at setup or by --top-up) whose repos all stopped declaring it.
+  // Only when every recorded repo is cloned here: one that is not may still declare it.
+  const cloned = new Set(repos.map((repo) => repo.name));
+  for (const [name, source] of Object.entries(state.fromRepos ? state.skillSources : {})) {
+    if (!Array.isArray(source) || declaredByRepos.has(name) || !source.every((repo) => cloned.has(repo))) continue;
+    findings.push(finding('D-skill-repo-leftover', 'note', 'thread', `skill ${name} was installed for ${source.join(', ')}, which no longer declare${source.length === 1 ? 's' : ''} it; it stays in ~/.claude/skills in this thread`,
+      'Nothing to do: the next environment rebuild drops it.'));
+  }
   if (profiles === 0) return;
   for (const name of state.skills) {
     if (!declaredByRepos.has(name) && !ALWAYS_USEFUL_SKILLS.includes(name)) {

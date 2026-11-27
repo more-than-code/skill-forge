@@ -401,9 +401,17 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   committed copies of installed skills, shadowing subagents, declared skills that are missing
   (fixed by `--top-up`), out of range or workstation-only, repo-installed skills that no repo
   declares any more (gone at the next rebuild), lock versions that differ from the installed
-  ones, and an instructions variant other than the environment's)
-  and, with `--context`, the Project-instructions text (length, missing PR base, restated
-  workflow rules); it also reports when the environment's `SKF_REF` is behind the registry's
+  ones, an instructions variant other than the environment's, repo skills that run unpinned
+  remote code (`npx …@latest`, `curl | sh`), lines in a repo's instructions that only one
+  machine or person can follow (a push to a remote the clone lacks or to `main`/`master`, a
+  fixed commit identity, a personal home path; skipped under a "local"/"workstation" heading),
+  a repo with instructions but no `skill-forge.json`, and committed `.claude/settings.json`,
+  `settings.local.json` or `launch.json`, which threads ignore)
+  and, with `--context`, the Project-instructions text (missing or empty, length, missing PR
+  base, restated workflow rules). In a thread (`CLAUDE_CODE_REMOTE=true`) it adds three
+  prompts for the agent, as notes: check the Project instructions when `--context` was not
+  given, judge each repo's instructions against what a thread can follow, and report the
+  session's failing or unused connectors to the owner in one note; it also reports when the environment's `SKF_REF` is behind the registry's
   `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it). Each finding names who fixes it: an owner paste, an owner account
   setting, a thread PR, or the thread itself. Not built: a branch-drift check (the steward
   skill gives the manual `git diff`), and the "this repository" phrasing heuristic.

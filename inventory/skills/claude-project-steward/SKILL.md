@@ -50,7 +50,8 @@ commit sha.
 was built before `main` moved: the owner re-saves the setup script unchanged to rebuild it, and
 does not edit a sha. Only a Project pinned to a fixed sha (the rollback below) moves that sha.
 
-Branch drift is checked by hand: threads load each repo's default branch, so compare it with
+Instruction drift between branches is checked by hand (skf-diagnose's `SD-branch` covers repo
+findings on other branches): threads load each repo's default branch, so compare it with
 the integration branch the Project instructions name, for example
 `git fetch origin dev && git diff --stat origin/main origin/dev -- CLAUDE.md AGENTS.md`.
 Instruction changes waiting on the integration branch reach threads only at the next release.
@@ -61,7 +62,15 @@ Two layers are not on disk. Write what you received at start into a file and che
 2. Your own tool list: count tools per connector, and list connectors this Project's work never
    uses. Report them to the owner as account choices (switching one off affects all their chats).
 
-Report findings grouped by who fixes them, with the exact fix.
+Then run the **skf-diagnose** skill on doctor's report (`doctor --context <file> --json`). It
+judges what doctor cannot: personal preferences in shared files, instructions that try to
+outrank others, repo rules that clash with the Project instructions, which suggested skills
+fit each repo's stack, and problems only on other active branches; it also works through
+doctor's prompt-only notes (`D-skill-suggest`, `D-repo-thread-limits`,
+`D-connectors-unchecked`). If the skill is not installed, follow those notes' fixes by hand and
+add `skf-diagnose` to `SKF_SKILLS` in the setup-script draft.
+
+Report doctor's and skf-diagnose's findings together, grouped by who fixes them, with the exact fix.
 
 Findings owned by `thread` you fix now. `D-skill-missing` (a repo declared a skill after the
 environment was built):
@@ -75,9 +84,9 @@ confirm the finding is gone, and tell the owner the next environment rebuild mak
 for every thread. If it exits non-zero, report the `FAILED` lines from `~/skf-setup.log`
 (usually the network or the `SKF_REF`) instead of retrying.
 
-`D-skill-suggest` lists registry skills that nothing installs or declares; its fix is a prompt.
-Follow it: match them against each repo's stack, read the plausible ones, and open a PR adding
-only clear fits to that repo's `skill-forge.json` (in another Project's repo, tell the owner).
+`D-skill-suggest` lists registry skills that nothing installs or declares; skf-diagnose matches
+them to each repo's stack (`SD-skill-fit`). Open a PR adding only clear fits to that repo's
+`skill-forge.json` (in another Project's repo, tell the owner).
 
 `D-skill-range` has two causes. A repo wants a version the pinned `SKF_REF` does not have: the
 owner's fix, so draft a newer `SKF_REF`, or a PR that changes the repo's range. A name that is
@@ -98,7 +107,7 @@ SKF_EOF
 SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
 [ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
 export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
-export SKF_SKILLS="claude-project-steward <process skills not every repo declares>"
+export SKF_SKILLS="claude-project-steward skf-diagnose <process skills not every repo declares>"
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
   && node /tmp/skf-cloud.mjs install || true
@@ -118,7 +127,7 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   pin installs only `SKF_SKILLS`, so with an older pin keep listing every skill in `SKF_SKILLS`.
 - `SKF_SKILLS`: environment extras only. Every registry skill a repo's `skill-forge.json`
   declares is installed from it automatically, once, at the version `SKF_REF` pins (it must
-  satisfy every declaring repo's range). Add this skill, plus any of the four process skills
+  satisfy every declaring repo's range). Add this skill and `skf-diagnose`, plus any of the four process skills
   (`coding-discipline security-baseline code-quality testing-strategy`) that not every repo
   declares. `SKF_FROM_REPOS=0` turns the repo reading off (the old explicit-list behaviour).
   On a fixed pin, shrink `SKF_SKILLS` in the same paste that moves `SKF_REF`, never before it.

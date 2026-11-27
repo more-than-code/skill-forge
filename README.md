@@ -48,6 +48,13 @@ inventory/
 test/                      # node:test CLI suite (npm test)
 docs/
   DESIGN.md                # architecture, roadmap, design decisions
+  MCP.md                   # MCP server for consumer agents (approved design, not built)
+  mcp-architecture.svg     # its architecture diagram
+  PLATFORM.md              # multi-tenant platform design (approved, not built)
+  CONSOLE.md                # web console design (approved, not built)
+  EVALS.md                 # evaluation workflow, suites and metrics (approved, not built)
+  DD-WORKER-JOBS.md        # draft requirements for the Defect Drainer worker (generic jobs, BYOK)
+  platform-architecture.svg # platform diagram
   brand/logo/mark.svg      # the brand mark; apps and `skf site` copy it from here, never redraw it
 otel/                      # local observability stack configs (see otel/README.md)
 docker-compose.yml         # container stack definition (docker/podman compose)

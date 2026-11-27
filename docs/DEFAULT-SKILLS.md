@@ -51,9 +51,11 @@ One switch, not a list: there is one default today, and a list variable would be
 
 ### `doctor`
 
-- No new findings and no output change. `D-skill-unused` already exempts the steward
+- No new finding ids and no change to the output format. `D-skill-unused` already exempts the steward
   (`ALWAYS_USEFUL_SKILLS`), and `D-skill-suggest` lists only skills that are not installed,
-  so it never suggests the steward once it is installed.
+  so it never suggests the steward once it is installed. One existing finding now applies
+  in more Projects: a repo that commits its own copy of the steward in `.claude/skills` gets
+  `D-repo-vendored-skill`, as it already did where `SKF_SKILLS` listed the steward.
 - `D-install-failed`'s fix text says "usually a wrong name in SKF_SKILLS"; unchanged, since a
   default can fail only for a network or `SKF_REF` problem, which the same text covers.
 

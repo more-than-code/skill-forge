@@ -83,7 +83,7 @@ fix as doctor's note. Doctor emits it only in a cloud thread; do this check anyw
 ### 4. Which suggested skills fit each repo (`SD-skill-fit`)
 
 Take the candidates doctor's `D-skill-suggest` lists (name, version, tags), leaving out the
-Project tooling skill `claude-project-steward` (skf-cloud installs it by default; never in a repo). If doctor reported `D-skill-suggest-unchecked` or ran `--offline`, list the
+Project tooling skill `claude-project-steward`: the environment installs it (by default), not a repo. If doctor reported `D-skill-suggest-unchecked` or ran `--offline`, list the
 candidates from `registry.json` at the environment's `SKF_REF` instead. For each repo,
 read its stack from dependency and config files only, not prose: `package.json` (with
 devDependencies), `go.mod`, `pubspec.yaml`, `pyproject.toml`, `Dockerfile`, deploy config,

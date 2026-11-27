@@ -529,9 +529,9 @@
       "type": "agents",
       "scope": "source",
       "installable": false,
-      "integrity": "sha256-W98HkmTBGjiTx0qXXpMwVlvhH5rGolK1eV0HUoM/6Cg=",
+      "integrity": "sha256-9snsplFiXx5F2bZdy0sGsyYRCVm6wzjyVmCaAoJ7Zbs=",
       "files": {
-        "core.md": "sha256-D8J4/oust6GX7TmeqNPhjMPYTcIN8FbWcZLBX9XXEzQ="
+        "core.md": "sha256-O3G4u6PNOPlx7vqypfVvK541VaHtN8zFEmKFxCjRlpE="
       },
       "sourceOnly": true
     },
@@ -678,9 +678,9 @@
       "name": "full",
       "version": "0.1.3",
       "type": "instructions",
-      "integrity": "sha256-Q+9+/6voxn71s1R77OmhnHEPg7Yu9EIOo+NLboqOwUA=",
+      "integrity": "sha256-+1RpDMtzoTiA6UAOvAg7duiZbYf6Cd6FOHNNPOyMNMU=",
       "files": {
-        "AGENTS.md": "sha256-4SeOvnzzUX4WbVQ0PMAm89z5vDNaZrtrCu8DTq7jVUM=",
+        "AGENTS.md": "sha256-ELBcDobxG8welHMcLQOll/a7TnZHcXgUgbPXpqNdC0E=",
         "CLAUDE.md": "sha256-kSbNXa6J3kiZ1heAdQE8WFNWO6HEkJlEmcV/JA2RQfI="
       }
     },
@@ -688,9 +688,9 @@
       "name": "cloud",
       "version": "0.1.1",
       "type": "instructions",
-      "integrity": "sha256-tGDRmNZioJpB47W4lMkM32iCnX0aExbznYeLXCjaDQA=",
+      "integrity": "sha256-dKgnIz+sPRbKBxXXEB+foWIK8oaAchM12qTMb6iAiZw=",
       "files": {
-        "AGENTS.md": "sha256-DwUOJcPughcYiUOx/1qQpTTtKA9tyrf2dmp2hW9KGQU=",
+        "AGENTS.md": "sha256-CHH6nUyefdOsi94mRZ6ZncU6hBVLDHpydBSA4nQ4noM=",
         "CLAUDE.md": "sha256-n+BCpqmGhu0T5tYS/UcnllCmAe1fzUaXgyF2EQvY3zc="
       }
     }

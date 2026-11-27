@@ -1053,10 +1053,11 @@ function readGit(dir, args, okCodes = [0], timeout = GIT_TIMEOUT_MS) {
     return null;
   }
   // No inherited GIT_* (GIT_DIR, GIT_CONFIG_*) may point git elsewhere; protocols are allowlisted (no ext::).
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !key.startsWith('SSH_ASKPASS')));
   Object.assign(env, { GIT_CEILING_DIRECTORIES: path.dirname(real), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GIT_ALLOW_PROTOCOL: 'https:ssh:file' });
-  // Settings a repo's own .git/config could use to run a command; the command line wins over it.
-  const safe = ['core.fsmonitor=false', 'core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=5', 'core.gitProxy='];
+  // Settings a repo's own .git/config could use to run a command; the command line wins over it. An empty
+  // credential.helper clears every helper (URL-scoped ones too), so an origin that needs one is "unchecked".
+  const safe = ['core.fsmonitor=false', 'core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=5', 'credential.helper=', 'core.askPass='];
   try {
     const out = execFileSync('git', [...safe.flatMap((setting) => ['-c', setting]), '-C', real, ...args], { encoding: 'utf8', env, timeout, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
     return { code: 0, out };
@@ -1403,15 +1404,21 @@ const PR_INTO = /\b(?:PRs?|pull requests?)\b.*\binto\s+`?[\w./-]+/i;
 // The first "into" after the PR words, then a backticked branch, skipping a determiner ("into the `dev` branch").
 const PR_BASE = /\b(?:PRs?|pull requests?)\b.*?\binto\s+(?:(?:the|a|an|our|this|that|its|each|every)\s+)?`([A-Za-z0-9][\w./-]{0,99})`/i;
 
+const NEGATION = /\b(?:never|not|no|don['\u2019]t|unless|except)\b/i;
+
 /**
  * The PR base branch the Project instructions name in backticks ("Pull requests go into `dev`").
- * Undefined when none is backticked, or when lines name different bases: then there is nothing certain to check.
+ * Undefined when none is, or when the text names several (per repo, or "`dev`, then `main`"): then nothing is certain
+ * enough to check. A line with a negation or condition ("never open PRs into `main`") names no base.
  */
 function prBase(text) {
   const bases = new Set();
   for (const line of text.split('\n')) {
     const match = line.length < 2000 && PR_BASE.exec(line);
-    if (match) bases.add(match[1].replace(/[./-]+$/, ''));
+    if (!match || NEGATION.test(line)) continue;
+    bases.add(match[1].replace(/[./-]+$/, ''));
+    // Any other backticked name later on the line is another base ("into `dev` for app, `main` for docs").
+    for (const other of line.slice(match.index + match[0].length).matchAll(/`([A-Za-z0-9][\w./-]{0,99})`/g)) bases.add(other[1].replace(/[./-]+$/, ''));
   }
   return bases.size === 1 ? [...bases][0] : undefined;
 }

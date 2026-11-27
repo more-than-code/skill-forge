@@ -58,9 +58,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-bTVJVn3W9zks53itgYJCUX2BdnKfNa1RexMADMUoU9w=",
+      "integrity": "sha256-DNcyjYapwVC3gHfXl7G8q4CZakqRMDk8sCZ/qgx86iA=",
       "files": {
-        "diagnose.md": "sha256-GMfRjLZrJV3I3VgDl9p0rnci/DYnELZkX5V6SgnO5GI=",
+        "diagnose.md": "sha256-R9ASH0WBN+zIJGijL81n6pVI64sNn/0VBvD1yZzbzS4=",
         "SKILL.md": "sha256-6PvY7ZwU18lvwN3cfA4b0spGvWfUJINOVTO+d1CSrpI="
       }
     },

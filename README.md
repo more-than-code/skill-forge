@@ -426,7 +426,8 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   PR base branch it names in backticks (`git ls-remote`, at most 10 s per repo and 30 s in all;
   an unreachable origin is a `D-context-base-unchecked` note). These checks run read-only git
   commands in each repo, with protocols allowlisted and repo settings that run commands
-  overridden. In a thread (`CLAUDE_CODE_REMOTE=true`) it adds three
+  (credential helpers, askpass, ssh command) overridden; a private origin that needs a
+  credential helper is therefore reported as unchecked. In a thread (`CLAUDE_CODE_REMOTE=true`) it adds three
   prompts for the agent, as notes: check the Project instructions when `--context` was not
   given, judge each repo's instructions against what a thread can follow, and report the
   session's failing or unused connectors to the owner in one note. Unpinned remote code,

@@ -16,7 +16,8 @@ owner). Item 5 adds and removes temporary worktrees.
    ```bash
    DOCTOR=${DOCTOR:-$HOME/.claude/skill-forge/skf-cloud.mjs}   # the steward's step 1 sets it when doctor was fetched
    CTX=$(mktemp) && OUT=$(mktemp) || exit 1
-   # write this thread's Project instructions block verbatim into "$CTX" (empty if none)
+   # Write this thread's Project instructions block verbatim into "$CTX" (empty if none) with the
+   # file tool, or a quoted heredoc (cat > "$CTX" <<'EOF'), so the shell expands nothing in it.
    node "$DOCTOR" doctor --context "$CTX" --json > "$OUT"
    ```
 
@@ -113,16 +114,20 @@ Skip a name that starts with `-` or holds anything but `A-Z a-z 0-9 . _ / -`, an
 an `SD-branch` note. Quote every substitution. Run doctor on a temporary worktree:
 
 ```bash
+(
 b=<branch>; r=<repo dir>; n=$(basename "$r")
 case "$b" in -*|*[!A-Za-z0-9._/-]*) echo "skip: unsafe branch name"; exit 0;; esac
 D=$(mktemp -d) || exit 1
 trap 'git -C "$r" worktree remove --force "$D/$n" 2>/dev/null; git -C "$r" worktree prune; rm -rf "$D"' EXIT
 git -C "$r" fetch -q origin -- "refs/heads/$b" \
-  && git -C "$r" worktree add -q --detach "$D/$n" FETCH_HEAD \
+  && git -C "$r" -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree add -q --detach "$D/$n" FETCH_HEAD \
   && node "$DOCTOR" doctor --repos-dir "$D" --offline --json
+)
 ```
 
-Run it once per branch (each run in its own shell, so the trap cleans up). Report only the
+Run it once per branch. The parentheses run it in a subshell, so its `exit` and trap end there
+and the trap cleans up. Nothing from the branch is executed: hooks are off (a branch could point
+a relative `core.hooksPath` into itself), and doctor only reads files. Report only the
 repo findings that are on that branch and not on the default branch, as `SD-branch` with the
 doctor id, the branch and the evidence (for example `D-repo-skill-remote-exec` on
 `shaw-update`). Fix: the change on that branch before it merges; tell the branch's author or

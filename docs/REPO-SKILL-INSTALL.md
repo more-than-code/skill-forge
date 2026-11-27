@@ -12,8 +12,9 @@ script (`skf-cloud.mjs install`). A collaborator on local Claude Code (any OS, n
 possibly non-technical) gets nothing today, so the repo's declared skills never load.
 
 This adds one platform-agnostic way to make a checkout's declared skills present: it
-finds them where the agent already looks, installs only what is missing or out of range
-into the repo, changes no tracked file, and runs on its own when a session starts.
+finds them where the agent already looks, keeps any copy at or above the declared version,
+warns loudly about an older one, installs only what is missing into the repo, changes no
+tracked file, and runs on its own when a session starts.
 
 It finishes a design already in the decision log (2026-11-25): the installer's resolver
 "is designed to take a target, repo dirs and a higher-level set", with "repo-rooted
@@ -22,17 +23,32 @@ sessions (target `<repo>/.claude`, `$HOME` higher)" named as later work.
 Generic, not Windows-specific: the core is tool-neutral and OS-neutral; Claude Code is the
 first (and today only) trigger.
 
+**The steward owns it** (Joe, 2026-11-27, DD note): the bootstrap is the existing
+`claude-project-steward` skill, not a new skill or a repo script. Skill Forge publishes one
+copy-ready `AGENTS.md` line that points at the steward and carries the pinned one-line
+command that gets the steward onto a machine that lacks it; the steward then installs the
+declared skills that are missing. The SessionStart hook stays the deterministic trigger,
+so nothing depends on the agent reading the line. A repo's instruction line points at the
+steward, never at another skill or a repo-specific script. (This supersedes the item's
+earlier "the repo will not carry an instruction line".)
+
+Three pieces, one mechanism: the **`ensure` command** (section 1) does the finding,
+comparing and installing; the **steward** (section 4) is the agent-facing entry point and
+runs `ensure`; the **hook** (section 5) runs the same command without the agent.
+
 ## Non-goals
 
 - No change to `skf sync`, `skill-forge.json`, `skill-forge.lock.json` or their formats.
-- No workflow rules, subagents or default skills; no scan of sibling repos.
+- No workflow rules, subagents or other default skills (the steward is the one exception,
+  section 2); no scan of sibling repos.
+- No install logic in skill prose: the steward runs `ensure`, it does not re-describe it.
 - No global install of `skf`, no npm package, no symlinks.
 - Project threads: unchanged. They ignore `.claude/settings.json`, so the environment's
   `install` keeps doing the work there.
 
 ## Design
 
-### 1. Core: `skf-cloud.mjs ensure [--repo <dir>] [--hook]`
+### 1. Core: `skf-cloud.mjs ensure [--repo <dir>] [--check] [--json] [--hook]`
 
 A new subcommand of the existing single-file installer (Node 18+, built-ins only).
 
@@ -42,22 +58,50 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
    No manifest or no dependencies: nothing to do, silent.
 2. **Defer to skf sync.** If `<repo>/.claude/skills` is a symlink (the `skf sync`
    layout), `ensure` changes nothing and says once that `skf sync` manages this repo.
-3. **Find before install.** For each name it looks where Claude Code resolves skills:
+3. **Discover before install** (the point of the feature: never reinstall or duplicate
+   a skill that is already there). For each declared name it records every copy at
    `<dir>/.claude/skills/<name>/SKILL.md` for every folder from the working directory up
-   to the repo root, and `~/.claude/skills/<name>/SKILL.md`. Claude Code ranks personal
-   (user-level) skills above project skills
-   ([docs](https://code.claude.com/docs/en/skills.md)), so a user-level copy decides.
+   to the filesystem root, and `~/.claude/skills/<name>/SKILL.md`, and labels each:
+   - **repo**: inside this repo (the working directory up to the repo root);
+   - **parent**: in a folder above the repo root, such as an umbrella workspace;
+   - **user**: `~/.claude/skills`.
+
+   Claude Code reads project skills from the session's start folder and its parents up
+   to the repository root, and ranks personal (user-level) skills above project skills
+   ([docs](https://code.claude.com/docs/en/skills.md)). So a **user** copy always wins;
+   a **parent** copy loads when the session starts in that parent folder (the umbrella
+   case), not when it starts inside the repo.
+   - Any copy found counts as present: `ensure` installs nothing for that name, so there
+     is never a second copy. A **parent**-only copy is reported once ("found in <dir>;
+     it loads when a session starts there") and not duplicated into the repo.
+     `--include-parent-copies=no` (open item) would install a repo copy instead.
+   - More than one copy already (for example repo and user): reported as a duplicate,
+     naming which one wins; `ensure` removes nothing it did not install.
 4. **Version of a found copy.** Versions are never in frontmatter (AGENTS.md), so they
    come from installer state: `~/.claude/skill-forge/state.json` (`versions`) for a
    user-level copy, the repo state file (below) for a repo copy, and the repo's
    `skill-forge.lock.json` for a copy `skf sync` committed. A copy no state knows
    (hand-installed, third-party) counts as present and is never touched.
-5. **Decide per name.**
-   - present in range, or present with unknown version: nothing;
-   - user-level copy out of range: **warn only** (a repo copy would not win), naming the
-     copy, its version and the range;
-   - missing, or a repo copy `ensure` owns that is out of range or has files missing on
-     disk: install into `<repo>/.claude/skills/<name>/`.
+5. **Decide per name: the installed copy is respected unless it is older than declared**
+   (Joe, 2026-11-27: "the version pinning should be respected if the declared version is
+   higher than the installed version; there should be a shout-out or an error; otherwise
+   it should be respected". Read here as: an installed copy older than the declared
+   version gets a loud warning; one at or above it is kept as is and never reinstalled.
+   Correct this reading if it is wrong.)
+   - **At or above the declared minimum** (the version in the range, `^0.2.0` -> 0.2.0):
+     kept, nothing installed. That includes a copy newer than the range's upper bound
+     (0.3.0 against `^0.2.0`): it is reported once as "newer than declared, kept", not
+     replaced.
+   - **Unknown version** (no state knows the copy): kept, reported as "version unknown".
+   - **Older than declared**, the copy that wins (user, or the repo/parent copy when there
+     is no user copy): a **warning that names the copy, its version, the declared range
+     and which copy wins**, shown to the user every session until fixed (hook
+     `systemMessage`, and the steward repeats it); `--check` exits 1 for it. It is never
+     silently replaced: a user-level copy is the user's, and a repo copy cannot override it.
+     The one exception is a repo copy `ensure` itself installed: that one is reinstalled
+     at the pinned version, and the line says so.
+   - **Missing**, or a copy `ensure` owns with files missing on disk: install into
+     `<repo>/.claude/skills/<name>/`.
 6. **Which version.** The registry commit in `skill-forge.lock.json`
    (`registry.commit`) when the repo has a lock, else the commit the script itself was
    fetched at (`--ref`, written into the hook). Same rule as `install`: install only if
@@ -78,7 +122,20 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
     The same fix goes into `install --top-up`: a recorded repo skill whose folder was
     deleted is treated as missing and added again.
 
-### 2. Output and exit
+11. **`--check`** (read-only, writes nothing, fetches nothing): prints the discovery for
+    every declared name: each copy found, its level and version, whether it is older than declared,
+    which copy wins, duplicates, and what `ensure` would install. `--json` gives the same
+    as JSON (a new, versioned shape: `{"version": 1, "skills": [...]}`). The steward runs
+    this first, so it can tell the user what is already installed before anything is.
+
+### 2. Getting the steward too
+
+`ensure` also installs `claude-project-steward` into `<repo>/.claude/skills/` when no
+copy is found at the levels above (same finding and version rules, range: any version at
+the pinned commit), whether or not the repo declares it. That is the "get steward itself
+onto the machine" step; `SKF_DEFAULT_SKILLS=0` turns it off, as for `install`.
+
+### 3. Output and exit
 
 - Nothing missing: silent, exit 0.
 - Installed: one line, `skill-forge: installed <names> into .claude/skills (<ref short>)`.
@@ -91,7 +148,40 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
 - Deadline: the existing 90 s fetch deadline, with the hook's own `timeout` as the outer
   bound.
 
-### 3. Trigger: a SessionStart hook in the repo
+### 4. The steward: one published line, and a local-session section
+
+**The published line.** The steward's README section and the skill itself carry one
+copy-ready line for a repo's `AGENTS.md` (pinned to the sha of the release that publishes
+it):
+
+> Skills: this repo declares skills in `skill-forge.json`. In a local session, use the
+> `claude-project-steward` skill to check they are installed; if that skill is missing,
+> first run `node -e '<bootstrap, pinned to <sha>>'` from the repo root.
+
+The bootstrap is the same one-line command as the hook's (section 5) without `--hook`, so
+it prints its one line to the terminal. Doctor's existing checks treat this line as
+repository text: it is not workstation-only (any machine can follow it), and its `node -e`
+fetch is pinned to a full sha, so it is not an unpinned remote runner.
+
+**The steward's new section** ("Local sessions: install a repo's declared skills"), used
+when `CLAUDE_CODE_REMOTE` is not `true`:
+1. run discovery first: `ensure --check --json` from the installed copy
+   (`node .claude/skill-forge/skf-cloud-<sha>.mjs`, or the published line's command when
+   none is there), and tell the user what is already installed and where (repo, parent
+   folder, user level), which copy wins, any duplicates and anything older than declared (a warning);
+2. only if something is missing, run `ensure` and report in one line what it installed;
+   never suggest reinstalling a skill that discovery found;
+3. after an install, the new skills are picked up within the session; if not, tell the
+   user to run `/reload-skills`.
+The steward's description gains "or when a local session finds a repo's declared skills
+missing", and its version goes up (a minor bump). In threads the steward behaves as
+today; `ensure` is never its fix there (the environment's `install` and `--top-up` are).
+
+**Where the line goes.** The steward skill's own section 3 ("Fix repositories by PR") adds: a repo
+with `skill-forge.json` dependencies and collaborators on local sessions gets the line in
+its `AGENTS.md` and the hook in `.claude/settings.json`, in one PR.
+
+### 5. Trigger: a SessionStart hook in the repo
 
 A hook, not an instruction line, so it runs before the agent reads anything. The repo
 commits one entry in `.claude/settings.json`:
@@ -116,7 +206,7 @@ opens the PR; the steward skill's checklist gains one line for repos with collab
 on local Claude Code. `skf project init` is unchanged (it refuses existing manifests, so
 it cannot serve existing repos).
 
-### 4. Doctor
+### 6. Doctor
 
 - `D-repo-settings-ignored`: a `.claude/settings.json` whose only content is this hook is
   not reported (the hook is meant for local sessions; threads ignoring it is correct).
@@ -129,16 +219,26 @@ it cannot serve existing repos).
 `staleness.mjs` stays as is. It serves workstations that have `skf` and the
 `.agents/skills` link, which `ensure` defers to; folding it in would mix two layouts.
 
+## Open items for the owner
+
+- A copy only in a **parent** folder: report it and install nothing (default here, no
+  duplicates), or install a repo copy so a session started inside the repo has it too?
+- Name of the command (`ensure`).
+- `.git/info/exclude` instead of the `.gitignore` block.
+
 ## Contract diff
 
 | Surface | Before | After |
 |---|---|---|
-| `skf-cloud.mjs` commands | `install`, `install --top-up`, `doctor` | adds `ensure [--repo] [--ref] [--hook] [--write-hook]` |
+| `skf-cloud.mjs` commands | `install`, `install --top-up`, `doctor` | adds `ensure [--repo] [--ref] [--check] [--json] [--hook] [--write-hook]` |
+| `ensure --check --json` | — | new versioned JSON shape (`version: 1`), a public contract from release |
 | `install --top-up` | trusts `state.json`; a deleted folder is "nothing to add" | a recorded skill with no `SKILL.md` on disk is added again |
 | `~/.claude` layout, `state.json` | unchanged | unchanged |
 | Repo files | none written by skf-cloud | ignored `<repo>/.claude/skills/<name>/`, `<repo>/.claude/skill-forge/{state.json,skf-cloud-<sha>.mjs}`; a block in `.git/info/exclude` |
 | Committed repo files | — | `.claude/settings.json` hook entry, only via `--write-hook` and a PR |
 | Doctor JSON | — | `D-repo-settings-ignored` skips a hook-only settings file; new `D-repo-local-hook-pin`; `version` unchanged |
+| `claude-project-steward` skill | threads only | adds the local-session section, the published line and the PR step; minor version bump |
+| Repo `AGENTS.md` | — | may carry the one published steward line (by PR) |
 | `skill-forge.json`, locks, `skf` CLI | — | unchanged |
 
 All additive: an older `SKF_REF` ignores the new command; nothing that exists today
@@ -166,21 +266,29 @@ older pins unaffected.
 
 ## Acceptance criteria
 
+0. Discovery finds a declared skill at each level (repo, parent folder, user) and
+   `--check --json` lists every copy, its level, version, range result and which one
+   wins; with copies at two levels it reports the duplicate and removes nothing.
 1. Every declared skill present at user level in range: `ensure` writes nothing, prints
    nothing, exits 0.
 2. Some missing: only those land in `<repo>/.claude/skills/`, verified; `git status`
    shows no change.
 3. A repo copy deleted on disk (state still lists it): the next run installs it again;
    same for `install --top-up`.
-4. User-level copy out of range: one warning naming copy, version and range; nothing
-   installed for it.
+4. User-level copy older than declared: one warning naming copy, version, range and
+   which copy wins; nothing installed for it; `--check` exits 1. A copy newer than the
+   range's upper bound: kept, one "newer than declared" note, exit 0.
 5. Repo with skf's `.claude/skills` symlink: nothing written, one line.
 6. Third-party folder in `.claude/skills`: untouched; a file edited since install: kept.
 7. `CLAUDE_CODE_REMOTE=true` with `--hook`: exit 0, no output, no writes.
 8. Offline or HTTP error: one warning, exit 0 under `--hook`.
 9. `--write-hook`: creates or merges `.claude/settings.json`, idempotent, other keys kept.
 10. The bootstrap text runs unchanged under bash and PowerShell (`pwsh -Command`).
-11. Paths built with `path.join` throughout; tests cover a Windows-style home via
+11. A machine with no steward and nothing installed: the published line's command
+    installs the steward and the declared skills; a second run prints nothing.
+12. The steward, in a local session with a skill missing, runs `ensure` and reports it;
+    in a thread (`CLAUDE_CODE_REMOTE=true`) it does not run `ensure`.
+13. Paths built with `path.join` throughout; tests cover a Windows-style home via
     `path.win32` where the code splits paths.
 
 ## Tests and verification
@@ -191,11 +299,12 @@ older pins unaffected.
   when `pwsh` is on PATH (reported as skipped otherwise; this environment has no `pwsh`).
 - Windows and macOS end to end: not runnable here; the owner or a collaborator runs the
   hook once in a fresh clone on each.
-- `node bin/cli.js lock` and `validate` only if registry or inventory change (the steward
-  skill's checklist line does; bump its version).
+- `node bin/cli.js lock` and `validate`: the steward skill changes, so both run, after
+  `node bin/cli.js skill bump claude-project-steward --minor` (or `set-version`).
 
 ## After merge
 
-- Pin move: none needed for existing Projects (threads do not use `ensure`). A repo that
-  wants the hook runs `ensure --write-hook` from a thread at the new sha and opens a PR.
+- Pin move: optional. Threads do not use `ensure`; the steward's new text reaches a
+  Project's threads only when its setup script moves to the new `SKF_REF`. A repo that
+  wants the line and the hook gets both by PR from a thread at the new sha.
 - Workstation: nothing.

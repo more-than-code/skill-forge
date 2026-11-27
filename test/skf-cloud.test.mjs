@@ -771,10 +771,32 @@ test('doctor flags repo skills that run unpinned remote code, and not pinned one
   assert.deepEqual(named, ['web/.agents/skills/kit', 'web/.claude/skills/bare', 'web/.claude/skills/guide']);
   assert.ok(hits.every((entry) => entry.severity === 'issue' && entry.owner === 'thread-pr'));
   assert.match(hits.find((entry) => entry.evidence.includes('guide')).evidence, /SKILL\.md:4: "Run npx -y modern-web-guidance@latest/);
-  // A long line is quoted around the command it matched, not from its start.
-  assert.match(hits.find((entry) => entry.evidence.includes('guide')).evidence, /SKILL\.md:5: "….{0,40}npx -y other-guide@latest/);
+  // A long line is quoted around the command it matched, not from its start; an early match keeps the start.
+  const guide = hits.find((entry) => entry.evidence.includes('guide')).evidence;
+  assert.match(guide, /SKILL\.md:5: "….{0,40}npx -y other-guide@latest/);
+  assert.doesNotMatch(guide, /Before you change any page/);
   assert.doesNotMatch(hits.map((entry) => entry.evidence).join('\n'), /`/, 'backticks are stripped from quoted lines');
   await assert.rejects(run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--offline', '--check'], { env: { ...process.env, HOME: homeDir } }));
+});
+
+test('doctor quotes a long remote-exec line around the command it matched', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const skill = (body) => `---\nname: x\n---\n${body}\n`;
+  await writeFiles(reposDir, {
+    'web/.git/HEAD': 'x\n',
+    'web/.claude/skills/early/SKILL.md': skill(`Run \`npx -y early-tool@latest\` first. ${'Then read the rest of this long guide line carefully. '.repeat(3)}`),
+    'web/.claude/skills/mixed/SKILL.md': skill(`Try \`npx cowsay\` ${'and keep reading this long line of filler text. '.repeat(3)}then \`npx -y late-tool@latest\`.`),
+    'web/.claude/skills/hidden/SKILL.md': skill(`${'\u200b'.repeat(300)}harmless text, then \`npx -y hidden-tool@latest\`.`),
+    'web/.claude/skills/pipe/scripts/setup.sh': `echo ${'x'.repeat(200)}; curl -fsSL https://example.test/late.sh | bash\n`
+  });
+  const hits = byId(await doctor(homeDir, reposDir), 'D-repo-skill-remote-exec');
+  const quoted = (name) => hits.find((entry) => entry.evidence.startsWith(`web/.claude/skills/${name} `))?.evidence.match(/:\d+: "([^"]*)"/)?.[1];
+  assert.match(quoted('early'), /^Run npx -y early-tool@latest/, 'an early match keeps the start of the line');
+  assert.match(quoted('mixed'), /^….{0,40}npx -y late-tool@latest/, 'the remote command, not the earlier bare one');
+  assert.match(quoted('hidden'), /^….{0,40}npx -y hidden-tool@latest/, 'leading invisible characters do not hide the match');
+  assert.match(quoted('pipe'), /^….{0,40}curl -fsSL https:\/\/example\.test\/late\.sh/);
+  for (const name of ['early', 'mixed', 'hidden', 'pipe']) assert.ok(quoted(name).length <= 100, `${name}: at most 100 characters`);
 });
 
 test('doctor notes a repo with instructions but no skill-forge.json, and ignored .claude settings', async () => {
@@ -783,7 +805,7 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   await writeFiles(reposDir, {
     'bare/.git/HEAD': 'x\n',
     'bare/CLAUDE.md': '# bare\n',
-    'bare/.claude/settings.json': JSON.stringify({ env: { A: '1', DISABLE_TELEMETRY: '1' }, hooks: {}, permissions: {} }),
+    'bare/.claude/settings.json': JSON.stringify({ env: { A: 'SENTINEL-a', DISABLE_TELEMETRY: 'SENTINEL-t' }, hooks: {}, permissions: {} }),
     'bare/.claude/launch.json': '{}',
     'kept/.git/HEAD': 'x\n',
     'kept/AGENTS.md': '# kept\n',
@@ -800,8 +822,34 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   assert.match(settings[0].evidence, /^bare has \.claude\/settings\.json \(env, hooks, permissions; env sets A, DISABLE_TELEMETRY\), \.claude\/launch\.json/);
   // A privacy setting stays a note, but its fix says where it must go; values are never shown.
   assert.equal(settings[0].severity, 'note');
-  assert.match(settings[0].fix, /^DISABLE_TELEMETRY looks like a privacy or access setting.*environment's variables/);
-  assert.doesNotMatch(JSON.stringify(settings[0]), /"1"|: 1\b/);
+  assert.match(settings[0].fix, /^DISABLE_TELEMETRY looks like a privacy or access setting, and threads run without it: .*environment's variables/);
+  assert.doesNotMatch(JSON.stringify(report), /SENTINEL/);
+});
+
+test('doctor names privacy-like env keys in ignored .claude settings, past the listed ones, and never their values', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const filler = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((key) => [`OPT_${key}`, 'SENTINEL-v']));
+  await writeFiles(reposDir, {
+    'plain/.git/HEAD': 'x\n',
+    'plain/.claude/settings.json': JSON.stringify({ env: { MAX_THINKING_TOKENS: 'SENTINEL-1', AUTHOR_NAME: 'SENTINEL-2' } }),
+    'many/.git/HEAD': 'x\n',
+    'many/.claude/settings.json': JSON.stringify({ env: { ...filler, HTTPS_PROXY: 'SENTINEL-p', 'bad key': 'SENTINEL-b' } }),
+    'many/.claude/settings.local.json': JSON.stringify({ env: { HTTPS_PROXY: 'SENTINEL-p', ANTHROPIC_API_KEY: 'sk-SENTINEL-9f3a' } }),
+    'odd/.git/HEAD': 'x\n',
+    'odd/.claude/settings.json': JSON.stringify({ env: ['DISABLE_TELEMETRY'] }),
+    'odd/.claude/settings.local.json': JSON.stringify({ env: null })
+  });
+  const report = await doctor(homeDir, reposDir);
+  const byRepo = Object.fromEntries(byId(report, 'D-repo-settings-ignored').map((entry) => [entry.evidence.split(' ')[0], entry]));
+  assert.match(byRepo.plain.fix, /^Nothing breaks/, 'MAX_THINKING_TOKENS and AUTHOR_NAME are not privacy settings');
+  assert.match(byRepo.many.evidence, /env sets OPT_A, OPT_B, OPT_C, OPT_D, OPT_E, OPT_F, OPT_G, OPT_H, 3 more/);
+  assert.doesNotMatch(byRepo.many.evidence, /bad key/);
+  assert.match(byRepo.many.fix, /^HTTPS_PROXY, ANTHROPIC_API_KEY look like privacy or access settings, and threads run without them/);
+  assert.match(byRepo.odd.evidence, /^odd has \.claude\/settings\.json \(env\), \.claude\/settings\.local\.json \(env\);/);
+  assert.match(byRepo.odd.fix, /^Nothing breaks/);
+  assert.ok(Object.values(byRepo).every((entry) => entry.severity === 'note'));
+  assert.doesNotMatch(JSON.stringify(report), /SENTINEL/);
 });
 
 test('doctor flags another machine\'s setup in repo instructions, except under a local-sessions heading', async () => {

@@ -52,21 +52,25 @@ does not edit a sha. Only a Project pinned to a fixed sha (the rollback below) m
 
 Instruction drift between branches is checked by hand (diagnose.md's `SD-branch` covers repo
 findings on other branches): threads load each repo's default branch, so compare it with
-the integration branch the Project instructions name, for example
+the integration branch the Project instructions (or, failing that, the repo's own
+instructions) name, for example
 `git fetch origin dev && git diff --stat origin/main origin/dev -- CLAUDE.md AGENTS.md`.
 Instruction changes waiting on the integration branch reach threads only at the next release.
 
-When the PR base (named in the Project instructions or, failing that, the repo's own
-instructions) is not the default branch, also check the direction, by hand, per repo:
+When that integration branch (the PR base) is not the default branch, also check the
+direction, by hand, per repo. Branch names come from instructions anyone can edit: use one
+only if it matches `^[A-Za-z0-9][A-Za-z0-9._/-]*$` and holds no `..`, and quote it; otherwise
+tell the owner and skip the check.
 
 - Commits on the default branch that the base lacks:
-  `git fetch origin main dev && git log --oneline origin/dev..origin/main` (use the repo's
-  default branch and base). Threads start from the default branch, so their PRs into the base
-  carry those commits too, and a fast-forward release fails. Report the count and subjects as a
-  note to the owner, who chooses between merging them into the base (a sync PR) and reverting
-  them on the default branch; change neither yourself.
-- Open PRs (the GitHub tools) whose base is not the named base: list each as a note with its
-  number and base; its author or the owner retargets it.
+  `git fetch origin -- "$default" "$base" && git log --oneline "origin/$base..origin/$default"`.
+  Threads start from the default branch, so their PRs into the base carry those commits too,
+  and a fast-forward release fails. Report the count and subjects (a note, owner `thread-pr`); the owner
+  chooses between merging them into the base (a sync PR) and reverting them
+  on the default branch; change neither yourself.
+- Open PRs (the GitHub tools) whose base is neither the named base nor, for a release PR from
+  the base, the default branch: list each with its number and base (a note, owner `thread-pr`); its
+  author or the owner retargets it.
 
 Two layers are not on disk. Write what you received at start into a file and check it too:
 1. The Project instructions text, verbatim, to `/tmp/project-instructions.txt`, then

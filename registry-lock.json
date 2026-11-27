@@ -136,9 +136,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-43AvBB4kqngcKNfkwD9s7Jiw4HamQYsn3ly5aTZZaXE=",
+      "integrity": "sha256-HQz97BYdMRmc6IvrFgXDMeBboYo5BPPxEYUOiQQ+SOM=",
       "files": {
-        "SKILL.md": "sha256-qQNMD4DrqXSMGAlBq/UhPOGuXm0s01cJsPeZax1Ypfw="
+        "SKILL.md": "sha256-6FKn6BYmivwxDaBIQQTlrdOI56VNUcM4y0TNRAp0T9U="
       }
     },
     "inventory/skills/deployment-strategy": {

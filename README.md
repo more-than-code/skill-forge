@@ -399,8 +399,9 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
   blocks, sections repeated across repos, always-loaded size, workstation-only rules,
   committed copies of installed skills, shadowing subagents, declared skills that are missing
-  (fixed by `--top-up`), out of range or workstation-only, lock versions that differ from the
-  installed ones, and an instructions variant other than the environment's)
+  (fixed by `--top-up`), out of range or workstation-only, repo-installed skills that no repo
+  declares any more (gone at the next rebuild), lock versions that differ from the installed
+  ones, and an instructions variant other than the environment's)
   and, with `--context`, the Project-instructions text (length, missing PR base, restated
   workflow rules); it also reports when the environment's `SKF_REF` is behind the registry's
   `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it). Each finding names who fixes it: an owner paste, an owner account

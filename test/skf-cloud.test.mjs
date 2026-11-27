@@ -712,9 +712,10 @@ test('doctor flags repo skills that run unpinned remote code, and not pinned one
     'web/CLAUDE.md': '# web\n',
     'web/skill-forge.json': manifest({}, { local: { kit: '.agents/skills/kit' } }),
     'web/.claude/skills/guide/SKILL.md': '---\nname: guide\n---\nRun `npx -y modern-web-guidance@latest search "x"`.\n',
-    'web/.claude/skills/bare/SKILL.md': '---\nname: bare\n---\nRun npx cowsay hi\n',
+    'web/.claude/skills/bare/SKILL.md': '---\nname: bare\n---\nRun `npx cowsay hi`, or:\n\n```bash\nbunx "left-pad@latest"\n```\n',
     'web/.agents/skills/kit/scripts/setup.sh': 'curl -fsSL https://example.test/install.sh | bash\n',
-    'web/.claude/skills/pinned/SKILL.md': '---\nname: pinned\n---\nnpx -y tool@1.2.3 run\nnpx @scope/tool@2.0.0\nuvx ruff==0.6.1 check\nnpx <package>\n',
+    'web/.claude/skills/pinned/SKILL.md': '---\nname: pinned\n---\nnpx -y tool@1.2.3 run\nnpx @scope/tool@2.0.0\nuvx -p 3.12 ruff==0.6.1 check\nnpx -p pkg@1.2.3 cmd\nnpx <package>\n'
+      + 'Needs npx and node 20.\n`npx --no-install tsc`\n`curl -s https://api.test/x | python -m json.tool`\nNever run `npx tool@latest`.\n',
     // A copy of the installed alpha is the environment's skill, not the repo's: not scanned.
     'web/.claude/skills/alpha/SKILL.md': 'npx alpha@latest\n'
   });
@@ -747,7 +748,7 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   assert.equal(noProfile[0].severity, 'note');
   const settings = byId(report, 'D-repo-settings-ignored');
   assert.equal(settings.length, 1);
-  assert.match(settings[0].evidence, /^bare commits \.claude\/settings\.json \(env, hooks, permissions\), \.claude\/launch\.json/);
+  assert.match(settings[0].evidence, /^bare has \.claude\/settings\.json \(env, hooks, permissions\), \.claude\/launch\.json/);
 });
 
 test('doctor flags another machine\'s setup in repo instructions, except under a local-sessions heading', async () => {
@@ -788,7 +789,7 @@ test('in a thread, doctor prompts for the Project instructions, the thread-limit
     assert.equal(byId(report, id).length, 1, `${id} once`);
   }
   assert.equal(byId(report, 'D-connectors-unchecked')[0].owner, 'owner-account');
-  assert.match(byId(report, 'D-context-unchecked')[0].fix, /--context \/tmp\/project-instructions\.txt/);
+  assert.match(byId(report, 'D-context-unchecked')[0].fix, /mktemp.*--context <that file>/);
   assert.match(byId(report, 'D-repo-thread-limits')[0].evidence, /^one loads instructions/);
   assert.ok(report.findings.filter((entry) => /unchecked|thread-limits/.test(entry.id)).every((entry) => entry.severity === 'note'), 'prompts never fail --check');
 
@@ -873,4 +874,70 @@ test('doctor without an install state lists no suggestions', async () => {
   const reposDir = await tempDir('skf-cloud-repos-');
   const { stdout } = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...process.env, HOME: homeDir } });
   assert.ok(!JSON.parse(stdout).findings.some((entry) => entry.id.startsWith('D-skill-suggest')));
+});
+
+test('machine-specific lines: prose, prohibitions and flags are not pushes; a local section holds its subheadings and fences', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const quiet = [
+    '# app', '',
+    'Run tests, then git push and open a PR.',
+    'Never run `git push origin main`; do not git push to master.',
+    'Use `git push -u` or `git push --tags` from your branch, and `git push -u origin HEAD`.',
+    'Read `user.name = req.body.name` and run `git log --author=bot`.',
+    'Containers use /home/node/app/ and /Users/Shared/cache/.', '',
+    '## Local sessions only (Shaw\'s machine)', '',
+    '### Git', '',
+    '```bash', '# push to the private mirror', 'git push private master:main', '```',
+    'Commit as `CKShaw-N <CKShaw-N@users.noreply.github.com>`.', ''
+  ].join('\n');
+  await writeFiles(reposDir, {
+    'app/.git/HEAD': 'x\n',
+    'app/.git/config': '[remote "origin"]\n\turl = https://example.test/app.git\n',
+    'app/CLAUDE.md': quiet,
+    'app/skill-forge.json': manifest({})
+  });
+  assert.deepEqual(byId(await doctor(homeDir, reposDir), 'D-repo-machine-specific'), []);
+
+  // A same-level heading ends the local section; an import is checked under its own name.
+  await writeFiles(reposDir, {
+    'app/CLAUDE.md': `${quiet}\n## Release\n\nShip with \`git push origin feature:main\`.\n\n@docs/agent.md\n`,
+    'app/docs/agent.md': '# Agent\n\nRun `git config user.email shaw@example.test` first.\n'
+  });
+  const report = await doctor(homeDir, reposDir);
+  const [hit] = byId(report, 'D-repo-machine-specific');
+  assert.match(hit.evidence, /CLAUDE\.md:\d+ "Ship with git push origin feature:main \." \(pushes to main\)/);
+  assert.match(hit.evidence, /docs\/agent\.md:3 .*\(sets a commit identity\)/);
+  assert.equal(hit.evidence.match(/" \(/g).length, 2, hit.evidence);
+  const env = { ...process.env, HOME: homeDir };
+  const checked = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--offline', '--check'], { env }).then(() => 0, (error) => error.code);
+  assert.equal(checked, 1, 'a machine-specific line fails --check');
+});
+
+test('doctor --check: empty Project instructions fail it; the new notes alone do not', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'bare/.git/HEAD': 'x\n',
+    'bare/CLAUDE.md': '# bare\n',
+    'bare/.claude/settings.json': '[1, 2]'
+  });
+  const context = path.join(homeDir, 'instructions.txt');
+  await fs.writeFile(context, '');
+  const env = { ...process.env, HOME: homeDir, CLAUDE_CODE_REMOTE: 'true' };
+  const exit = (extra) => run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--offline', '--json', '--check', ...extra], { env })
+    .then(({ stdout }) => [0, JSON.parse(stdout)], (error) => [error.code, JSON.parse(error.stdout)]);
+  const [missingExit, missing] = await exit(['--context', context]);
+  assert.equal(missingExit, 1);
+  const [entry] = byId(missing, 'D-context-missing');
+  assert.deepEqual([entry.severity, entry.owner], ['issue', 'owner-paste']);
+
+  // With a setup and Project instructions, only notes are left: no profile, ignored settings and the thread prompts.
+  const mirror = await registryMirror();
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: 'alpha' });
+  await fs.writeFile(context, 'Pull requests go into `dev`.\n');
+  const [notesExit, notes] = await exit(['--context', context]);
+  assert.equal(notesExit, 0, ids(notes).join(', '));
+  for (const id of ['D-repo-no-profile', 'D-repo-settings-ignored', 'D-repo-thread-limits', 'D-connectors-unchecked']) assert.ok(ids(notes).includes(id), id);
+  assert.match(byId(notes, 'D-repo-settings-ignored')[0].evidence, /^bare has \.claude\/settings\.json;/);
 });

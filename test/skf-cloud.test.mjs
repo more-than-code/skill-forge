@@ -1006,3 +1006,113 @@ test('false positives from the PR #9 review: local bins, container homes, read-o
   assert.deepEqual(byId(report, 'D-repo-machine-specific'), [], 'container homes, a prohibition and a read-only git config are not machine-specific; an outside CLAUDE.md is not quoted');
   assert.deepEqual(byId(report, 'D-repo-settings-ignored'), [], 'a .claude file is no settings folder');
 });
+
+const git = (cwd, ...args) => run('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.test', '-c', 'init.defaultBranch=main', ...args], { cwd });
+/** A real git repository under reposDir with the given files committed. */
+async function gitRepo(reposDir, name, files) {
+  const dir = path.join(reposDir, name);
+  await writeFiles(dir, files);
+  await git(reposDir, 'init', '-q', name);
+  await git(dir, 'add', '-A');
+  await git(dir, 'commit', '-q', '-m', 'init');
+  return dir;
+}
+
+test('doctor flags tracked personal files as issues and unignored ones as a note', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const env = { ...process.env, HOME: homeDir };
+  // Without an install, D-setup-missing is an issue too; --check must fail on the personal file alone.
+  const issues = (report) => report.findings.filter((entry) => entry.severity === 'issue' && entry.id !== 'D-setup-missing').map((entry) => entry.id);
+  await gitRepo(reposDir, 'leaky', {
+    'CLAUDE.md': '@AGENTS.md\n', 'AGENTS.md': '# leaky\n', 'skill-forge.json': manifest({}),
+    'CLAUDE.local.md': 'Reply in Simplified Chinese.\n', '.claude/settings.local.json': '{}'
+  });
+  let report = await doctor(homeDir, reposDir);
+  const [tracked, ...more] = byId(report, 'D-repo-personal-file');
+  assert.equal(more.length, 0);
+  assert.equal(tracked.severity, 'issue');
+  assert.match(tracked.evidence, /^leaky tracks CLAUDE\.local\.md, \.claude\/settings\.local\.json,/);
+  assert.match(tracked.fix, /git rm --cached -- CLAUDE\.local\.md \.claude\/settings\.local\.json/);
+  assert.deepEqual(byId(report, 'D-repo-personal-unignored'), [], 'a tracked file is not reported twice');
+  assert.deepEqual(issues(report), ['D-repo-personal-file']);
+
+  const dir = path.join(reposDir, 'leaky');
+  await git(dir, 'rm', '-q', '--cached', '--', 'CLAUDE.local.md', '.claude/settings.local.json');
+  await git(dir, 'commit', '-q', '-m', 'untrack');
+  report = await doctor(homeDir, reposDir);
+  assert.deepEqual(byId(report, 'D-repo-personal-file'), []);
+  const [unignored] = byId(report, 'D-repo-personal-unignored');
+  assert.equal(unignored.severity, 'note');
+  assert.match(unignored.evidence, /does not cover CLAUDE\.local\.md, \.claude\/settings\.local\.json/);
+
+  await fs.writeFile(path.join(dir, '.gitignore'), '/CLAUDE.local.md\n');
+  assert.match(byId(await doctor(homeDir, reposDir), 'D-repo-personal-unignored')[0].evidence, /does not cover \.claude\/settings\.local\.json,/);
+  await fs.writeFile(path.join(dir, '.gitignore'), '/CLAUDE.local.md\n/.claude/settings.local.json\n');
+  report = await doctor(homeDir, reposDir);
+  assert.deepEqual(byId(report, 'D-repo-personal-unignored'), []);
+  assert.deepEqual(issues(report), []);
+});
+
+test('doctor says nothing about personal files where git cannot read the repository', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  // A .git that is not a repository: git must not fall back to a repository above it.
+  await writeFiles(reposDir, { 'fake/.git/HEAD': 'x\n', 'fake/CLAUDE.md': '@AGENTS.md\n', 'fake/AGENTS.md': '# fake\n', 'fake/CLAUDE.local.md': 'mine\n' });
+  await gitRepo(reposDir, '.', { 'outer.txt': 'x\n' });
+  const found = ids(await doctor(homeDir, reposDir));
+  assert.ok(!found.some((id) => id.startsWith('D-repo-personal')), found.join(', '));
+});
+
+test('doctor suggests AGENTS.md for a repo whose instructions live only in CLAUDE.md', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'only/.git/HEAD': 'x\n', 'only/CLAUDE.md': '# only\n\nRun `make test`.\n',
+    'imports/.git/HEAD': 'x\n', 'imports/CLAUDE.md': '@docs/agents.md\n\n', 'imports/docs/agents.md': '# imports\n',
+    'shared/.git/HEAD': 'x\n', 'shared/CLAUDE.md': '@AGENTS.md\n', 'shared/AGENTS.md': '# shared\n'
+  });
+  const hits = byId(await doctor(homeDir, reposDir), 'D-repo-no-agents-md');
+  assert.deepEqual(hits.map((entry) => [entry.evidence.split(' ')[0], entry.severity, entry.owner]), [['only', 'note', 'thread-pr']]);
+  assert.match(hits[0].fix, /single line @AGENTS\.md/);
+});
+
+test('doctor checks that each repo has the PR base the Project instructions name', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const remotes = await tempDir('skf-cloud-remotes-');
+  const env = { ...process.env, HOME: homeDir };
+  const online = async (extra) => JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', ...extra], { env })).stdout);
+  const files = { 'CLAUDE.md': '@AGENTS.md\n', 'AGENTS.md': '# r\n', 'skill-forge.json': manifest({}) };
+  for (const name of ['withdev', 'nodev']) {
+    const dir = await gitRepo(reposDir, name, files);
+    await git(remotes, 'init', '-q', '--bare', `${name}.git`);
+    await git(dir, 'remote', 'add', 'origin', path.join(remotes, `${name}.git`));
+    await git(dir, 'push', '-q', 'origin', 'main');
+    if (name === 'withdev') await git(dir, 'push', '-q', 'origin', 'main:dev');
+  }
+  const context = path.join(homeDir, 'instructions.txt');
+  await fs.writeFile(context, 'Pull requests go into `dev`.\n');
+  let report = await online(['--context', context]);
+  const [missing, ...more] = byId(report, 'D-context-base-missing');
+  assert.equal(more.length, 0);
+  assert.deepEqual([missing.severity, missing.owner], ['issue', 'owner-paste']);
+  assert.match(missing.evidence, /into dev, but nodev has no dev branch on origin$/);
+  assert.deepEqual(byId(report, 'D-context-base-unchecked'), []);
+  assert.deepEqual(byId(await online(['--context', context, '--offline']), 'D-context-base-missing'), [], '--offline skips it');
+
+  await fs.writeFile(context, 'PRs go into main.\n');
+  report = await online(['--context', context]);
+  assert.deepEqual(ids(report).filter((id) => id.startsWith('D-context-base')), []);
+
+  // An unreachable origin is a note, never an issue.
+  await git(path.join(reposDir, 'nodev'), 'remote', 'set-url', 'origin', path.join(remotes, 'gone.git'));
+  await fs.writeFile(context, 'Pull requests go into `dev`.\n');
+  report = await online(['--context', context]);
+  assert.deepEqual(byId(report, 'D-context-base-missing'), []);
+  assert.match(byId(report, 'D-context-base-unchecked')[0].evidence, /^could not check that nodev has a dev branch/);
+
+  // A base that git could read as an option never reaches git.
+  await fs.writeFile(context, 'Pull requests go into `--upload-pack=touch`.\n');
+  assert.deepEqual(ids(await online(['--context', context])).filter((id) => id.startsWith('D-context-base')), []);
+});

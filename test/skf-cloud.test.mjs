@@ -556,6 +556,11 @@ test('doctor notes a repo-installed skill no repo declares any more, only when e
   assert.match(leftovers[0].evidence, /beta was installed for one, which no longer declares it/);
   assert.match(leftovers[0].fix, /next environment rebuild/);
 
+  // A manifest that does not parse (mid-edit) may still declare it: say nothing.
+  await fs.writeFile(path.join(reposDir, 'one/skill-forge.json'), '{');
+  assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-skill-repo-leftover'));
+  await fs.writeFile(path.join(reposDir, 'one/skill-forge.json'), manifest({ alpha: '^0.1.0' }));
+
   // A recorded repo that is not cloned here may still declare it: say nothing.
   await fs.rename(path.join(reposDir, 'one'), path.join(reposDir, 'renamed'));
   assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-skill-repo-leftover'));

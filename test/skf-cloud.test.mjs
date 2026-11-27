@@ -941,3 +941,29 @@ test('doctor --check: empty Project instructions fail it; the new notes alone do
   for (const id of ['D-repo-no-profile', 'D-repo-settings-ignored', 'D-repo-thread-limits', 'D-connectors-unchecked']) assert.ok(ids(notes).includes(id), id);
   assert.match(byId(notes, 'D-repo-settings-ignored')[0].evidence, /^bare has \.claude\/settings\.json;/);
 });
+
+test('false positives from the PR #9 review: local bins, container homes, read-only git config, outside files', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const outside = await tempDir('skf-cloud-outside-');
+  await fs.writeFile(path.join(outside, 'CLAUDE.md'), '# elsewhere\n\n`git push private master:main`\n');
+  await writeFiles(reposDir, {
+    'web/.git/HEAD': 'x\n',
+    'web/.git/config': '[remote "origin"]\n\turl = https://example.test/web.git\n',
+    'web/CLAUDE.md': '# web\n\nThe image runs from /home/app/ and /home/deploy/releases/.\nNever run `git config user.email` here.\nCheck with `git config user.email`.\n',
+    'web/package.json': JSON.stringify({ devDependencies: { prettier: '3.3.3' } }),
+    'web/skill-forge.json': manifest({}),
+    'web/.claude/skills/fmt/SKILL.md': '---\nname: fmt\n---\nRun `npx prettier --check .`.\n',
+    'web/.claude/skills/types/SKILL.md': '---\nname: types\n---\nRun `npx tsc --noEmit`.\n',
+    'web/.claude/skills/gh/SKILL.md': '---\nname: gh\n---\nRun `npx github:someone/tool`.\n',
+    'odd/.git/HEAD': 'x\n',
+    'odd/.claude': 'not a folder\n',
+    'odd/skill-forge.json': manifest({})
+  });
+  await fs.symlink(path.join(outside, 'CLAUDE.md'), path.join(reposDir, 'odd/CLAUDE.md'));
+  const report = await doctor(homeDir, reposDir);
+  const exec = byId(report, 'D-repo-skill-remote-exec').map((entry) => [entry.evidence.split(' ')[0], entry.severity]).sort();
+  assert.deepEqual(exec, [['web/.claude/skills/gh', 'issue'], ['web/.claude/skills/types', 'note']], 'a declared devDependency bin is skipped; an undeclared bare name is a note');
+  assert.deepEqual(byId(report, 'D-repo-machine-specific'), [], 'container homes, a prohibition and a read-only git config are not machine-specific; an outside CLAUDE.md is not quoted');
+  assert.deepEqual(byId(report, 'D-repo-settings-ignored'), [], 'a .claude file is no settings folder');
+});

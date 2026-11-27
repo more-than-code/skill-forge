@@ -26,6 +26,7 @@ const VALIDATOR = '---\nname: validator\ndescription: Validate.\n---\nValidate.\
 const SKILL_A = '---\nname: alpha\ndescription: Alpha skill.\n---\nAlpha.\n';
 const SKILL_A_EXTRA = 'Alpha examples.\n';
 const SKILL_B = '---\nname: beta\ndescription: Beta skill.\n---\nBeta.\n';
+const STEWARD = '---\nname: claude-project-steward\ndescription: Steward.\n---\nSteward.\n';
 
 const tempDirs = [];
 async function tempDir(prefix) {
@@ -47,7 +48,7 @@ const read = (file) => fs.readFile(file, 'utf8');
 const exists = (file) => fs.lstat(file).then(() => true, () => false);
 
 /** A locked fixture registry, mirrored at <base>/<REF>. */
-async function registryMirror() {
+async function registryMirror({ steward = true } = {}) {
   const root = await tempDir('skf-cloud-reg-');
   await writeFiles(root, {
     'inventory/agents/variants/cloud/core.md': CORE,
@@ -57,14 +58,15 @@ async function registryMirror() {
     'inventory/skills/alpha/SKILL.md': SKILL_A,
     'inventory/skills/alpha/EXAMPLES.md': SKILL_A_EXTRA,
     'inventory/skills/beta/SKILL.md': SKILL_B,
-    'inventory/skills/podman/SKILL.md': '---\nname: podman\ndescription: Mac only.\n---\nPodman.\n'
+    'inventory/skills/podman/SKILL.md': '---\nname: podman\ndescription: Mac only.\n---\nPodman.\n',
+    ...(steward ? { 'inventory/skills/claude-project-steward/SKILL.md': STEWARD } : {})
   });
   const skill = (name, tags = []) => ({ type: 'skill', name, version: '0.1.0', scope: 'custom', path: `inventory/skills/${name}`, installable: true, tags });
   const registry = {
     name: 'skill-forge-test',
     version: '0.0.0',
     schemaVersion: 1,
-    skills: [skill('alpha'), skill('beta'), skill('podman', ['containers', 'workstation-only'])],
+    skills: [skill('alpha'), skill('beta'), skill('podman', ['containers', 'workstation-only']), ...(steward ? [skill('claude-project-steward')] : [])],
     managedAgents: [],
     managedSubagents: [{ type: 'subagents', name: 'claude-code-subagents', version: '0.2.0', scope: 'claude-code', path: 'inventory/subagents/claude-code', installable: false, runtimeTarget: '~/.claude/agents' }],
     managedHooks: [],
@@ -80,7 +82,10 @@ async function registryMirror() {
 async function install(mirror, homeDir, decl) {
   // Repos are read from SKF_REPOS_DIR; default to an empty folder so the test runner's cwd never counts.
   const reposDir = decl.SKF_REPOS_DIR ?? await tempDir('skf-cloud-norepos-');
+  // Default skills are off unless a test asks for them (SKF_DEFAULT_SKILLS: ''), so the fixture
+  // registry needs no steward and the other tests see only what they declare.
   const env = { ...process.env, HOME: homeDir, SKF_BASE: mirror.base, SKF_REF: REF, SKF_REPOS_DIR: reposDir, ...decl };
+  for (const [key, value] of Object.entries(env)) if (value === undefined) delete env[key];
   const { stdout } = await run('node', [CLOUD, 'install'], { env });
   return stdout;
 }
@@ -115,7 +120,8 @@ test('install writes exactly the declared rules, agents and skills, byte-identic
   const state = JSON.parse(await read(path.join(claude, 'skill-forge/state.json')));
   assert.equal(state.ref, REF);
   assert.deepEqual(state.failed, []);
-  assert.equal(Object.keys(state.files).length, 6);
+  assert.equal(Object.keys(state.files).length, 7, 'rules, two agents, three skill files and the default steward');
+  assert.deepEqual(state.skills, ['alpha', 'beta', 'claude-project-steward']);
   assert.ok(await exists(path.join(claude, 'skill-forge/skf-cloud.mjs')), 'keeps a copy of itself for doctor');
   assert.match(await read(path.join(homeDir, 'skf-setup.log')), /done: all files verified/);
 });
@@ -456,7 +462,7 @@ test('install adds repo-declared skills once each, after SKF_SKILLS, and skips l
   await fs.symlink(path.join(reposDir, 'secret.json'), path.join(reposDir, 'four/skill-forge.json'));
   await fs.symlink('loop', path.join(reposDir, 'loop'));
   const out = await install(mirror, homeDir, { ...DECL, SKF_SKILLS: 'alpha', SKF_REPOS_DIR: reposDir });
-  assert.deepEqual(await skillDirs(homeDir), ['alpha', 'beta'], 'each name once; no podman, no local skill, no non-git folder');
+  assert.deepEqual(await skillDirs(homeDir), ['alpha', 'beta', 'claude-project-steward'], 'each name once; no podman, no local skill, no non-git folder');
   assert.equal(await read(path.join(homeDir, '.claude/skills/beta/SKILL.md')), SKILL_B);
   assert.match(out, /skipped three\/skill-forge\.json/);
   assert.match(out, /skipped four\/skill-forge\.json: not a regular file/);
@@ -466,8 +472,8 @@ test('install adds repo-declared skills once each, after SKF_SKILLS, and skips l
   const state = await readStateFile(homeDir);
   assert.equal(state.version, 2);
   assert.equal(state.fromRepos, true);
-  assert.deepEqual(state.skills, ['alpha'], 'skills stays the SKF_SKILLS list');
-  assert.deepEqual(state.skillSources, { alpha: 'env', beta: ['one', 'two'] });
+  assert.deepEqual(state.skills, ['alpha', 'claude-project-steward'], 'skills stays the environment-level list');
+  assert.deepEqual(state.skillSources, { alpha: 'env', 'claude-project-steward': 'env', beta: ['one', 'two'] });
   assert.deepEqual(state.skipped, { podman: { reason: 'workstation-only', repos: ['one'], detail: '', version: '0.1.0' } });
   assert.deepEqual(state.failed, [], 'a skip is not a failure');
   assert.equal(state.versions['skill:beta'], '0.1.0');
@@ -488,7 +494,7 @@ test('install reads the repos in its working directory when SKF_REPOS_DIR is uns
   const env = { ...process.env, HOME: homeDir, SKF_BASE: mirror.base, SKF_REF: REF, ...DECL, SKF_SKILLS: '' };
   delete env.SKF_REPOS_DIR;
   await run('node', [CLOUD, 'install'], { env, cwd: reposDir });
-  assert.deepEqual(await skillDirs(homeDir), ['beta']);
+  assert.deepEqual(await skillDirs(homeDir), ['beta', 'claude-project-steward']);
 });
 
 test('satisfiesRange in skf-cloud.mjs matches lib/skill-helpers.js', async () => {
@@ -514,7 +520,7 @@ test('a version outside a repo range skips that skill alone; install exits 0 and
     'two/skill-forge.json': manifest({ beta: '~0.1.0', gone: '^1.0.0' })
   });
   await install(mirror, homeDir, { ...DECL, SKF_SKILLS: '', SKF_REPOS_DIR: reposDir });
-  assert.deepEqual(await skillDirs(homeDir), ['alpha'], 'an exact range matches; ^0.1.1 rejects 0.1.0');
+  assert.deepEqual(await skillDirs(homeDir), ['alpha', 'claude-project-steward'], 'an exact range matches; ^0.1.1 rejects 0.1.0');
   const state = await readStateFile(homeDir);
   assert.equal(state.skipped.beta.reason, 'range');
   assert.match(state.skipped.beta.detail, /SKF_REF has 0\.1\.0; one wants \^0\.1\.1/);
@@ -541,7 +547,7 @@ test('SKF_FROM_REPOS=0 ignores the repos: same files and state as without them',
   assert.deepEqual(strip(await treeHashes(path.join(withRepos, '.claude'))), strip(await treeHashes(path.join(without, '.claude'))));
   const [a, b] = [await readStateFile(withRepos), await readStateFile(without)];
   assert.equal(a.fromRepos, false);
-  assert.deepEqual(a.skillSources, { alpha: 'env' });
+  assert.deepEqual(a.skillSources, { alpha: 'env', 'claude-project-steward': 'env' });
   assert.deepEqual(a.skipped, {});
   assert.deepEqual(Object.keys(a.files).map((f) => path.relative(withRepos, f)), Object.keys(b.files).map((f) => path.relative(without, f)));
 });
@@ -574,7 +580,7 @@ test('install --top-up adds a newly declared skill and leaves every other file u
   }
   assert.deepEqual(Object.keys(after).filter((rel) => !(rel in before)), ['skills/beta/SKILL.md']);
   const state = await readStateFile(homeDir);
-  assert.deepEqual(state.skillSources, { alpha: ['one'], beta: ['one'] });
+  assert.deepEqual(state.skillSources, { 'claude-project-steward': 'env', alpha: ['one'], beta: ['one'] });
   assert.equal(state.rules, 'cloud', 'the rest of the state is kept');
   assert.ok(!ids(await doctor(homeDir, reposDir)).includes('D-skill-missing'));
   assert.match(await read(path.join(homeDir, 'skf-setup.log')), /added: beta/, 'appends to the setup log');
@@ -1192,4 +1198,86 @@ test('doctor\'s git ignores a repo\'s credential helper and askpass on an https 
   assert.ok(asked > 0, 'git reached the server');
   for (const suffix of ['', '.helper', '.scoped']) assert.equal(await exists(marker + suffix), false, `nothing ran (${suffix || 'askpass'})`);
   assert.match(byId(report, 'D-context-base-unchecked')[0].evidence, /locked/);
+});
+
+test('install adds claude-project-steward by default, once, and SKF_DEFAULT_SKILLS=0 turns it off', async () => {
+  const mirror = await registryMirror();
+  const stateOf = async (homeDir) => JSON.parse(await read(path.join(homeDir, '.claude/skill-forge/state.json')));
+  const steward = (homeDir) => path.join(homeDir, '.claude/skills/claude-project-steward/SKILL.md');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/skill-forge.json': manifest({ beta: '^0.1.0' }) });
+  // Online doctor too, so D-skill-suggest (skipped under --offline) is checked as well.
+  const aboutSteward = async (homeDir) => {
+    const { stdout } = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...process.env, HOME: homeDir } });
+    return JSON.parse(stdout).findings.filter((entry) => `${entry.evidence} ${entry.fix}`.includes('claude-project-steward'));
+  };
+
+  // No SKF_SKILLS and SKF_DEFAULT_SKILLS unset: the steward still installs, as an environment-level skill.
+  const bare = await tempDir('skf-cloud-home-');
+  await install(mirror, bare, { ...DECL, SKF_SKILLS: '', SKF_DEFAULT_SKILLS: undefined, SKF_REPOS_DIR: reposDir });
+  assert.equal(await read(steward(bare)), STEWARD);
+  const bareState = await stateOf(bare);
+  assert.deepEqual(bareState.skills, ['claude-project-steward']);
+  assert.equal(bareState.skillSources['claude-project-steward'], 'env');
+  assert.deepEqual(bareState.failed, []);
+  assert.match(await read(path.join(bare, 'skf-setup.log')), /defaults=claude-project-steward/);
+  assert.deepEqual(await aboutSteward(bare), [], 'no D-skill-unused, D-skill-suggest or other finding about it');
+
+  // An older setup script that still lists it: the same single copy, the name once, no failure.
+  const listed = await tempDir('skf-cloud-home-');
+  await install(mirror, listed, { ...DECL, SKF_SKILLS: 'alpha claude-project-steward', SKF_REPOS_DIR: reposDir });
+  const listedState = await stateOf(listed);
+  assert.deepEqual(listedState.skills, ['alpha', 'claude-project-steward']);
+  assert.deepEqual(listedState.failed, []);
+  assert.deepEqual(await skillDirs(listed), ['alpha', 'beta', 'claude-project-steward']);
+  assert.deepEqual(await aboutSteward(listed), []);
+
+  // Opted out, nothing in SKF_SKILLS: the behaviour before defaults existed.
+  const off = await tempDir('skf-cloud-home-');
+  await install(mirror, off, { ...DECL, SKF_SKILLS: '', SKF_DEFAULT_SKILLS: '0' });
+  assert.equal(await exists(steward(off)), false);
+  assert.deepEqual((await stateOf(off)).skills, []);
+  assert.match(await read(path.join(off, 'skf-setup.log')), /defaults=off/);
+});
+
+test('a default the registry at SKF_REF lacks is one recorded failure; everything else installs', async () => {
+  const mirror = await registryMirror({ steward: false });
+  const homeDir = await tempDir('skf-cloud-home-');
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: 'alpha' });
+  assert.deepEqual(await skillDirs(homeDir), ['alpha']);
+  const state = JSON.parse(await read(path.join(homeDir, '.claude/skill-forge/state.json')));
+  assert.equal(state.failed.length, 1);
+  assert.match(state.failed[0], /claude-project-steward/);
+  assert.ok(await exists(path.join(homeDir, '.claude/rules/skill-forge.md')));
+});
+
+test('a repo that also declares the steward does not take it over; top-up leaves it alone', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'one/.git/HEAD': 'x\n',
+    'one/skill-forge.json': manifest({ alpha: '^0.1.0', 'claude-project-steward': '^0.1.0' })
+  });
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: '', SKF_REPOS_DIR: reposDir });
+  const state = JSON.parse(await read(path.join(homeDir, '.claude/skill-forge/state.json')));
+  assert.equal(state.skillSources['claude-project-steward'], 'env', 'the environment level wins');
+  assert.deepEqual(await skillDirs(homeDir), ['alpha', 'claude-project-steward']);
+  const env = { ...process.env, HOME: homeDir, SKF_REPOS_DIR: reposDir, SKF_BASE: mirror.base };
+  const { stdout } = await run('node', [path.join(homeDir, '.claude/skill-forge/skf-cloud.mjs'), 'install', '--top-up'], { env });
+  assert.match(stdout, /nothing to add/);
+  const report = await doctor(homeDir, reposDir);
+  assert.deepEqual(report.findings.filter((entry) => `${entry.evidence} ${entry.fix}`.includes('claude-project-steward')), []);
+});
+
+test('every default skill is an installable cloud skill in this repository\'s registry', async () => {
+  const source = await read(CLOUD);
+  const names = JSON.parse(source.match(/const DEFAULT_SKILLS = (\[[^\]]*\]);/)[1].replaceAll("'", '"'));
+  const registry = JSON.parse(await read(path.join(REPO, 'registry.json')));
+  for (const name of names) {
+    const skill = registry.skills.find((entry) => entry.name === name);
+    assert.ok(skill, `${name} is in registry.json`);
+    assert.notEqual(skill.installable, false, `${name} is installable`);
+    assert.ok(!skill.workstationOnly && !(skill.tags || []).includes('workstation-only'), `${name} is not workstation-only`);
+  }
 });

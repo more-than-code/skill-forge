@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="12">
+  <title>Skill Forge MCP server architecture</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="880" height="470" fill="#ffffff"/>
+
+  <!-- Static bootstrap -->
+  <rect x="20" y="20" width="220" height="70" rx="8" fill="#f1f5f9" stroke="#64748b"/>
+  <text x="130" y="44" text-anchor="middle" font-weight="600">Cloud environment setup script</text>
+  <text x="130" y="62" text-anchor="middle">skf-cloud install @ SKF_REF</text>
+  <text x="130" y="78" text-anchor="middle" fill="#475569">static, runs before the thread</text>
+
+  <rect x="20" y="130" width="220" height="44" rx="8" fill="#f1f5f9" stroke="#64748b"/>
+  <text x="130" y="150" text-anchor="middle" font-weight="600">~/.claude</text>
+  <text x="130" y="166" text-anchor="middle">rules, subagents, skills</text>
+
+  <!-- Consumer thread -->
+  <rect x="20" y="214" width="220" height="80" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="130" y="238" text-anchor="middle" font-weight="600">Consumer thread</text>
+  <text x="130" y="256" text-anchor="middle">Project thread / cloud session</text>
+  <text x="130" y="272" text-anchor="middle">in Deploybot, Tutored, …</text>
+  <text x="130" y="286" text-anchor="middle" fill="#475569">own repo only on GitHub</text>
+
+  <line x1="130" y1="90" x2="130" y2="128" stroke="#475569" marker-end="url(#a)"/>
+  <line x1="130" y1="174" x2="130" y2="212" stroke="#475569" marker-end="url(#a)"/>
+  <text x="138" y="198" fill="#475569">loads at start</text>
+
+  <!-- MCP server -->
+  <rect x="290" y="150" width="250" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="415" y="172" text-anchor="middle" font-weight="600">Skill Forge MCP server</text>
+  <text x="415" y="188" text-anchor="middle" fill="#475569">Deploybot container, Node 22</text>
+
+  <rect x="306" y="200" width="218" height="44" rx="6" fill="#ffffff" stroke="#16a34a"/>
+  <text x="415" y="219" text-anchor="middle">MCP endpoint: Streamable HTTP</text>
+  <text x="415" y="235" text-anchor="middle">OAuth 2.1 (GitHub sign-in, allowlist)</text>
+
+  <rect x="306" y="254" width="218" height="44" rx="6" fill="#ffffff" stroke="#16a34a"/>
+  <text x="415" y="273" text-anchor="middle">Sandbox job (no network, no secrets)</text>
+  <text x="415" y="289" text-anchor="middle">bin/cli.js skill check | write, lock, validate</text>
+
+  <rect x="306" y="308" width="218" height="44" rx="6" fill="#ffffff" stroke="#16a34a"/>
+  <text x="415" y="327" text-anchor="middle">Committer (holds App key)</text>
+  <text x="415" y="343" text-anchor="middle">server-built tree, path checks</text>
+
+  <rect x="306" y="362" width="218" height="28" rx="6" fill="#ffffff" stroke="#16a34a"/>
+  <text x="415" y="380" text-anchor="middle">git mirror + proposal records</text>
+
+  <line x1="415" y1="244" x2="415" y2="252" stroke="#475569" marker-end="url(#a)"/>
+  <line x1="415" y1="298" x2="415" y2="306" stroke="#475569" marker-end="url(#a)"/>
+
+  <line x1="240" y1="248" x2="304" y2="222" stroke="#2563eb" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="20" y="318" fill="#2563eb">MCP tool calls during the thread:</text>
+  <text x="20" y="334" fill="#2563eb">read · check · propose · revise · feedback</text>
+
+  <!-- GitHub repo -->
+  <rect x="650" y="20" width="210" height="300" rx="10" fill="#faf5ff" stroke="#7c3aed"/>
+  <text x="755" y="42" text-anchor="middle" font-weight="600">more-than-code/skill-forge</text>
+  <text x="755" y="58" text-anchor="middle" fill="#475569">public, GitHub</text>
+
+  <rect x="666" y="70" width="178" height="30" rx="6" fill="#ffffff" stroke="#7c3aed"/>
+  <text x="755" y="90" text-anchor="middle">main (SKF_REF pins)</text>
+  <rect x="666" y="112" width="178" height="30" rx="6" fill="#ffffff" stroke="#7c3aed"/>
+  <text x="755" y="132" text-anchor="middle">dev</text>
+  <rect x="666" y="154" width="178" height="44" rx="6" fill="#ffffff" stroke="#7c3aed"/>
+  <text x="755" y="173" text-anchor="middle">proposal/* branches</text>
+  <text x="755" y="189" text-anchor="middle">+ draft PRs into dev</text>
+  <rect x="666" y="210" width="178" height="30" rx="6" fill="#ffffff" stroke="#7c3aed"/>
+  <text x="755" y="230" text-anchor="middle">feedback issues</text>
+  <rect x="666" y="252" width="178" height="56" rx="6" fill="#ffffff" stroke="#7c3aed"/>
+  <text x="755" y="272" text-anchor="middle">GitHub Actions CI</text>
+  <text x="755" y="288" text-anchor="middle">npm test, lock, validate</text>
+  <text x="755" y="302" text-anchor="middle" fill="#475569">no secrets</text>
+
+  <line x1="755" y1="112" x2="755" y2="102" stroke="#475569" marker-end="url(#a)"/>
+  <text x="762" y="108" fill="#475569" font-size="10">fast-forward</text>
+  <line x1="755" y1="154" x2="755" y2="144" stroke="#475569" marker-end="url(#a)"/>
+  <text x="762" y="151" fill="#475569" font-size="10">merge</text>
+
+  <line x1="524" y1="322" x2="664" y2="190" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="566" y="292" fill="#7c3aed">GitHub App:</text>
+  <text x="566" y="306" fill="#7c3aed">push proposal/*,</text>
+  <text x="566" y="320" fill="#7c3aed">PR, issue</text>
+  <line x1="664" y1="135" x2="526" y2="370" stroke="#475569" stroke-dasharray="4 3" marker-end="url(#a)"/>
+  <text x="548" y="388" fill="#475569" font-size="10">fetch any ref (read)</text>
+
+  <!-- Joe -->
+  <rect x="650" y="370" width="210" height="80" rx="10" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="755" y="394" text-anchor="middle" font-weight="600">Joe (owner)</text>
+  <text x="755" y="412" text-anchor="middle">reviews and merges every PR</text>
+  <text x="755" y="428" text-anchor="middle">fast-forwards main</text>
+  <text x="755" y="444" text-anchor="middle">moves SKF_REF in setup scripts</text>
+  <line x1="755" y1="370" x2="755" y2="322" stroke="#ea580c" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- pin back to setup -->
+  <path d="M666,85 C480,85 420,55 242,55" fill="none" stroke="#475569" stroke-dasharray="4 3" marker-end="url(#a)"/>
+  <text x="330" y="48" fill="#475569">pinned commit, fetched at setup</text>
+</svg>

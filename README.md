@@ -293,9 +293,13 @@ below.
 It is a separate, compact core (`inventory/agents/variants/cloud/`, at most 150
 lines for both blocks, enforced by `validate` through the variant's `maxLines`):
 tiers, gates with "skipped is not passed", independent review, git rules for
-thread branches, task state in the PR, security, docs with code. It drops the
-workstation-only parts of `full` (the `tasks/` ledger, external workers and
-Grok, podman, skill-path protocol). The variant sets `requiresClaude`, so `use
+thread branches (threads commit and push their own branch without being asked;
+repository rules about commits and pushes govern shared branches only, and
+`skf-cloud doctor` flags common "do not commit / do not push" phrasings), task state in the
+PR, security, docs with code. `full` carries the matching exception for
+sessions that load the cloud rules. It drops the workstation-only parts of
+`full` (the `tasks/` ledger, external workers and Grok, podman, skill-path
+protocol). The variant sets `requiresClaude`, so `use
 cloud` adds the `claude-code` shim when the profile lacks it and says so, and
 sync refuses a `cloud` declaration without the shim. Switch with `use cloud`
 from `full` or from nothing; `use none` removes the blocks but keeps the shim
@@ -397,7 +401,8 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   nothing. A skill added this way is usable in the same thread after a moment.
 - `doctor` (read-only; `--json`, `--check`, `--repos-dir`, `--context <file>`) checks the
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
-  blocks, sections repeated across repos, always-loaded size, workstation-only rules,
+  blocks, sections repeated across repos, always-loaded size, workstation-only rules and
+  blanket "do not commit / do not push" lines,
   committed copies of installed skills, shadowing subagents, declared skills that are missing
   (fixed by `--top-up`), out of range or workstation-only, repo-installed skills that no repo
   declares any more (gone at the next rebuild), lock versions that differ from the installed

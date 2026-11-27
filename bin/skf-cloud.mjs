@@ -56,6 +56,15 @@ const MANAGED_BLOCK = /<!-- >>> skill-forge instructions[^\n]*\n[\s\S]*?<!-- <<<
 // such as `grok-bot-box` (a host) or a product's `grok` agent adapter is a repository fact, not the
 // Grok workflow, so only Grok as a worker or build harness matches.
 const WORKSTATION_PHRASES = [/tasks\/todo\.md/, /tasks\/lessons\.md/, /external[- ]worker/i, /\bgrok(?:-build-harness\b|[ -](?:workers?|build)\b)/i, /podman/i, /skf sync --check/];
+// A repository's blanket commit/push ban, written for local sessions ("Do not commit unless the user
+// asks. Do not push."). The cloud rules let threads commit and push their own branch regardless, so
+// the repo should point at them instead. The ban must end its sentence on the same line or carry an ask-first
+// qualifier; a rule about where or what to commit ("never push to main", "do not commit generated
+// files", "do not commit without running tests") is a repository fact. Checked line by line with
+// Markdown emphasis and code marks removed, and only in repository prose: Project instructions may
+// restrict threads on purpose.
+const REPO_COMMIT_BAN = /\b(?:do not|don['\u2019]t|never)\s+(?:commit|push)(?:\s*(?:\/|,|or|and)\s*(?:commit|push))?(?:\s*[.;!]|\s+unless\s+(?:the user|you are|you're|asked|told)\b|\s+without\s+(?:asking|being asked|explicit|permission|approval)\b)/i;
+const hasCommitBan = (prose) => prose.split('\n').some((line) => REPO_COMMIT_BAN.test(line.replace(/[*_`]/g, '')));
 
 const hashBytes = (bytes) => `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
 const withoutManagedBlocks = (text) => text.replace(MANAGED_BLOCK, '');
@@ -1134,10 +1143,13 @@ function checkRepos(findings, repos, state) {
       findings.push(finding('D-repo-managed-block', state ? 'issue' : 'note', 'thread-pr', `${repo.name} carries a Skill Forge managed instructions block, which repeats the environment's workflow rules`,
         `PR in ${repo.name}: remove the block and the "instructions" variant keys in skill-forge.json, and keep only ${repo.name}'s own facts.`));
     }
-    const phrases = WORKSTATION_PHRASES.filter((pattern) => pattern.test(prose));
+    const phrases = WORKSTATION_PHRASES.filter((pattern) => pattern.test(prose)).map(String);
+    const commitBan = hasCommitBan(prose);
+    if (commitBan) phrases.push('a "do not commit / do not push" line');
     if (phrases.length > 0) {
-      findings.push(finding('D-repo-restates-rules', 'note', 'thread-pr', `${repo.name} instructions mention workstation-only workflow (${phrases.map(String).join(', ')})`,
-        `PR in ${repo.name}: drop workflow rules the environment already carries; keep repository facts.`));
+      const pointer = commitBan ? ' Replace a blanket "do not commit / do not push" line with a pointer to the shared workflow rules (Git and pull requests); rules about shared branches can stay.' : '';
+      findings.push(finding('D-repo-restates-rules', 'note', 'thread-pr', `${repo.name} instructions mention workstation-only workflow (${phrases.join(', ')})`,
+        `PR in ${repo.name}: drop workflow rules the environment already carries; keep repository facts.${pointer}`));
     }
     if (Buffer.byteLength(text) > REPO_BYTES_BUDGET) {
       findings.push(finding('D-repo-size', 'issue', 'thread-pr', `${repo.name} loads ${Buffer.byteLength(text)} bytes of instructions in every thread (budget ${REPO_BYTES_BUDGET})`,

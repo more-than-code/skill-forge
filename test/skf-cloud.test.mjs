@@ -1118,7 +1118,10 @@ test('doctor checks that each repo has the PR base the Project instructions name
     ['Pull requests go into the `dev` branch.\n', ['D-context-base-unchecked']],
     ['PRs go into `dev`; the owner merges dev into main.\n', ['D-context-base-unchecked']],
     ['Pull requests go into the default branch.\n', []],
-    ['PRs into `dev` for nodev.\nPRs into `main` for withdev.\n', []]
+    ['PRs into `dev` for nodev.\nPRs into `main` for withdev.\n', []],
+    ['PRs go into `dev` for apps, `main` for docs.\n', []],
+    ['Never open pull requests into `main`.\nPull requests go into `dev`.\n', ['D-context-base-unchecked']],
+    ['Never open pull requests into `main`.\n', []]
   ]) {
     await fs.writeFile(context, text);
     assert.deepEqual(ids(await online(['--context', context])).filter((id) => id.startsWith('D-context-base')), expected, text);
@@ -1150,4 +1153,43 @@ test('doctor stays fast on a CLAUDE.md line of many @ characters and ignores a h
   const report = JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--context', context], { env })).stdout);
   assert.equal(await exists(marker), false, 'the repo config ran no command');
   assert.match(byId(report, 'D-context-base-missing')[0].evidence, /odd has no dev branch/);
+});
+
+test('doctor\'s git ignores a repo\'s credential helper and askpass on an https origin that asks for a password', async (t) => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const certDir = await tempDir('skf-cloud-cert-');
+  try {
+    await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=127.0.0.1', '-days', '1',
+      '-keyout', path.join(certDir, 'key.pem'), '-out', path.join(certDir, 'cert.pem')]);
+  } catch {
+    t.skip('openssl is not available');
+    return;
+  }
+  const https = await import('node:https');
+  let asked = 0;
+  const server = https.createServer({ key: await read(path.join(certDir, 'key.pem')), cert: await read(path.join(certDir, 'cert.pem')) }, (req, res) => {
+    asked += 1;
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="x"' });
+    res.end();
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const url = `https://127.0.0.1:${server.address().port}/r.git`;
+  const dir = await gitRepo(reposDir, 'locked', { 'CLAUDE.md': '@AGENTS.md\n', 'AGENTS.md': '# locked\n', 'skill-forge.json': manifest({}) });
+  const marker = path.join(homeDir, 'ran');
+  const askpass = path.join(homeDir, 'askpass.sh');
+  await fs.writeFile(askpass, `#!/bin/sh\ntouch ${marker}\necho secret\n`, { mode: 0o755 });
+  await git(dir, 'remote', 'add', 'origin', url);
+  await git(dir, 'config', 'http.sslVerify', 'false');
+  await git(dir, 'config', 'credential.helper', `!touch ${marker}.helper; echo`);
+  await git(dir, 'config', `credential.${url}.helper`, `!touch ${marker}.scoped; echo`);
+  await git(dir, 'config', 'core.askPass', askpass);
+  const context = path.join(homeDir, 'instructions.txt');
+  await fs.writeFile(context, 'Pull requests go into `dev`.\n');
+  const env = { ...process.env, HOME: homeDir, SSH_ASKPASS: askpass, NO_PROXY: '127.0.0.1', no_proxy: '127.0.0.1' };
+  const report = JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--context', context], { env })).stdout);
+  assert.ok(asked > 0, 'git reached the server');
+  for (const suffix of ['', '.helper', '.scoped']) assert.equal(await exists(marker + suffix), false, `nothing ran (${suffix || 'askpass'})`);
+  assert.match(byId(report, 'D-context-base-unchecked')[0].evidence, /locked/);
 });

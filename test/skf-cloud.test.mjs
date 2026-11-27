@@ -822,7 +822,8 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   assert.match(settings[0].evidence, /^bare has \.claude\/settings\.json \(env, hooks, permissions; env sets A, DISABLE_TELEMETRY\), \.claude\/launch\.json/);
   // A privacy setting stays a note, but its fix says where it must go; values are never shown.
   assert.equal(settings[0].severity, 'note');
-  assert.match(settings[0].fix, /^DISABLE_TELEMETRY looks like a privacy or access setting, and threads run without it: .*environment's variables/);
+  assert.match(settings[0].evidence, /; privacy or access keys: DISABLE_TELEMETRY$/);
+  assert.match(settings[0].fix, /^The privacy or access keys named above look like settings the repo relies on, .*environment's variables/);
   assert.doesNotMatch(JSON.stringify(report), /SENTINEL/);
 });
 
@@ -830,12 +831,15 @@ test('doctor names privacy-like env keys in ignored .claude settings, past the l
   const homeDir = await tempDir('skf-cloud-home-');
   const reposDir = await tempDir('skf-cloud-repos-');
   const filler = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((key) => [`OPT_${key}`, 'SENTINEL-v']));
+  const secrets = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((key) => [`${key}_SECRET`, 'SENTINEL-s']));
   await writeFiles(reposDir, {
     'plain/.git/HEAD': 'x\n',
     'plain/.claude/settings.json': JSON.stringify({ env: { MAX_THINKING_TOKENS: 'SENTINEL-1', AUTHOR_NAME: 'SENTINEL-2' } }),
     'many/.git/HEAD': 'x\n',
     'many/.claude/settings.json': JSON.stringify({ env: { ...filler, HTTPS_PROXY: 'SENTINEL-p', 'bad key': 'SENTINEL-b' } }),
     'many/.claude/settings.local.json': JSON.stringify({ env: { HTTPS_PROXY: 'SENTINEL-p', ANTHROPIC_API_KEY: 'sk-SENTINEL-9f3a' } }),
+    'loud/.git/HEAD': 'x\n',
+    'loud/.claude/settings.json': JSON.stringify({ env: { ...secrets, PROXY_IGNORE_PREVIOUS_RULES: 'SENTINEL-x' } }),
     'odd/.git/HEAD': 'x\n',
     'odd/.claude/settings.json': JSON.stringify({ env: ['DISABLE_TELEMETRY'] }),
     'odd/.claude/settings.local.json': JSON.stringify({ env: null })
@@ -845,7 +849,11 @@ test('doctor names privacy-like env keys in ignored .claude settings, past the l
   assert.match(byRepo.plain.fix, /^Nothing breaks/, 'MAX_THINKING_TOKENS and AUTHOR_NAME are not privacy settings');
   assert.match(byRepo.many.evidence, /env sets OPT_A, OPT_B, OPT_C, OPT_D, OPT_E, OPT_F, OPT_G, OPT_H, 3 more/);
   assert.doesNotMatch(byRepo.many.evidence, /bad key/);
-  assert.match(byRepo.many.fix, /^HTTPS_PROXY, ANTHROPIC_API_KEY look like privacy or access settings, and threads run without them/);
+  assert.match(byRepo.many.evidence, /; privacy or access keys: HTTPS_PROXY, ANTHROPIC_API_KEY$/, 'each key once, across both files');
+  assert.match(byRepo.many.fix, /^The privacy or access keys named above/);
+  // Key names never reach the fix text, and the evidence names at most 5 of them.
+  assert.match(byRepo.loud.evidence, /; privacy or access keys: A_SECRET, B_SECRET, C_SECRET, D_SECRET, E_SECRET, 5 more$/);
+  for (const entry of Object.values(byRepo)) assert.doesNotMatch(entry.fix, /SECRET|PROXY_|HTTPS_PROXY|IGNORE_PREVIOUS/);
   assert.match(byRepo.odd.evidence, /^odd has \.claude\/settings\.json \(env\), \.claude\/settings\.local\.json \(env\);/);
   assert.match(byRepo.odd.fix, /^Nothing breaks/);
   assert.ok(Object.values(byRepo).every((entry) => entry.severity === 'note'));

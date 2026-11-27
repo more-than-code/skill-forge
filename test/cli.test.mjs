@@ -2537,6 +2537,13 @@ test('a CRLF .gitignore keeps CRLF in the block, and removing the block drops it
   assert.equal(await fx.gitignore(), `node_modules/\r\ndist/\r\n\r\n${crlfBlock}`, 'idempotent');
   await fx.skf(['project', 'generated', 'committed']);
   assert.equal(await fx.gitignore(), 'node_modules/\r\ndist/\r\n', 'block and its blank line removed');
+
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), 'node_modules/\r\ndist/');
+  await fx.skf(['project', 'generated', 'ignored']);
+  assert.equal(await fx.gitignore(), `node_modules/\r\ndist/\r\n\r\n${crlfBlock}`, 'a last line without an ending gets CRLF');
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), 'a\r\nb\r\nc\n');
+  await fx.skf(['sync']);
+  assert.equal(await fx.gitignore(), `a\r\nb\r\nc\n\r\n${crlfBlock}`, 'an existing LF line is left as it is');
 });
 
 test('project generated committed removes the block and copies everything again; a refusal changes nothing', async () => {

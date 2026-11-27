@@ -942,6 +942,8 @@ function checkRepos(findings, repos, state) {
   const cloned = new Set(repos.map((repo) => repo.name));
   for (const [name, source] of Object.entries(state.fromRepos ? state.skillSources : {})) {
     if (!Array.isArray(source) || declaredByRepos.has(name) || !source.every((repo) => cloned.has(repo))) continue;
+    // A manifest that does not parse may still declare it (a thread mid-edit): say nothing.
+    if (source.some((owner) => readRepoJson(repos.find((repo) => repo.name === owner).dir, MANIFEST_NAME) === null)) continue;
     findings.push(finding('D-skill-repo-leftover', 'note', 'thread', `skill ${name} was installed for ${source.join(', ')}, which no longer declare${source.length === 1 ? 's' : ''} it; it stays in ~/.claude/skills in this thread`,
       'Nothing to do: the next environment rebuild drops it.'));
   }

@@ -1351,7 +1351,8 @@ async function planGitignore(projectRoot, lines) {
   } else if (lines) {
     const kept = current === null ? [] : [...all];
     while (kept.length > 0 && isBlankLine(kept[kept.length - 1])) kept.pop();
-    if (cr && kept.length > 0 && !kept[kept.length - 1].endsWith(cr)) kept[kept.length - 1] += cr;
+    // Only a last line with no terminator at all gets the file's ending; an existing LF stays.
+    if (cr && kept.length > 0 && !current.endsWith('\n')) kept[kept.length - 1] += cr;
     nextText = `${[...kept, ...(kept.length > 0 ? [cr] : []), ...block].join('\n')}\n`;
   } else {
     nextText = current;

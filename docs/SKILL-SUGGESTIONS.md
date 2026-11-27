@@ -1,136 +1,110 @@
-# Doctor suggests skills for a repo's stack (spec)
+# Doctor prompts the agent to suggest skills for a repo's stack (spec)
 
-Status: proposed 2026-11-27, awaiting Joe's approval. Tier 3: it adds a field to
-`registry.json` skill entries and a finding to `skf-cloud.mjs doctor` JSON.
+Status: proposed 2026-11-27, revised the same day on Joe's direction ("leave this to the
+agent; doctor just drops a prompt for the agent to use"). Awaiting Joe's approval. Tier 3:
+it adds findings to `skf-cloud.mjs doctor` output, whose JSON is a public contract.
 Tracks Defect Drainer requirement DEF-20261127-doctor-should-suggest-skills-for-the-rep-pytp.
 
 ## Goal
 
-A repository whose stack has a matching registry skill, but which neither declares that
-skill nor gets it from the environment, gets a note from `skf-cloud.mjs doctor` naming the
-skill and the `skill-forge.json` lines that add it. Example: a React + Vite app that calls
-the Anthropic SDK and declares only `claude-project-steward` is told about
-`frontend-engineering` and `llm-integration`.
+When a thread runs doctor, the output includes a prompt telling the agent which registry
+skills the environment neither installs nor any repo declares, and asking it to match them
+against the repositories' stacks. The agent judges which fit, reads those skills, and opens
+a pull request adding the good matches to that repo's `skill-forge.json`. Example: a React +
+Vite app that calls the Anthropic SDK and declares only `claude-project-steward` ends up
+with a PR adding `frontend-engineering` and `llm-integration`.
 
-Doctor never installs anything. The fix is a pull request in that repository.
+Doctor itself detects no stack and installs nothing. Matching is the agent's judgment.
 
 ## Changes
 
-### 1. `registry.json`: optional `suggestFor` on a skill entry
+### `skf-cloud.mjs doctor`: one `D-skill-suggest` note
 
-```json
-{ "name": "frontend-engineering", "version": "0.3.1", "...": "...",
-  "suggestFor": ["npm:react", "npm:vue", "npm:svelte"] }
-```
+- Reads `registry.json` at the environment's recorded `SKF_REF` (one fetch, the commit
+  install used, so every candidate is one `install --top-up` can install).
+- Candidates: registry skills that are installable, not `workstation-only`, not installed
+  in `~/.claude/skills`, and not declared by any cloned repo. A skill a repo declares but
+  the environment lacks is already reported by `D-skill-missing` or `D-skill-range`.
+- When there is at least one candidate, one finding:
+  - id `D-skill-suggest`, severity `note`, owner `thread`
+  - evidence: `<N> registry skills are neither installed nor declared: frontend-engineering 0.3.1 [frontend, architecture], llm-integration 0.1.0 [llm, workflow], ...`
+  - fix (the prompt):
 
-An array of stack signals. Any one signal matching is enough. Three kinds in v1:
+    > Check whether any of these skills fits a cloned repository's stack. Look at each
+    > repo's dependency and config files (package.json including devDependencies, go.mod,
+    > pubspec.yaml, pyproject.toml, Dockerfile, deploy config) and its subfolders' apps.
+    > For a skill whose name or tags fit, read its description at
+    > `<base>/<ref>/<path>/SKILL.md`. Where it clearly applies, open a PR in that repo
+    > adding `"<name>": "^<version>"` to `skill-forge.json` `skills.dependencies` (create
+    > `{"schemaVersion": 2, "skills": {"dependencies": {}}}` if the repo has none); after
+    > it merges, run `node ~/.claude/skill-forge/skf-cloud.mjs install --top-up`. Suggest
+    > nothing that only loosely fits. If the repo belongs to another Project, tell the
+    > owner instead of opening the PR.
 
-| Signal | Matches when |
-|---|---|
-| `npm:<package>` | the repo-root `package.json` lists the exact package name in `dependencies`, `devDependencies` or `peerDependencies` |
-| `go:<module>` | the repo-root `go.mod` has a `require` for the exact module path (single-line or block form) |
-| `file:<path>` | the repo-relative file or directory exists (`file:vercel.json`, `file:supabase/config.toml`, `file:.fvmrc`) |
-
-Signals are matched literally (no globs). The map lives in the registry, so it grows with
-the inventory: adding a skill for a stack means adding its signals in the same PR. Other
-kinds (`pub:`, `pypi:`, `cargo:`) are added when a registry skill needs them.
-
-`node bin/cli.js validate` checks the field: an array of strings, each `npm:`, `go:` or
-`file:` followed by a plain value (`file:` paths must be safe relative paths), and none on a
-`workstation-only` skill (it would never install in a thread). `skf` ignores the field
-everywhere else.
-
-### 2. Initial signals
-
-Only skills a stack signal clearly calls for. Process skills (`coding-discipline`,
-`security-baseline`, `code-quality`, `testing-strategy`) are not stack-specific and get none.
-
-| Skill | Signals |
-|---|---|
-| `frontend-engineering` | `npm:react`, `npm:vue`, `npm:svelte`, `npm:@angular/core`, `npm:solid-js`, `npm:preact` |
-| `llm-integration` | `npm:@anthropic-ai/sdk`, `npm:@anthropic-ai/claude-agent-sdk`, `npm:openai`, `npm:ai`, `npm:@google/genai`, `go:github.com/anthropics/anthropic-sdk-go`, `go:github.com/openai/openai-go` |
-| `supabase-postgres` | `file:supabase/config.toml`, `npm:@supabase/supabase-js` |
-| `vercel-deploy` | `file:vercel.json`, `npm:vercel` |
-| `fvm-flutter` | `file:.fvmrc`, `file:.fvm/fvm_config.json` |
-
-Answer to the requirement's open question: today the registry has `frontend-engineering`
-for React/Vite UIs and `llm-integration` for SDK calls; there is no TypeScript, Node or Go
-skill, so those stacks get no suggestion until one exists (Go is
-DEF-20261126-go-skill-for-go-repos-no-go-specific-ski-qop0). Dev dependencies count,
-because `vite`, `typescript` and test tooling usually live there.
-
-### 3. `skf-cloud.mjs doctor`: `D-skill-suggested`
-
-- Reads `registry.json` at the environment's recorded `SKF_REF` (the commit install used,
-  so a suggested skill and version are ones `install --top-up` can install). With
-  `--offline`, without an install state, or when the fetch fails, the check is skipped; a
-  failed fetch adds one `D-skill-suggest-unchecked` note (severity note, owner thread).
-- For each cloned repo, collects the skills whose signals match, then drops any that are:
-  workstation-only; already installed in `~/.claude/skills`; declared by that repo
-  (`skills.dependencies` or `skills.local`); or committed in its `.claude/skills/`.
-- One finding per repo that has suggestions:
-  - id `D-skill-suggested`, severity `note`, owner `thread-pr`
-  - evidence: `<repo> uses a stack with registry skills it does not declare: frontend-engineering (npm:react), llm-integration (npm:@anthropic-ai/sdk)`
-  - fix: `PR in <repo>: add to skill-forge.json skills.dependencies: "frontend-engineering": "^0.3.1", "llm-integration": "^0.1.0" (create the file as {"schemaVersion": 2, "skills": {"dependencies": {...}}} if it has none). After merge, run node ~/.claude/skill-forge/skf-cloud.mjs install --top-up; a workstation checkout runs skf sync to update the lock. Skip a skill the repo does not want.`
-  - The range is a caret on the version at `SKF_REF`.
-- Reading stays within the existing limits: `package.json` through `readRepoJson`, `go.mod`
-  through `readText` with the same size cap; symlinks out of the repo are not followed.
+    with `<base>`, `<ref>`, each candidate's `<path>` and `<version>` filled in, so the
+    agent has everything it needs without the skf CLI.
+- `--offline` or no install state: the check is skipped with no finding. A failed fetch
+  adds one `D-skill-suggest-unchecked` note (owner `thread`).
 - A note never changes `--check`'s exit code.
+
+### Docs
+
+README's doctor paragraph mentions the prompt. The `claude-project-steward` skill gets one
+line: act on `D-skill-suggest` when setting up or checking a Project (steward version
+bump).
 
 ## Contracts
 
 | Interface | Before | After |
 |---|---|---|
-| `registry.json` skill entry | no `suggestFor` | optional `suggestFor: string[]`; old readers ignore it |
-| doctor JSON | `version: 1`; findings as today | `version: 1` unchanged; two new finding ids, both `note` |
+| doctor JSON | `version: 1`; findings as today | `version: 1` unchanged; two new finding ids, both `note`, same finding shape |
 | doctor exit code (`--check`) | issues only | unchanged |
-| `skill-forge.json`, locks, `state.json`, `~/.claude` layout, declaration variables | — | unchanged |
-| `skf` CLI | — | `validate` checks the new field; nothing else changes |
+| `registry.json`, `skill-forge.json`, locks, `state.json`, `~/.claude` layout, declaration variables | — | unchanged |
+| `skf` CLI | — | unchanged |
 
 The steward skill acts on findings by owner and names only some ids, so a new id needs no
-doctor JSON version bump. An older `skf-cloud.mjs` ignores `suggestFor`.
+doctor JSON version bump.
 
 ## Alternatives considered
 
-- **Match registry `tags`** against the stack. Rejected: tags describe the skill
-  (`review-lens`, `tier-3`), not the stack, and a tag like `node` on `vercel-deploy` would
-  suggest it to every Node repo.
-- **Record the signal map in `state.json` at install**, so doctor works offline. Rejected
-  for v1: it changes `state.json`, and doctor already needs the network for `D-ref-behind`.
-- **Doctor installs the suggestion** (`--top-up` with suggestions). Rejected: the repo's
-  manifest is the declaration; installing undeclared skills makes threads differ from
-  local sessions.
-- **An opt-out list in `skill-forge.json`** for suggestions a repo rejects. Deferred: it
-  changes the manifest format; the note is cheap to ignore. Add it if notes become noise.
+- **A signal map in the registry** (`suggestFor: ["npm:react", ...]`, doctor matches
+  deterministically). The first draft of this spec. Dropped on Joe's direction: someone
+  has to maintain the map, and it misses stacks nobody listed (monorepo subfolders, new
+  frameworks). The agent reads the repo anyway.
+- **Matching registry `tags` in doctor.** Tags describe the skill (`review-lens`,
+  `tier-3`), not the stack; the agent can use them as hints instead.
+- **Doctor installs the suggestions.** Rejected: the repo manifest stays the
+  declaration, so threads and local sessions match.
+
+## Trade-offs
+
+- Results depend on the agent's judgment and are not reproducible run to run. The prompt
+  asks for clear fits only, and the PR is the review point.
+- The note appears on every online doctor run while candidates exist. It is one line of
+  evidence plus the prompt; an opt-out (a per-repo "considered" list) can come later if it
+  becomes noise.
 
 ## Acceptance criteria
 
-1. A repo with `react` in `devDependencies` and no declaration gets `D-skill-suggested`
-   naming `frontend-engineering` with its caret range, owner `thread-pr`, severity `note`.
-2. The same repo declaring the skill, or the environment having it installed, or a
-   committed `.claude/skills/frontend-engineering/`, gets no suggestion for it.
-3. A `go.mod` `require` (single-line and block form) and a `file:` path both match.
-4. A workstation-only skill with signals fails `validate`; a malformed signal fails
-   `validate`.
-5. `--offline` and a missing state skip the check with no finding; a failed fetch gives one
+1. With an install state and a fixture registry, doctor emits one `D-skill-suggest` note
+   (owner `thread`) listing exactly the installable, non-workstation-only skills that are
+   neither installed nor declared, with version, tags and SKILL.md URL at `SKF_REF`.
+2. A skill installed in `~/.claude/skills`, or declared by any repo, is not listed; a
+   workstation-only skill is never listed.
+3. No candidates: no finding.
+4. `--offline` or no install state: no finding; a failed fetch: one
    `D-skill-suggest-unchecked` note.
-6. Suggestions never change `--check`'s exit code.
-7. Existing doctor tests pass unchanged.
+5. `--check`'s exit code is unchanged by either note.
+6. Existing doctor tests pass unchanged.
 
 ## Tests and verification
 
-- `test/skf-cloud.test.mjs`: doctor cases for criteria 1–3, 5 and 6 against the fixture
-  mirror (`SKF_BASE` absolute path) with a fixture registry carrying `suggestFor`.
-- `test/cli.test.mjs`: `validate` cases for criterion 4.
-- Gates: `npm test` (pass, fail and skip counts), `node bin/cli.js lock`,
-  `node bin/cli.js validate`.
+- `test/skf-cloud.test.mjs`: doctor cases for criteria 1–5 against the fixture mirror
+  (`SKF_BASE` absolute path).
+- Gates: `npm test` (pass, fail and skip counts); `node bin/cli.js lock` and
+  `node bin/cli.js validate` for the steward skill bump.
 
 ## Rollout and rollback
 
-Projects follow `main`, so the doctor change reaches a Project at its next environment
-rebuild after `dev` is fast-forwarded to `main`; no pin move is needed. Rollback: revert the
-commit; older registries without `suggestFor` simply produce no suggestions.
-
-Docs: README's doctor paragraph mentions suggestions; the `claude-project-steward` skill
-gets one line on `D-skill-suggested` (open the repo PR, or tell the owner when the repo
-belongs to another Project), with a version bump.
+Projects follow `main`, so no pin move: the change reaches a Project at its next
+environment rebuild after `dev` is fast-forwarded to `main`. Rollback: revert the commit.

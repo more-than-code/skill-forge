@@ -1336,23 +1336,32 @@ async function planGitignore(projectRoot, lines) {
     if (!lines) return unchanged(current);
     throw new Error(`.gitignore has a malformed "${GITIGNORE_BLOCK_START}" block; fix or remove its markers, then re-run "${CLI_NAME} sync".`);
   }
-  const block = lines ? [GITIGNORE_BLOCK_START, ...lines, GITIGNORE_BLOCK_END] : [];
+  // Lines keep their own "\r"; the block is written in the file's dominant line ending.
+  const crlfCount = ((current ?? '').match(/\r\n/g) || []).length;
+  const cr = crlfCount > all.length - 1 - crlfCount ? '\r' : '';
+  const block = lines ? [GITIGNORE_BLOCK_START, ...lines, GITIGNORE_BLOCK_END].map((line) => `${line}${cr}`) : [];
   let nextText;
   if (starts.length === 1 && lines) {
     nextText = [...all.slice(0, starts[0]), ...block, ...all.slice(ends[0] + 1)].join('\n');
   } else if (starts.length === 1) {
     // Removing the block also drops the blank line sync put before it; a file that held only the block goes.
-    const before = all.slice(0, starts[0] > 0 && all[starts[0] - 1] === '' ? starts[0] - 1 : starts[0]);
+    const before = all.slice(0, starts[0] > 0 && isBlankLine(all[starts[0] - 1]) ? starts[0] - 1 : starts[0]);
     const rest = [...before, ...all.slice(ends[0] + 1)].join('\n');
     nextText = rest.trim() === '' ? null : rest;
   } else if (lines) {
     const kept = current === null ? [] : [...all];
-    while (kept.length > 0 && kept[kept.length - 1] === '') kept.pop();
-    nextText = `${[...kept, ...(kept.length > 0 ? [''] : []), ...block].join('\n')}\n`;
+    while (kept.length > 0 && isBlankLine(kept[kept.length - 1])) kept.pop();
+    if (cr && kept.length > 0 && !kept[kept.length - 1].endsWith(cr)) kept[kept.length - 1] += cr;
+    nextText = `${[...kept, ...(kept.length > 0 ? [cr] : []), ...block].join('\n')}\n`;
   } else {
     nextText = current;
   }
   return { file, current, next: nextText, changed: nextText !== current, hadBlock: starts.length === 1 };
+}
+
+/** An empty line, with or without the "\r" of a CRLF file. */
+function isBlankLine(line) {
+  return line === '' || line === '\r';
 }
 
 /** The paths git would ignore by the rules alone (tracked or not); empty when none. */

@@ -1,6 +1,6 @@
 ---
 name: claude-project-steward
-description: Set up, check and repair how a Claude Project's threads get their instructions, skills and subagents from Skill Forge — the cloud environment's setup script, the topic line, the Project instructions and each repository's CLAUDE.md/AGENTS.md. Activate when the owner asks to set up Skill Forge for a Project, to check a Project's setup or context, why threads miss rules or skills, or why rules load twice; also when a thread notices its workflow rules, skills or subagents missing or duplicated.
+description: Set up, check and repair how a Claude Project's threads get their instructions, skills and subagents from Skill Forge — the cloud environment's setup script, the topic line, the Project instructions and each repository's CLAUDE.md/AGENTS.md. Activate when the owner asks to set up Skill Forge for a Project, to check a Project's setup or context, why threads miss rules or skills, or why rules load twice; also when a thread notices its workflow rules, skills or subagents missing or duplicated, or when a local session finds a repo's declared skills missing.
 ---
 
 # Claude Project steward
@@ -202,6 +202,12 @@ One PR per repo, into the base the Project instructions name, on your own branch
   `D-skill-workstation-only`) keeps its copy until that is resolved. Say in the PR that a
   workstation checkout runs `skf sync` once after pulling it.
 
+- a repo whose collaborators use local sessions (not threads) gets, in the same PR, the
+  SessionStart hook and the `AGENTS.md` line from section 5: run
+  `node ~/.claude/skill-forge/skf-cloud.mjs ensure --write-hook --repo <repo folder>`, commit the
+  `.claude/settings.json` it writes, and paste the line it prints into `AGENTS.md` as is. Point a
+  repo's instruction line only at this skill, never at another skill or a repo script.
+
 Never edit a `skill-forge.lock.json` by hand.
 
 When a release flow means fixes reach the default branch only at release, say which findings
@@ -213,3 +219,28 @@ open it and ask the owner to merge it promptly. Never push to the default branch
 Tell the owner to start a **new** thread (after pasting or merging) and run step 1 there.
 Done when doctor shows no issues and the thread reports one rules file, each skill name once,
 the subagents present, and Project instructions naming the PR base.
+
+## 5. Local sessions: install a repo's declared skills
+
+Only where `CLAUDE_CODE_REMOTE` is not `true` (a local Claude Code session, any OS). In a thread
+the environment's `install` and `install --top-up` do this; never use `ensure` there.
+
+The repo's SessionStart hook usually did it already: it runs
+`node .claude/skill-forge/skf-cloud-<sha>.mjs ensure --hook` before you read anything. When the
+user asks, or a declared skill looks missing:
+
+1. Run discovery first, from the repo root:
+   `node .claude/skill-forge/skf-cloud-<sha>.mjs ensure --check --json` (or the command in the
+   repo's `AGENTS.md` line when that file is not there yet; it fetches the script first). It
+   lists every copy of each declared skill: `repo`, `parent` (a folder above the repo) or
+   `user` (`~/.claude/skills`), its version, which copy wins (a user copy always does) and
+   duplicates. Tell the user what is already installed and where, in a few sentences.
+2. Never install a second copy of a skill discovery found. A copy at or above the declared
+   version is kept, even past the range's upper bound.
+3. A copy older than declared (`status: "older"`): say which copy, its version, the range,
+   and that it wins. Offer to upgrade it where it is; on the user's yes run
+   `ensure --upgrade <name>`. It refuses a copy that Skill Forge's installer did not write, an
+   edited one, or a version outside another range it can see; pass its reason on.
+4. Anything `missing`: run `ensure` (no flags) and report its one line. The skills load in the
+   same session; if one does not show up, ask the user to run `/reload-skills`.
+5. A repo whose `.claude/skills` is a symlink is managed by `skf sync`: `ensure` leaves it alone.

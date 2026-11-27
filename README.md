@@ -416,7 +416,24 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   `doctor`) runs inside a thread when a repository declared a skill
   after the environment snapshot was built (it is rebuilt when the setup script changes or
   about weekly): it adds the missing skills at the recorded `SKF_REF` and replaces or removes
-  nothing. A skill added this way is usable in the same thread after a moment.
+  nothing. A skill added this way is usable in the same thread after a moment. It checks the disk, not only `state.json`: a repo-declared skill whose folder
+  was deleted counts as missing and is added again.
+- `ensure [--repo <dir>] [--ref <sha>] [--check [--json]] [--upgrade <name>] [--hook] [--write-hook]`
+  installs a repo's declared skills on **any machine** (a local Claude Code session on Windows,
+  macOS or Linux, no `skf`, no symlinks), only when missing
+  ([docs/REPO-SKILL-INSTALL.md](docs/REPO-SKILL-INSTALL.md)). It first finds every copy where
+  Claude Code reads skills (`repo`, a `parent` folder above the repo, `user` =
+  `~/.claude/skills`; a user copy always wins) and never adds a second one. A copy at or above
+  the declared version is kept; an older one gets a warning and is upgraded in place only by
+  `--upgrade <name>`, which the `claude-project-steward` skill runs on the user's yes.
+  Missing names land in the ignored `<repo>/.claude/skills/` at the lock's registry commit (else
+  `--ref`), listed in `.git/info/exclude`, so nothing tracked changes; the steward comes along
+  unless `SKF_DEFAULT_SKILLS=0`. `--check --json` is the read-only discovery report
+  (`version: 1`). `--hook` is for a SessionStart hook: silent when nothing is missing and in
+  cloud sessions, hook JSON with `reloadSkills` after an install, exit 0 on any failure.
+  `--write-hook` merges that hook, pinned to a full sha, into `<repo>/.claude/settings.json` and
+  prints the one `AGENTS.md` line that points at the steward. A repo whose `.claude/skills` is
+  the `skf sync` link is left to `skf sync`.
 - `doctor` (read-only; `--json`, `--check`, `--repos-dir`, `--context <file>`) checks the
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
   blocks, sections repeated across repos, always-loaded size, workstation-only rules and
@@ -429,7 +446,8 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   machine or person can follow (a push to a remote the clone lacks or to `main`/`master`, a
   fixed commit identity, a personal home path; skipped under a "local"/"workstation" heading),
   a repo with instructions but no `skill-forge.json`, and committed `.claude/settings.json`,
-  `settings.local.json` or `launch.json`, which threads ignore; a tracked `CLAUDE.local.md` or
+  `settings.local.json` or `launch.json`, which threads ignore (a `settings.json` holding only the
+  `ensure` hook is not reported; a hook pinned off this environment's `SKF_REF` is a note); a tracked `CLAUDE.local.md` or
   `.claude/settings.local.json`, or a `.gitignore` that does not cover them; and instructions
   kept only in `CLAUDE.md` with no `AGENTS.md`)
   and, with `--context`, the Project-instructions text (missing or empty, length, missing PR

@@ -1,7 +1,9 @@
-# Installing a repo's declared skills on any machine (proposed, not built)
+# Installing a repo's declared skills on any machine
 
-Status: **spec awaiting the owner's approval** (Tier 3: it adds an `skf-cloud.mjs`
-command, a repo-local state file and doctor behaviour). Tracked in Defect Drainer as
+Status: **approved by Joe on 2026-11-27 ("Approve.") and built** (Tier 3: it adds an
+`skf-cloud.mjs` command, a repo-local state file and doctor behaviour). Where the build
+differs from the text that was approved, it says so under "Changes during the build" at
+the end. Tracked in Defect Drainer as
 `DEF-20261127-local-windows-friendly-install-of-a-repo-kf8u`.
 
 ## Goal
@@ -189,7 +191,7 @@ commits one entry in `.claude/settings.json`:
 
 ```json
 { "hooks": { "SessionStart": [ { "matcher": "startup|resume", "hooks": [
-  { "type": "command", "timeout": 60, "command": "node -e '<bootstrap, pinned to <sha>>'" }
+  { "type": "command", "timeout": 120, "command": "node -e '<bootstrap, pinned to <sha>>' -- --hook" }
 ] } ] } }
 ```
 
@@ -211,8 +213,8 @@ it cannot serve existing repos).
 
 - `D-repo-settings-ignored`: a `.claude/settings.json` whose only content is this hook is
   not reported (the hook is meant for local sessions; threads ignoring it is correct).
-- New note `D-repo-local-hook-pin`: the hook's sha is older than the environment's
-  `SKF_REF`; fix: re-run `ensure --write-hook` in a PR.
+- New note `D-repo-local-hook-pin`: the hook's sha differs from the environment's
+  `SKF_REF`; fix: re-run `ensure --write-hook` in a PR, unless the older pin is deliberate.
 - Doctor JSON gains only finding ids; its `version` does not change.
 
 ### Not folded in
@@ -230,8 +232,8 @@ were:
   older copy where it is, and does it only on the user's yes, through
   `ensure --upgrade <name>`. Before offering, it checks that the new version still fits
   every range it can see for that name: this repo's `skill-forge.json`, the parent
-  folder's own `skill-forge.json` when there is one, and the ranges recorded in
-  `~/.claude/skill-forge/state.json`. If one of those would break, it says which and
+  folder's own `skill-forge.json` when there is one (an umbrella, or the `$HOME`
+  profile for a user copy). If one of those would break, it says which and
   offers nothing. It upgrades only a copy that Skill Forge installed (recorded in a
   state file) and not edited since. A hand-installed copy gets instructions, not a write.
 - **B. Install the declared version into the repo as well.** This makes a duplicate. For
@@ -339,3 +341,16 @@ older pins unaffected.
   Project's threads only when its setup script moves to the new `SKF_REF`. A repo that
   wants the line and the hook gets both by PR from a thread at the new sha.
 - Workstation: nothing.
+
+## Changes during the build
+
+None of these widens what was approved:
+
+- `--upgrade` checks the ranges in the `skill-forge.json` of the copy's own folder (an
+  umbrella, or `$HOME` for a user copy) in place of "ranges recorded in state.json". The
+  state file records which repos declared a skill, not their ranges.
+- `D-repo-local-hook-pin` fires when the pin **differs** from `SKF_REF`. Doctor cannot
+  tell offline which of two commits is older, and its fix keeps a deliberate older pin.
+- The hook passes `-- --hook`: after `node -e`, Node would take a bare `--hook` as its own
+  option. The hook's timeout is 120 s, to cover the script fetch plus the 90 s install deadline.
+- In hook mode, `ensure` waits at most 2 s for the hook payload on stdin.

@@ -42,8 +42,8 @@ node "$DOCTOR" doctor
 `doctor` is read-only. It checks the installed setup against what it recorded, every repo under
 `/home/user` (missing `CLAUDE.md`, managed Skill Forge blocks, duplicated sections, size,
 workstation-only rules, skills and agents that duplicate or shadow the environment's) and the
-skills the repo profiles declare, and whether the environment's `SKF_REF` is behind the
-registry's `main`. If `git ls-remote` is blocked, ask the owner for the current skill-forge
+skills the repo profiles declare, whether the environment's `SKF_REF` is behind the
+registry's `main`, and which registry skills nothing installs or declares (`D-skill-suggest`). If `git ls-remote` is blocked, ask the owner for the current skill-forge
 commit sha.
 
 `D-ref-behind` with the default block below (it follows `main`) means the environment snapshot

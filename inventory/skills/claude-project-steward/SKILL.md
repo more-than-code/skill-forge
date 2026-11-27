@@ -56,6 +56,18 @@ the integration branch the Project instructions name, for example
 `git fetch origin dev && git diff --stat origin/main origin/dev -- CLAUDE.md AGENTS.md`.
 Instruction changes waiting on the integration branch reach threads only at the next release.
 
+When the PR base (named in the Project instructions or, failing that, the repo's own
+instructions) is not the default branch, also check the direction, by hand, per repo:
+
+- Commits on the default branch that the base lacks:
+  `git fetch origin main dev && git log --oneline origin/dev..origin/main` (use the repo's
+  default branch and base). Threads start from the default branch, so their PRs into the base
+  carry those commits too, and a fast-forward release fails. Report the count and subjects as a
+  note to the owner, who chooses between merging them into the base (a sync PR) and reverting
+  them on the default branch; change neither yourself.
+- Open PRs (the GitHub tools) whose base is not the named base: list each as a note with its
+  number and base; its author or the owner retargets it.
+
 Two layers are not on disk. Write what you received at start into a file and check it too:
 1. The Project instructions text, verbatim, to `/tmp/project-instructions.txt`, then
    `node "$DOCTOR" doctor --context /tmp/project-instructions.txt`.

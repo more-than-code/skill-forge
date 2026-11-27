@@ -43,8 +43,8 @@ node "$DOCTOR" doctor
 `/home/user` (missing `CLAUDE.md`, managed Skill Forge blocks, duplicated sections, size,
 workstation-only rules, skills and agents that duplicate or shadow the environment's) and the
 skills the repo profiles declare, whether the environment's `SKF_REF` is behind the
-registry's `main`, and which registry skills nothing installs or declares (`D-skill-suggest`). If `git ls-remote` is blocked, ask the owner for the current skill-forge
-commit sha.
+registry's `main`, and which registry skills nothing installs or declares (`D-skill-suggest`).
+If `git ls-remote` is blocked, ask the owner for the current skill-forge commit sha.
 
 `D-ref-behind` with the default block below (it follows `main`) means the environment snapshot
 was built before `main` moved: the owner re-saves the setup script unchanged to rebuild it, and
@@ -62,13 +62,15 @@ Two layers are not on disk. Write what you received at start into a file and che
 2. Your own tool list: count tools per connector, and list connectors this Project's work never
    uses. Report them to the owner as account choices (switching one off affects all their chats).
 
-Then run the **skf-diagnose** skill on doctor's report (`doctor --context <file> --json`). It
+Then run the **skf-diagnose** skill on doctor's report (`doctor --context <file> --json`,
+with `$DOCTOR` from above). It
 judges what doctor cannot: personal preferences in shared files, instructions that try to
 outrank others, repo rules that clash with the Project instructions, which suggested skills
 fit each repo's stack, and problems only on other active branches; it also works through
 doctor's prompt-only notes (`D-skill-suggest`, `D-repo-thread-limits`,
 `D-connectors-unchecked`). If the skill is not installed, follow those notes' fixes by hand and
-add `skf-diagnose` to `SKF_SKILLS` in the setup-script draft.
+add `skf-diagnose` to `SKF_SKILLS` in the setup-script draft (only with an `SKF_REF` that has
+the skill; an older fixed pin reports it as a `FAILED` install line).
 
 Report doctor's and skf-diagnose's findings together, grouped by who fixes them, with the exact fix.
 

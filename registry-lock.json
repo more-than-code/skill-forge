@@ -58,9 +58,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-EKzEvkMj6ARtnz+6uJmQI56wdsAdrrpjPm/tD3c3odw=",
+      "integrity": "sha256-bW/bUjCvjamML7TWtVcQ1bEe8vn96dXBdG2/QqXW9fs=",
       "files": {
-        "SKILL.md": "sha256-74550DAYsn3Mw7o3dm2gze1dmlJprXAwQ/+EDf/ez6w="
+        "SKILL.md": "sha256-5BD1zGcI9rP5l/boBd6E9gbXPv3H73CdKjoDIu4Gkx4="
       }
     },
     "inventory/skills/code-quality": {
@@ -450,9 +450,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-WGn8MhMtIWTIfCP/16kKtbSbYuEXVX+3JyyMjcwZI58=",
+      "integrity": "sha256-kJxKPq3C2p2GRkzLQ8cBzvgAeLns78DK1lBBa+x5oTQ=",
       "files": {
-        "SKILL.md": "sha256-PaAPe9EC/jZ/VEIR4BPDAufJgZ+UDci2QglzmuiaOao="
+        "SKILL.md": "sha256-EDfwxunTtqJ92HKr4TBrOLo4mo+2pBdnv4PwVCu2SH8="
       }
     },
     "inventory/skills/skill-forge-authoring": {

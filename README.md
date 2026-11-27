@@ -405,9 +405,10 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   and, with `--context`, the Project-instructions text (length, missing PR base, restated
   workflow rules); it also reports when the environment's `SKF_REF` is behind the registry's
   `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it), and
-  lists the registry skills at `SKF_REF` that nothing installs or declares as a prompt for the
-  thread's agent to match against the repos' stacks and propose in a PR (`D-skill-suggest`;
-  `--offline` skips it; see `docs/SKILL-SUGGESTIONS.md`). Each finding names who fixes it: an owner paste, an owner account
+  lists the registry skills at `SKF_REF` that nothing installs and no repo declares, keeps
+  locally or commits, as a prompt for the thread's agent to match against the repos' stacks
+  and propose in a PR (`D-skill-suggest`; `--offline` skips it, a failed registry read is a
+  `D-skill-suggest-unchecked` note; see `docs/SKILL-SUGGESTIONS.md`). Each finding names who fixes it: an owner paste, an owner account
   setting, a thread PR, or the thread itself. Not built: a branch-drift check (the steward
   skill gives the manual `git diff`), and the "this repository" phrasing heuristic.
 - The `claude-project-steward` skill tells a thread how to run `doctor`, draft the setup

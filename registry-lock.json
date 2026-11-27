@@ -58,9 +58,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-V2othjz0grYc1LJCPaWHuxHH0HVJjcx4IrK8YiKJmq8=",
+      "integrity": "sha256-5S1uX1qJdkPuear2tIQWJ5riSzsF4lN65mHw4rf7jKg=",
       "files": {
-        "SKILL.md": "sha256-f/sUB+mXFcuCqUjcq+fddMZy/0uz2fGw+sHBDCn2EA8="
+        "SKILL.md": "sha256-HgNBZA+ojNz89SWEjGtgjZQ2kDTAfFcS/XMGaLuRoAg="
       }
     },
     "inventory/skills/code-quality": {

@@ -698,49 +698,74 @@ test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one fi
   assert.doesNotMatch(three.fix, /skills\/\//, 'a trailing slash in the link does not double up');
 });
 
-test('doctor lists registry skills nothing installs or declares as a prompt for the agent', async () => {
+/** Installs alpha, then widens the ref's registry: gamma (tagged), plus skills doctor must never list. */
+async function suggestSetup() {
   const mirror = await registryMirror();
   const homeDir = await tempDir('skf-cloud-home-');
   await install(mirror, homeDir, { ...DECL, SKF_SKILLS: 'alpha' });
+  const registryFile = path.join(mirror.root, 'registry.json');
+  const registry = JSON.parse(await read(registryFile));
+  const skill = (name, extra) => ({ type: 'skill', name, version: '0.2.0', scope: 'custom', path: `inventory/skills/${name}`, installable: true, tags: [], ...extra });
+  registry.skills.push(
+    skill('gamma', { tags: ['frontend', 'workflow'] }),
+    skill('delta', { workstationOnly: true }),
+    skill('epsilon', { installable: false }),
+    skill('zeta', { version: 'next' }),
+    skill('eta', { path: 'elsewhere/eta' }));
+  await fs.writeFile(registryFile, JSON.stringify(registry));
   const reposDir = await tempDir('skf-cloud-repos-');
   await writeFiles(reposDir, {
     'one/.git/HEAD': 'ref: refs/heads/main\n',
     'one/CLAUDE.md': '@AGENTS.md\n',
-    'one/AGENTS.md': '# one\n\nRun `make test`.\n',
-    'one/package.json': JSON.stringify({ devDependencies: { vite: '^8.0.0' } })
+    'one/AGENTS.md': '# one\n\nRun `make test`.\n'
   });
   const env = { ...process.env, HOME: homeDir };
-  const online = async () => JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env })).stdout);
+  const online = async (extra = []) => JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', ...extra], { env })).stdout);
+  const suggestions = async () => (await online()).findings.filter((entry) => entry.id.startsWith('D-skill-suggest'));
+  return { mirror, homeDir, reposDir, online, suggestions };
+}
 
-  // alpha is installed and podman is workstation-only, so only beta is a candidate, with its SKILL.md at the ref.
-  const suggest = (await online()).findings.filter((entry) => entry.id.startsWith('D-skill-suggest'));
-  assert.equal(suggest.length, 1);
-  assert.equal(suggest[0].id, 'D-skill-suggest');
-  assert.equal(suggest[0].severity, 'note');
-  assert.equal(suggest[0].owner, 'thread');
-  assert.match(suggest[0].evidence, /^1 registry skill\(s\) are neither installed nor declared by a repo: beta 0\.1\.0$/);
-  assert.ok(suggest[0].fix.includes(`beta ^0.1.0 ${mirror.base}/${REF}/inventory/skills/beta/SKILL.md`));
-  assert.match(suggest[0].fix, /devDependencies/);
-  assert.match(suggest[0].fix, /install --top-up/);
-  // A note never fails --check; --offline skips the check.
-  await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--check'], { env });
-  assert.ok(!ids(await doctor(homeDir, reposDir)).some((id) => id.startsWith('D-skill-suggest')));
+test('doctor lists the installable registry skills nothing installs or declares as a prompt for the agent', async () => {
+  const { mirror, suggestions } = await suggestSetup();
+  // alpha is installed; podman (tag) and delta (flag) are workstation-only; epsilon, zeta and eta are not installable.
+  const found = await suggestions();
+  assert.deepEqual(found.map((entry) => [entry.id, entry.severity, entry.owner]), [['D-skill-suggest', 'note', 'thread']]);
+  assert.equal(found[0].evidence, '2 registry skill(s) are neither installed nor declared by a repo: beta 0.1.0, gamma 0.2.0 [frontend, workflow]');
+  assert.ok(found[0].fix.endsWith(`Skills (name, range, description): beta ^0.1.0 ${mirror.base}/${REF}/inventory/skills/beta/SKILL.md; gamma ^0.2.0 ${mirror.base}/${REF}/inventory/skills/gamma/SKILL.md`));
+  assert.match(found[0].fix, /skill-forge\.json skills\.dependencies/);
+  assert.match(found[0].fix, /install --top-up/);
+});
 
-  // A committed repo copy, a local skill or a declaration takes the skill off the list; no candidates, no finding.
-  const none = async () => !(await online()).findings.some((entry) => entry.id.startsWith('D-skill-suggest'));
-  await writeFiles(reposDir, { 'one/.claude/skills/beta/SKILL.md': SKILL_B });
-  assert.ok(await none(), 'a committed copy counts');
+test('a skill a repo declares, keeps locally or commits is not suggested; no candidates, no finding', async () => {
+  const { reposDir, suggestions } = await suggestSetup();
+  await writeFiles(reposDir, {
+    'one/.claude/skills/beta/SKILL.md': SKILL_B,
+    'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { local: { gamma: 'skills/gamma' } } })
+  });
+  assert.deepEqual(await suggestions(), [], 'a committed copy and a local skill count');
   await fs.rm(path.join(reposDir, 'one/.claude'), { recursive: true });
-  await writeFiles(reposDir, { 'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { local: { beta: 'skills/beta' } } }) });
-  assert.ok(await none(), 'a local skill counts');
-  await writeFiles(reposDir, { 'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { dependencies: { beta: '^0.1.0' } } }) });
-  assert.ok(await none(), 'a declaration counts');
+  // A malformed range is reported elsewhere; the repo still names the skill, so it is not suggested again.
+  await writeFiles(reposDir, { 'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { dependencies: { beta: 'latest', gamma: '^0.2.0' } } }) });
+  assert.deepEqual(await suggestions(), [], 'declarations count');
+});
 
-  // An unreadable registry is one note, not a failure.
-  await fs.rm(path.join(reposDir, 'one/skill-forge.json'));
+test('suggestions: --offline and a bad recorded ref skip them; an unreadable registry is one note; --check ignores both', async () => {
+  const { mirror, homeDir, reposDir, online, suggestions } = await suggestSetup();
+  const env = { ...process.env, HOME: homeDir };
+  const checked = JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--check'], { env })).stdout);
+  assert.ok(checked.findings.some((entry) => entry.id === 'D-skill-suggest'), 'present in the run that exits 0');
+  assert.ok(!(await online(['--offline'])).findings.some((entry) => entry.id.startsWith('D-skill-suggest')));
+
+  const stateFile = path.join(homeDir, '.claude/skill-forge/state.json');
+  const state = JSON.parse(await read(stateFile));
+  await fs.writeFile(stateFile, JSON.stringify({ ...state, ref: '../x' }));
+  assert.deepEqual(await suggestions(), [], 'a ref install would refuse is never fetched or echoed');
+  await fs.writeFile(stateFile, JSON.stringify(state));
+
   await fs.unlink(path.join(mirror.base, REF));
-  const unchecked = (await online()).findings.filter((entry) => entry.id.startsWith('D-skill-suggest'));
-  assert.deepEqual(unchecked.map((entry) => [entry.id, entry.severity]), [['D-skill-suggest-unchecked', 'note']]);
+  const unchecked = JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--check'], { env })).stdout);
+  assert.deepEqual(unchecked.findings.filter((entry) => entry.id.startsWith('D-skill-suggest')).map((entry) => [entry.id, entry.severity]),
+    [['D-skill-suggest-unchecked', 'note']]);
 });
 
 test('doctor without an install state lists no suggestions', async () => {

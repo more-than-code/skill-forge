@@ -697,3 +697,55 @@ test('doctor: a .claude/skills symlink (the skf sync claude-code shim) is one fi
   assert.match(three.fix, /Also settle \.agents\/skills\/handmade: declare each in skills\.local/);
   assert.doesNotMatch(three.fix, /skills\/\//, 'a trailing slash in the link does not double up');
 });
+
+test('doctor lists registry skills nothing installs or declares as a prompt for the agent', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: 'alpha' });
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, {
+    'one/.git/HEAD': 'ref: refs/heads/main\n',
+    'one/CLAUDE.md': '@AGENTS.md\n',
+    'one/AGENTS.md': '# one\n\nRun `make test`.\n',
+    'one/package.json': JSON.stringify({ devDependencies: { vite: '^8.0.0' } })
+  });
+  const env = { ...process.env, HOME: homeDir };
+  const online = async () => JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env })).stdout);
+
+  // alpha is installed and podman is workstation-only, so only beta is a candidate, with its SKILL.md at the ref.
+  const suggest = (await online()).findings.filter((entry) => entry.id.startsWith('D-skill-suggest'));
+  assert.equal(suggest.length, 1);
+  assert.equal(suggest[0].id, 'D-skill-suggest');
+  assert.equal(suggest[0].severity, 'note');
+  assert.equal(suggest[0].owner, 'thread');
+  assert.match(suggest[0].evidence, /^1 registry skill\(s\) are neither installed nor declared by a repo: beta 0\.1\.0$/);
+  assert.ok(suggest[0].fix.includes(`beta ^0.1.0 ${mirror.base}/${REF}/inventory/skills/beta/SKILL.md`));
+  assert.match(suggest[0].fix, /devDependencies/);
+  assert.match(suggest[0].fix, /install --top-up/);
+  // A note never fails --check; --offline skips the check.
+  await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--check'], { env });
+  assert.ok(!ids(await doctor(homeDir, reposDir)).some((id) => id.startsWith('D-skill-suggest')));
+
+  // A committed repo copy, a local skill or a declaration takes the skill off the list; no candidates, no finding.
+  const none = async () => !(await online()).findings.some((entry) => entry.id.startsWith('D-skill-suggest'));
+  await writeFiles(reposDir, { 'one/.claude/skills/beta/SKILL.md': SKILL_B });
+  assert.ok(await none(), 'a committed copy counts');
+  await fs.rm(path.join(reposDir, 'one/.claude'), { recursive: true });
+  await writeFiles(reposDir, { 'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { local: { beta: 'skills/beta' } } }) });
+  assert.ok(await none(), 'a local skill counts');
+  await writeFiles(reposDir, { 'one/skill-forge.json': JSON.stringify({ schemaVersion: 2, skills: { dependencies: { beta: '^0.1.0' } } }) });
+  assert.ok(await none(), 'a declaration counts');
+
+  // An unreadable registry is one note, not a failure.
+  await fs.rm(path.join(reposDir, 'one/skill-forge.json'));
+  await fs.unlink(path.join(mirror.base, REF));
+  const unchecked = (await online()).findings.filter((entry) => entry.id.startsWith('D-skill-suggest'));
+  assert.deepEqual(unchecked.map((entry) => [entry.id, entry.severity]), [['D-skill-suggest-unchecked', 'note']]);
+});
+
+test('doctor without an install state lists no suggestions', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const { stdout } = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json'], { env: { ...process.env, HOME: homeDir } });
+  assert.ok(!JSON.parse(stdout).findings.some((entry) => entry.id.startsWith('D-skill-suggest')));
+});

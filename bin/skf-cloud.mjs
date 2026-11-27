@@ -766,6 +766,46 @@ async function checkRefBehind(findings, state, offline) {
 }
 
 /**
+ * Lists the registry skills at SKF_REF that nothing installs or declares, as a prompt for the
+ * thread's agent to match against the repositories' stacks (docs/SKILL-SUGGESTIONS.md). Doctor
+ * detects no stack itself; the agent judges and opens a PR in the repo for a clear fit.
+ */
+async function checkSuggestions(findings, state, repos, offline) {
+  if (offline || !state?.ref) return;
+  let registry;
+  try {
+    registry = JSON.parse((await fetchBytes(state.base, state.ref, 'registry.json', AbortSignal.timeout(FETCH_TIMEOUT_MS))).toString('utf8'));
+  } catch (error) {
+    findings.push(finding('D-skill-suggest-unchecked', 'note', 'thread', `could not read the registry at ${state.ref} to list skills to suggest (${error.message})`,
+      'Re-run doctor with network access, or pass --offline.'));
+    return;
+  }
+  const taken = new Set(listDir(path.join(claudeDir(), 'skills')));
+  for (const name of readRepoNeeds(repos, () => {}).keys()) taken.add(name);
+  for (const repo of repos) {
+    const local = readRepoJson(repo.dir, MANIFEST_NAME)?.skills?.local;
+    if (local && typeof local === 'object') for (const name of Object.keys(local)) taken.add(name);
+    for (const name of listDir(path.join(repo.dir, '.claude', 'skills'))) taken.add(name);
+  }
+  const candidates = (Array.isArray(registry.skills) ? registry.skills : [])
+    .filter((skill) => skill && isSafeName(String(skill.name)) && skill.path === `inventory/skills/${skill.name}`
+      && skill.installable !== false && /^\d+\.\d+\.\d+$/.test(String(skill.version)) && skill.workstationOnly !== true
+      && !(Array.isArray(skill.tags) && skill.tags.includes('workstation-only')) && !taken.has(skill.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (candidates.length === 0) return;
+  const tags = (skill) => (Array.isArray(skill.tags) ? skill.tags.filter((tag) => typeof tag === 'string' && isSafeName(tag)) : []);
+  const listed = candidates.map((skill) => `${skill.name} ${skill.version}${tags(skill).length > 0 ? ` [${tags(skill).join(', ')}]` : ''}`);
+  const urls = candidates.map((skill) => `${skill.name} ^${skill.version} ${state.base}/${state.ref}/${skill.path}/SKILL.md`);
+  findings.push(finding('D-skill-suggest', 'note', 'thread', `${candidates.length} registry skill(s) are neither installed nor declared by a repo: ${listed.join(', ')}`,
+    'Check whether any of these skills fits a cloned repository\'s stack. Look at each repo\'s dependency and config files '
+    + '(package.json including devDependencies, go.mod, pubspec.yaml, pyproject.toml, Dockerfile, deploy config), including apps in subfolders. '
+    + 'For a skill whose name or tags fit, read its description at the URL below. Where it clearly applies, open a PR in that repo adding '
+    + `"<name>": "^<version>" to ${MANIFEST_NAME} skills.dependencies (create {"schemaVersion": 2, "skills": {"dependencies": {}}} if the repo has none); `
+    + 'after it merges, run: node ~/.claude/skill-forge/skf-cloud.mjs install --top-up. Suggest nothing that only loosely fits. '
+    + `If the repo belongs to another Project, tell the owner instead of opening the PR. Skills (name, range, description): ${urls.join('; ')}`));
+}
+
+/**
  * For a committed `.claude/skills` symlink, the repo-relative folder it points at ("" is never
  * returned). null: not a symlink (a real folder, or absent). undefined: a link that is absolute,
  * leaves the repository, dangles or has unusual characters; doctor never lists through it.
@@ -988,6 +1028,7 @@ async function runDoctor(args) {
   await checkRefBehind(findings, state, args.includes('--offline'));
   const repos = findRepos(reposDir);
   checkRepos(findings, repos, state);
+  await checkSuggestions(findings, state, repos, args.includes('--offline'));
   const context = option('--context');
   if (context) checkContext(findings, context);
   const report = { version: 1, ref: state?.ref ?? null, repos: repos.map((repo) => repo.name), findings };

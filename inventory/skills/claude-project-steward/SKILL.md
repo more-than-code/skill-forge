@@ -42,8 +42,8 @@ node "$DOCTOR" doctor
 `doctor` is read-only. It checks the installed setup against what it recorded, every repo under
 `/home/user` (missing `CLAUDE.md`, managed Skill Forge blocks, duplicated sections, size,
 workstation-only rules, skills and agents that duplicate or shadow the environment's) and the
-skills the repo profiles declare, and whether the environment's `SKF_REF` is behind the
-registry's `main`. If `git ls-remote` is blocked, ask the owner for the current skill-forge
+skills the repo profiles declare, whether the environment's `SKF_REF` is behind the
+registry's `main`, and which registry skills nothing installs or declares (`D-skill-suggest`). If `git ls-remote` is blocked, ask the owner for the current skill-forge
 commit sha.
 
 `D-ref-behind` with the default block below (it follows `main`) means the environment snapshot
@@ -74,6 +74,10 @@ It adds only missing skills, at the pinned `SKF_REF`, and replaces nothing. Run 
 confirm the finding is gone, and tell the owner the next environment rebuild makes it permanent
 for every thread. If it exits non-zero, report the `FAILED` lines from `~/skf-setup.log`
 (usually the network or the `SKF_REF`) instead of retrying.
+
+`D-skill-suggest` lists registry skills that nothing installs or declares; its fix is a prompt.
+Follow it: match them against each repo's stack, read the plausible ones, and open a PR adding
+only clear fits to that repo's `skill-forge.json` (in another Project's repo, tell the owner).
 
 `D-skill-range` has two causes. A repo wants a version the pinned `SKF_REF` does not have: the
 owner's fix, so draft a newer `SKF_REF`, or a PR that changes the repo's range. A name that is

@@ -54,13 +54,13 @@
     },
     "inventory/skills/claude-project-steward": {
       "name": "claude-project-steward",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-z0etg/IjeL21Vn6xYv0IiZKLmBscZbM5oqgFgeTEK9o=",
+      "integrity": "sha256-5S1uX1qJdkPuear2tIQWJ5riSzsF4lN65mHw4rf7jKg=",
       "files": {
-        "SKILL.md": "sha256-ykMzb7eiJ7Gf1G5cPaqW1uOQR7l6xPnZVNwOEDKb/kY="
+        "SKILL.md": "sha256-HgNBZA+ojNz89SWEjGtgjZQ2kDTAfFcS/XMGaLuRoAg="
       }
     },
     "inventory/skills/code-quality": {

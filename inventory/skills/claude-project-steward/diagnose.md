@@ -76,11 +76,13 @@ gates. Do this even when the Project has no instructions: the workflow rules sti
 clash is two rules a thread cannot both follow. Say which wins for threads:
 
 - Against the Project instructions: the Project instructions win.
-- Against the workflow rules: quote the workflow rules' own precedence line rather than
-  restating it. Today it says a stricter repo rule wins, except that nothing stops a thread
-  committing and pushing its own branch, and nothing lets one push to `main`, the default
-  branch or the PR base. So "ask before committing" yields in threads (the thread still shows
-  the owner before a shared branch moves), while "never push to `main`" agrees and is no clash.
+- Against the workflow rules: quote their own precedence lines from the installed file (its
+  opening paragraph and §8) and apply exactly what they say, since an environment on an older
+  `SKF_REF` may have older rules. In current rules a stricter repo rule wins, except that
+  nothing stops a thread committing and pushing its own branch, and nothing lets one push to
+  `main`, the default branch or the PR base. Under those, "ask before committing" yields in
+  threads (the thread still shows the owner before a shared branch moves), while "never push
+  to `main`" agrees and is no clash.
 
 Fix: a PR in the repo drops or narrows its line (or moves it under a "## Local sessions only"
 heading that names the machine); if the repo's rule is the right one, the owner changes the

@@ -354,3 +354,41 @@ None of these widens what was approved:
 - The hook passes `-- --hook`: after `node -e`, Node would take a bare `--hook` as its own
   option. The hook's timeout is 120 s, to cover the script fetch plus the 90 s install deadline.
 - In hook mode, `ensure` waits at most 2 s for the hook payload on stdin.
+
+Changes from the security, spec, code and test reviews (2026-11-27). The first three make
+the trust model hold against a hostile repository; none adds a surface:
+
+- **The pin.** `--ref` wins: the hook's sha, or the cached script's own (taken from its file
+  name `skf-cloud-<sha>.mjs`). The repo lock's commit is used only without `--ref`, and only
+  after GitHub's compare API confirms it is in `more-than-code/skill-forge` main's history:
+  GitHub serves a sha that exists only in a fork under the same raw URL, so a repo-chosen sha
+  is not authenticated by the URL alone. A local mirror or another https `SKF_BASE` is the
+  user's own choice and is not checked.
+- **The script.** The hook pins the sha256 of `bin/skf-cloud.mjs` at its sha, and the cache moves
+  out of the repo to `~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs`. The bootstrap runs a cached
+  copy only when its hash matches; otherwise it checks the sha is on main, fetches it over
+  HTTPS, checks the hash and writes it under a random name opened exclusively. `--write-hook`
+  makes the same main check before writing. Overrides (`SKF_BASE`, `SKF_GITHUB_API`) are https only.
+- **Writes.** No write through a link at `<root>`, `skills`, `skill-forge` or `state.json`; an
+  `--upgrade` target folder owned by another user is refused; `writeAtomic` uses a random,
+  exclusive temp name; state keys that are not normalised paths are ignored; repo JSON is read
+  only from regular files up to 1 MB.
+- **State.** An existing state (the environment's at `~/.claude`) keeps its `ref`, `base`,
+  `failed`, `skipped` and `env` sources on an upgrade. A version is recorded only for a skill
+  whose every file now holds the planned bytes, so a partial copy shows as `incomplete`; a
+  skill the pin cannot give keeps the copy it has.
+- **Output.** `--check --json` is always one JSON document, with a `warnings` array (and
+  `managedBy: "skf sync"` for the link case). The hook's JSON carries no `additionalContext`.
+  Warnings are capped at three lines. A copy found only in a parent folder is said once per
+  run ("loads only in sessions started in <dir>"), not duplicated. `--check` also exits 1 for
+  `missing` and `incomplete`. A flag with no value is a usage error (exit 2). Any error in
+  `--hook` becomes a warning and exit 0.
+- **The install core** takes the target root as a parameter (`planInstall`, `applyInstall` and
+  helpers); there is no module-level target.
+- **The published line** is printed by `--write-hook` (pinned to its sha and hash) rather than
+  written into the skill or README, which cannot know a future release's sha.
+- **Not done:** a `path.win32` unit test (criterion 13). `skf-cloud.mjs` is a script with no
+  exports. Paths are built with `path.join` and compared with `path.sep`, and failure lines are
+  normalised to `/` before matching. Windows end to end and the PowerShell test (criterion 10)
+  were not run in this environment. The bootstrap's download path is exercised only for its
+  failure (no https mirror in tests); the cached-hash path is tested.

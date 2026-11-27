@@ -424,16 +424,21 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   ([docs/REPO-SKILL-INSTALL.md](docs/REPO-SKILL-INSTALL.md)). It first finds every copy where
   Claude Code reads skills (`repo`, a `parent` folder above the repo, `user` =
   `~/.claude/skills`; a user copy always wins) and never adds a second one. A copy at or above
-  the declared version is kept; an older one gets a warning and is upgraded in place only by
-  `--upgrade <name>`, which the `claude-project-steward` skill runs on the user's yes.
-  Missing names land in the ignored `<repo>/.claude/skills/` at the lock's registry commit (else
-  `--ref`), listed in `.git/info/exclude`, so nothing tracked changes; the steward comes along
-  unless `SKF_DEFAULT_SKILLS=0`. `--check --json` is the read-only discovery report
-  (`version: 1`). `--hook` is for a SessionStart hook: silent when nothing is missing and in
-  cloud sessions, hook JSON with `reloadSkills` after an install, exit 0 on any failure.
-  `--write-hook` merges that hook, pinned to a full sha, into `<repo>/.claude/settings.json` and
-  prints the one `AGENTS.md` line that points at the steward. A repo whose `.claude/skills` is
-  the `skf sync` link is left to `skf sync`.
+  the declared version is kept; an older one gets a warning (at most three lines) and is
+  upgraded in place only by `--upgrade <name>`, which the `claude-project-steward` skill runs
+  on the user's yes. Missing or incomplete names land in the ignored `<repo>/.claude/skills/`
+  (state in `<repo>/.claude/skill-forge/state.json`), listed in `.git/info/exclude`, so
+  nothing tracked changes; the steward comes along unless `SKF_DEFAULT_SKILLS=0`. The pin is
+  `--ref` (the hook's, or the cached script's own sha); without it, the repo lock's registry
+  commit, used only once GitHub confirms it is in Skill Forge's `main` history. `--check
+  --json` is the read-only discovery report (`version: 1`, with `warnings`); it exits 1 when
+  something is missing, incomplete or older. `--hook` is for a SessionStart hook: silent in
+  cloud sessions and when there is nothing to say, a `systemMessage` (plus `reloadSkills`
+  after an install) otherwise, exit 0 on any failure. `--write-hook` merges that hook into
+  `<repo>/.claude/settings.json`, pinned to a full sha on `main` and to the sha256 of this
+  script at it, and prints the one `AGENTS.md` line that points at the steward. The hook runs
+  `~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs` only when its hash matches, fetching it
+  once otherwise. A repo whose `.claude/skills` is the `skf sync` link is left to `skf sync`.
 - `doctor` (read-only; `--json`, `--check`, `--repos-dir`, `--context <file>`) checks the
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
   blocks, sections repeated across repos, always-loaded size, workstation-only rules and

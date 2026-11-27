@@ -506,6 +506,9 @@ async function runInstall() {
   const log = (line) => lines.push(line);
   const decl = readDeclaration(process.env);
   log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'} defaults=${decl.defaults ? DEFAULT_SKILLS.join(',') : 'off'} from-repos=${decl.fromRepos ? decl.reposDir : 'off'}`);
+  if (decl.defaults && process.env.SKF_DEFAULT_SKILLS) {
+    log(`SKF_DEFAULT_SKILLS=${JSON.stringify(process.env.SKF_DEFAULT_SKILLS.slice(0, 40))} ignored: only 0 turns the defaults off`);
+  }
   try {
     const previous = readState();
     let needs = new Map();

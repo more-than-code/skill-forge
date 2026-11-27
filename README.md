@@ -406,8 +406,11 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   script that still lists it gets the same single copy. Only the literal `SKF_DEFAULT_SKILLS=0`
   turns the default off, for example in a Project that has the steward as a claude.ai account
   skill and does not want a second copy. A fixed `SKF_REF`, or the block's fallback sha, older
-  than this change runs the older script, which ignores the default: keep the steward in
-  `SKF_SKILLS` there. `SKF_SKILLS` is only for other environment extras, such as process skills no
+  than this change runs the older script, which ignores the default and says nothing. Check
+  the sha: `curl -fsSL https://raw.githubusercontent.com/more-than-code/skill-forge/<sha>/bin/skf-cloud.mjs | grep -c SKF_DEFAULT_SKILLS` prints 1 or more when its script knows the default. Use a fallback sha
+  that passes; where a pinned or fallback sha does not, keep `claude-project-steward` in
+  `SKF_SKILLS`. Any other non-empty value of `SKF_DEFAULT_SKILLS` is ignored, and the setup log
+  says so. `SKF_SKILLS` is only for other environment extras, such as process skills no
   repository declares; leave it out when there are none.
 - `install --top-up [--repos-dir <dir>]` (default `SKF_REPOS_DIR`, then `/home/user`, like
   `doctor`) runs inside a thread when a repository declared a skill

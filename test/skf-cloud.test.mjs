@@ -82,9 +82,9 @@ async function registryMirror({ steward = true } = {}) {
 async function install(mirror, homeDir, decl) {
   // Repos are read from SKF_REPOS_DIR; default to an empty folder so the test runner's cwd never counts.
   const reposDir = decl.SKF_REPOS_DIR ?? await tempDir('skf-cloud-norepos-');
-  // Default skills are off unless a test asks for them (SKF_DEFAULT_SKILLS: ''), so the fixture
-  // registry needs no steward and the other tests see only what they declare.
-  const env = { ...process.env, HOME: homeDir, SKF_BASE: mirror.base, SKF_REF: REF, SKF_REPOS_DIR: reposDir, ...decl };
+  // Default skills are on, as in a real setup (the fixture registry has the steward). An
+  // inherited SKF_DEFAULT_SKILLS never leaks in; a test sets it in decl, and undefined unsets it.
+  const env = { ...process.env, HOME: homeDir, SKF_BASE: mirror.base, SKF_REF: REF, SKF_REPOS_DIR: reposDir, SKF_DEFAULT_SKILLS: undefined, ...decl };
   for (const [key, value] of Object.entries(env)) if (value === undefined) delete env[key];
   const { stdout } = await run('node', [CLOUD, 'install'], { env });
   return stdout;
@@ -493,6 +493,7 @@ test('install reads the repos in its working directory when SKF_REPOS_DIR is uns
   await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/skill-forge.json': manifest({ beta: '^0.1.0' }) });
   const env = { ...process.env, HOME: homeDir, SKF_BASE: mirror.base, SKF_REF: REF, ...DECL, SKF_SKILLS: '' };
   delete env.SKF_REPOS_DIR;
+  delete env.SKF_DEFAULT_SKILLS;
   await run('node', [CLOUD, 'install'], { env, cwd: reposDir });
   assert.deepEqual(await skillDirs(homeDir), ['beta', 'claude-project-steward']);
 });
@@ -1238,6 +1239,13 @@ test('install adds claude-project-steward by default, once, and SKF_DEFAULT_SKIL
   assert.equal(await exists(steward(off)), false);
   assert.deepEqual((await stateOf(off)).skills, []);
   assert.match(await read(path.join(off, 'skf-setup.log')), /defaults=off/);
+
+  // Any other value is not an opt-out: the steward installs and the log says the value was ignored.
+  const typo = await tempDir('skf-cloud-home-');
+  await install(mirror, typo, { ...DECL, SKF_SKILLS: '', SKF_DEFAULT_SKILLS: 'off' });
+  assert.equal(await read(steward(typo)), STEWARD);
+  assert.match(await read(path.join(typo, 'skf-setup.log')), /SKF_DEFAULT_SKILLS="off" ignored: only 0 turns the defaults off/);
+  assert.doesNotMatch(await read(path.join(bare, 'skf-setup.log')), /ignored: only 0/);
 });
 
 test('a default the registry at SKF_REF lacks is one recorded failure; everything else installs', async () => {

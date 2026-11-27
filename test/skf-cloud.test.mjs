@@ -1021,7 +1021,6 @@ async function gitRepo(reposDir, name, files) {
 test('doctor flags tracked personal files as issues and unignored ones as a note', async () => {
   const homeDir = await tempDir('skf-cloud-home-');
   const reposDir = await tempDir('skf-cloud-repos-');
-  const env = { ...process.env, HOME: homeDir };
   // Without an install, D-setup-missing is an issue too; --check must fail on the personal file alone.
   const issues = (report) => report.findings.filter((entry) => entry.severity === 'issue' && entry.id !== 'D-setup-missing').map((entry) => entry.id);
   await gitRepo(reposDir, 'leaky', {
@@ -1070,7 +1069,9 @@ test('doctor suggests AGENTS.md for a repo whose instructions live only in CLAUD
   await writeFiles(reposDir, {
     'only/.git/HEAD': 'x\n', 'only/CLAUDE.md': '# only\n\nRun `make test`.\n',
     'imports/.git/HEAD': 'x\n', 'imports/CLAUDE.md': '@docs/agents.md\n\n', 'imports/docs/agents.md': '# imports\n',
-    'shared/.git/HEAD': 'x\n', 'shared/CLAUDE.md': '@AGENTS.md\n', 'shared/AGENTS.md': '# shared\n'
+    'shared/.git/HEAD': 'x\n', 'shared/CLAUDE.md': '@AGENTS.md\n', 'shared/AGENTS.md': '# shared\n',
+    'shim/.git/HEAD': 'x\n', 'shim/CLAUDE.md': '@AGENTS.md\r\n',
+    'block/.git/HEAD': 'x\n', 'block/CLAUDE.md': '<!-- >>> skill-forge instructions full@0.1.0 >>> -->\n# Core\n<!-- <<< skill-forge instructions <<< -->\n'
   });
   const hits = byId(await doctor(homeDir, reposDir), 'D-repo-no-agents-md');
   assert.deepEqual(hits.map((entry) => [entry.evidence.split(' ')[0], entry.severity, entry.owner]), [['only', 'note', 'thread-pr']]);
@@ -1112,7 +1113,41 @@ test('doctor checks that each repo has the PR base the Project instructions name
   assert.deepEqual(byId(report, 'D-context-base-missing'), []);
   assert.match(byId(report, 'D-context-base-unchecked')[0].evidence, /^could not check that nodev has a dev branch/);
 
+  // Only a backticked name is checked, after a determiner; different bases on different lines check nothing.
+  for (const [text, expected] of [
+    ['Pull requests go into the `dev` branch.\n', ['D-context-base-unchecked']],
+    ['PRs go into `dev`; the owner merges dev into main.\n', ['D-context-base-unchecked']],
+    ['Pull requests go into the default branch.\n', []],
+    ['PRs into `dev` for nodev.\nPRs into `main` for withdev.\n', []]
+  ]) {
+    await fs.writeFile(context, text);
+    assert.deepEqual(ids(await online(['--context', context])).filter((id) => id.startsWith('D-context-base')), expected, text);
+  }
+  assert.equal(byId(report, 'D-context-base-unchecked')[0].owner, 'thread');
+
   // A base that git could read as an option never reaches git.
   await fs.writeFile(context, 'Pull requests go into `--upload-pack=touch`.\n');
   assert.deepEqual(ids(await online(['--context', context])).filter((id) => id.startsWith('D-context-base')), []);
+});
+
+test('doctor stays fast on a CLAUDE.md line of many @ characters and ignores a hostile uploadpack', async () => {
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  const remotes = await tempDir('skf-cloud-remotes-');
+  const dir = await gitRepo(reposDir, 'odd', { 'CLAUDE.md': `${'@'.repeat(60)}\`\n`, 'skill-forge.json': manifest({}) });
+  const started = Date.now();
+  assert.equal(byId(await doctor(homeDir, reposDir), 'D-repo-no-agents-md').length, 1);
+  assert.ok(Date.now() - started < 5000, 'no catastrophic backtracking');
+
+  await git(remotes, 'init', '-q', '--bare', 'odd.git');
+  await git(dir, 'remote', 'add', 'origin', path.join(remotes, 'odd.git'));
+  await git(dir, 'push', '-q', 'origin', 'main');
+  const marker = path.join(homeDir, 'ran');
+  await git(dir, 'config', 'remote.origin.uploadpack', `touch ${marker}; git-upload-pack`);
+  const context = path.join(homeDir, 'instructions.txt');
+  await fs.writeFile(context, 'Pull requests go into `dev`.\n');
+  const env = { ...process.env, HOME: homeDir };
+  const report = JSON.parse((await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--context', context], { env })).stdout);
+  assert.equal(await exists(marker), false, 'the repo config ran no command');
+  assert.match(byId(report, 'D-context-base-missing')[0].evidence, /odd has no dev branch/);
 });

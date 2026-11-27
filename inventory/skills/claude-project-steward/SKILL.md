@@ -42,8 +42,13 @@ node "$DOCTOR" doctor
 `doctor` is read-only. It checks the installed setup against what it recorded, every repo under
 `/home/user` (missing `CLAUDE.md`, managed Skill Forge blocks, duplicated sections, size,
 workstation-only rules, skills and agents that duplicate or shadow the environment's) and the
-skills the repo profiles declare, and whether the pinned `SKF_REF` is behind the registry.
-If `git ls-remote` is blocked, ask the owner for the current skill-forge commit sha.
+skills the repo profiles declare, and whether the environment's `SKF_REF` is behind the
+registry's `main`. If `git ls-remote` is blocked, ask the owner for the current skill-forge
+commit sha.
+
+`D-ref-behind` with the default block below (it follows `main`) means the environment snapshot
+was built before `main` moved: the owner re-saves the setup script unchanged to rebuild it, and
+does not edit a sha. Only a Project pinned to a fixed sha (the rollback below) moves that sha.
 
 Branch drift is checked by hand: threads load each repo's default branch, so compare it with
 the integration branch the Project instructions name, for example
@@ -85,7 +90,10 @@ owner already has (databases, toolchains); add or replace only the marked block:
 cat > /tmp/skf-project-rules.md <<'SKF_EOF'
 <Project rules that threads need but the coordinator does not; often empty>
 SKF_EOF
-export SKF_REF=<40-char skill-forge commit sha> SKF_RULES=cloud SKF_AGENTS=claude-code
+# Follow Skill Forge's main: resolved to a commit each time the environment is built.
+SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
+[ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
+export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
 export SKF_SKILLS="claude-project-steward <process skills not every repo declares>"
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
@@ -93,18 +101,23 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
 # <<< skill-forge <<<
 ```
 
-- `SKF_REF`: the commit `~/.claude/skill-forge/state.json` records, or the latest `main`
-  (`git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main`). If neither
-  is available, ask the owner for the sha. Never a branch name. Installing repo-declared skills
-  needs a `skf-cloud.mjs` that knows `install --top-up` (check the file at that sha with
-  `grep -c -- --top-up`); an older pin installs only `SKF_SKILLS`, so with an older pin either
-  move it to the latest `main` or keep listing every skill in `SKF_SKILLS`.
+- `SKF_REF`: by default the block follows `main`. The `ls-remote` line resolves it to a full
+  commit sha each time the environment is built, and `skf-cloud.mjs` still receives and records
+  a sha (in `~/.claude/skill-forge/state.json`). So a change merged to `main` reaches every
+  Project at its next environment rebuild (a setup-script save, or about every 7 days); running
+  threads keep the commit their environment was built with. For the fallback sha, use the
+  commit `state.json` records or the current `main`; ask the owner if neither is available.
+- Rollback, per Project: replace the `ls-remote` and fallback lines with a fixed known-good
+  `SKF_REF=<40-char commit sha>`, then save the script (which rebuilds the environment). Never
+  set `SKF_REF` to a branch name. Installing repo-declared skills needs a `skf-cloud.mjs` that
+  knows `install --top-up` (check the file at that sha with `grep -c -- --top-up`); an older
+  pin installs only `SKF_SKILLS`, so with an older pin keep listing every skill in `SKF_SKILLS`.
 - `SKF_SKILLS`: environment extras only. Every registry skill a repo's `skill-forge.json`
   declares is installed from it automatically, once, at the version `SKF_REF` pins (it must
   satisfy every declaring repo's range). Add this skill, plus any of the four process skills
   (`coding-discipline security-baseline code-quality testing-strategy`) that not every repo
   declares. `SKF_FROM_REPOS=0` turns the repo reading off (the old explicit-list behaviour).
-  Shrink `SKF_SKILLS` in the same paste that moves `SKF_REF`, never before it.
+  On a fixed pin, shrink `SKF_SKILLS` in the same paste that moves `SKF_REF`, never before it.
 - Drop the project-rules lines when there is nothing to put there.
 
 **Topic line:** one or two sentences: what the Project is and which repo owns what.

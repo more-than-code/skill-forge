@@ -337,8 +337,9 @@ Claude Project threads, and cloud sessions on the same environment, have no `skf
 umbrella and no `~/.claude` of yours. They get Skill Forge from the Project's cloud
 environment instead: its setup script runs before every new thread starts, and whatever it
 writes to `~/.claude` loads in that thread. `bin/skf-cloud.mjs` is the one file that does
-this. It uses Node built-ins only and is fetched from this public repository at a pinned
-commit, so a Project that only ever existed in claude.ai needs nothing else.
+this. It uses Node built-ins only and is fetched from this public repository at a commit
+resolved from `main` when the environment is built, so a Project that only ever existed in
+claude.ai needs nothing else.
 
 The setup-script block (a thread drafts it; the owner pastes it, since claude.ai has no API
 for Project settings):
@@ -348,7 +349,10 @@ for Project settings):
 cat > /tmp/skf-project-rules.md <<'SKF_EOF'
 <Project rules threads need; optional, drop these lines and SKF_PROJECT_RULES_FILE if empty>
 SKF_EOF
-export SKF_REF=<40-char commit sha> SKF_RULES=cloud SKF_AGENTS=claude-code
+# Follow Skill Forge's main: resolved to a commit each time the environment is built.
+SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
+[ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
+export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
 export SKF_SKILLS="claude-project-steward"   # extras; repo-declared skills install on their own
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
@@ -356,6 +360,12 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
 # <<< skill-forge <<<
 ```
 
+- `SKF_REF` follows `main` by default: the `ls-remote` line resolves it to a full commit sha
+  at every environment build, and `skf-cloud.mjs` receives and records that sha. A change
+  merged to `main` reaches every Project at its next environment rebuild (a setup-script save,
+  or about every 7 days); running threads keep the commit they were built with. To roll one
+  Project back, replace the `ls-remote` and fallback lines with a fixed known-good
+  `SKF_REF=<40-char commit sha>` and save the script. Never set `SKF_REF` to a branch name.
 - `install` reads `registry.json` and `registry-lock.json` at `SKF_REF`, downloads the declared
   variant (rendered into `~/.claude/rules/skill-forge.md`), subagent set (`~/.claude/agents/`)
   and skills (`~/.claude/skills/<name>/`), checks every file against the lock, and writes only
@@ -379,7 +389,7 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   `SKF_FROM_REPOS=0` installs exactly what the explicit-list setup did (same files) and
   keeps doctor's explicit-list findings. Every repository cloned for the Project is trusted
   to add registry skills for all of its threads. The repo reading needs this version of the
-  file: shrink `SKF_SKILLS` only in the same change that moves `SKF_REF` to it.
+  file: on a fixed pin, shrink `SKF_SKILLS` only in the same change that moves `SKF_REF` to it.
 - `install --top-up [--repos-dir <dir>]` (default `SKF_REPOS_DIR`, then `/home/user`, like
   `doctor`) runs inside a thread when a repository declared a skill
   after the environment snapshot was built (it is rebuilt when the setup script changes or
@@ -389,19 +399,24 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   install, every repository cloned for the thread (missing `CLAUDE.md`, managed Skill Forge
   blocks, sections repeated across repos, always-loaded size, workstation-only rules,
   committed copies of installed skills, shadowing subagents, declared skills that are missing
-  (fixed by `--top-up`), out of range or workstation-only, lock versions that differ from the
-  installed ones, and an instructions variant other than the environment's)
+  (fixed by `--top-up`), out of range or workstation-only, repo-installed skills that no repo
+  declares any more (gone at the next rebuild), lock versions that differ from the installed
+  ones, and an instructions variant other than the environment's)
   and, with `--context`, the Project-instructions text (length, missing PR base, restated
-  workflow rules); it also reports when the pinned `SKF_REF` is behind the registry's `main`
-  (`--offline` skips that). Each finding names who fixes it: an owner paste, an owner account
+  workflow rules); it also reports when the environment's `SKF_REF` is behind the registry's
+  `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it), and
+  lists the registry skills at `SKF_REF` that nothing installs and no repo declares, keeps
+  locally or commits, as a prompt for the thread's agent to match against the repos' stacks
+  and propose in a PR (`D-skill-suggest`; `--offline` skips it, a failed registry read is a
+  `D-skill-suggest-unchecked` note; see `docs/SKILL-SUGGESTIONS.md`). Each finding names who fixes it: an owner paste, an owner account
   setting, a thread PR, or the thread itself. Not built: a branch-drift check (the steward
   skill gives the manual `git diff`), and the "this repository" phrasing heuristic.
 - The `claude-project-steward` skill tells a thread how to run `doctor`, draft the setup
   block, topic line and Project instructions, open repository fixes as PRs, and verify in a
   new thread. Upload it once as a claude.ai account skill so new Projects have it before any
   setup exists.
-- Changes reach new threads only: a changed setup script rebuilds the environment's snapshot,
-  and repository files load from each repo's default branch.
+- Changes reach new threads only: a changed setup script rebuilds the environment's snapshot
+  (picking up the current `main`), and repository files load from each repo's default branch.
 
 Run the test suite:
 

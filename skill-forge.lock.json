@@ -3,8 +3,8 @@
   "registry": {
     "name": "skill-forge",
     "version": "1.4.0",
-    "commit": "f124af5e7c5576a9df185e6044adfbbc146b2579",
-    "lockIntegrity": "sha256-RjpX96HOgVbAPJ4pMtuiTGtibf4VnTWo61Uzkj90k/c="
+    "commit": "14a4890caa5193ba3c0afc8018e8d2bb6b151199",
+    "lockIntegrity": "sha256-YQaLo/VX2Iv+IQBM0rQDzKCgvA9K62GfdRQAz+dPz0s="
   },
   "skills": {
     "api-contracts": {
@@ -30,6 +30,11 @@
     "podman-utilization": {
       "version": "0.1.0",
       "integrity": "sha256-P43XjXAyNVO+qHLfviWPhapje1lINUjIKdQEUlLxE5M=",
+      "source": "registry"
+    },
+    "review-checklist": {
+      "version": "0.1.0",
+      "integrity": "sha256-YSIXV2pBJ4yuNtnRjJkkbPxG1PxEh+5wzZxK94ItOJ8=",
       "source": "registry"
     },
     "security-baseline": {

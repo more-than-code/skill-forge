@@ -556,7 +556,7 @@
     {
       "type": "skill",
       "name": "claude-project-steward",
-      "version": "0.2.2",
+      "version": "0.2.4",
       "scope": "custom",
       "path": "inventory/skills/claude-project-steward",
       "installable": true,
@@ -565,6 +565,18 @@
         "claude-projects",
         "setup",
         "diagnosis"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "review-checklist",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/review-checklist",
+      "installable": true,
+      "tags": [
+        "review",
+        "review-lens"
       ]
     },
     {
@@ -691,7 +703,7 @@
     {
       "type": "subagents",
       "name": "codex-subagents",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "scope": "codex",
       "path": "inventory/subagents/codex",
       "installable": false,
@@ -700,7 +712,7 @@
     {
       "type": "subagents",
       "name": "copilot-cli-subagents",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "scope": "copilot-cli",
       "path": "inventory/subagents/copilot-cli",
       "installable": false,
@@ -709,7 +721,7 @@
     {
       "type": "subagents",
       "name": "claude-code-subagents",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "scope": "claude-code",
       "path": "inventory/subagents/claude-code",
       "installable": false,
@@ -718,7 +730,7 @@
     {
       "type": "subagents",
       "name": "grok-subagents",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "scope": "grok",
       "path": "inventory/subagents/grok",
       "installable": false,

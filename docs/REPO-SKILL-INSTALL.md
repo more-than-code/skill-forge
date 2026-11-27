@@ -219,7 +219,36 @@ it cannot serve existing repos).
 `staleness.mjs` stays as is. It serves workstations that have `skf` and the
 `.agents/skills` link, which `ensure` defers to; folding it in would mix two layouts.
 
+## Choice: an older copy at user level or in a parent folder
+
+When the winning copy is older than the repo declares, there are three options:
+
+- **A. Warn, and offer an upgrade of the shared copy in place** (recommended). No repo
+  duplicate. `ensure` warns (section 1, step 5); the steward offers to upgrade the
+  older copy where it is, and does it only on the user's yes, through
+  `ensure --upgrade <name>`. Before offering, it checks that the new version still fits
+  every range it can see for that name: this repo's `skill-forge.json`, the parent
+  folder's own `skill-forge.json` when there is one, and the ranges recorded in
+  `~/.claude/skill-forge/state.json`. If one of those would break, it says which and
+  offers nothing. It upgrades only a copy that Skill Forge installed (recorded in a
+  state file) and not edited since. A hand-installed copy gets instructions, not a write.
+- **B. Install the declared version into the repo as well.** This makes a duplicate. For
+  a user-level copy it does not even help: Claude Code ranks personal skills above
+  project ones ([docs](https://code.claude.com/docs/en/skills.md)), so the older user
+  copy still runs. For a parent copy it helps only in sessions started inside the repo.
+- **C. Upgrade the shared copy silently.** Other repos on the machine may rely on that
+  copy, so it can break them without a word.
+
+A is recommended because it never makes a copy that cannot win, and never changes a
+shared copy without the user's yes. It adds `--upgrade <name>` to the contract diff.
+
+A note on parent folders: Claude Code reads project skills from the session's start
+folder up to the repository root. A copy in a folder above the repo root therefore
+loads only in sessions started in that folder, not in sessions started inside the repo.
+
 ## Open items for the owner
+
+- Older shared copy: option A above (recommended), B or C.
 
 - A copy only in a **parent** folder: report it and install nothing (default here, no
   duplicates), or install a repo copy so a session started inside the repo has it too?
@@ -231,6 +260,7 @@ it cannot serve existing repos).
 | Surface | Before | After |
 |---|---|---|
 | `skf-cloud.mjs` commands | `install`, `install --top-up`, `doctor` | adds `ensure [--repo] [--ref] [--check] [--json] [--hook] [--write-hook]` |
+| `ensure --upgrade <name>` | — | upgrades a user-level or parent copy Skill Forge installed, in place, only when the steward asks after the user's yes (option A) |
 | `ensure --check --json` | — | new versioned JSON shape (`version: 1`), a public contract from release |
 | `install --top-up` | trusts `state.json`; a deleted folder is "nothing to add" | a recorded skill with no `SKILL.md` on disk is added again |
 | `~/.claude` layout, `state.json` | unchanged | unchanged |

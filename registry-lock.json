@@ -688,9 +688,9 @@
       "name": "cloud",
       "version": "0.1.1",
       "type": "instructions",
-      "integrity": "sha256-dKgnIz+sPRbKBxXXEB+foWIK8oaAchM12qTMb6iAiZw=",
+      "integrity": "sha256-/g/ihGlmmSQtUHS+z6GGPXOnMaKhqo5eK5oB9QM1tgQ=",
       "files": {
-        "AGENTS.md": "sha256-CHH6nUyefdOsi94mRZ6ZncU6hBVLDHpydBSA4nQ4noM=",
+        "AGENTS.md": "sha256-AmbRO9S0vMgwuGrMsKYKwxBv8Gq0z4thti+1DZlgxc8=",
         "CLAUDE.md": "sha256-n+BCpqmGhu0T5tYS/UcnllCmAe1fzUaXgyF2EQvY3zc="
       }
     }

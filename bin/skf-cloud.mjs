@@ -742,7 +742,8 @@ function loadedRepoText(dir) {
 }
 
 /** Whether CLAUDE.md holds text of its own, not only @imports and blank lines. */
-const hasOwnText = (text) => text.split('\n').some((line) => line.trim() !== '' && !/^\s*(?:@[^\s`]+\s*)+$/.test(line));
+const hasOwnText = (text) => text.split('\n').some((line) => line.trim() !== ''
+  && (line.length >= 2000 || !line.trim().split(/\s+/).every((word) => /^@[^\s`]+$/.test(word))));
 
 /** `## heading` sections with their bodies, for spotting the same section in two repos. */
 function sections(text) {
@@ -1044,10 +1045,20 @@ function ownSkillDirs(repo, profile, envSkills) {
  * A read-only git command in one repository: { code, out }, or null when git fails or is missing.
  * Fixed argument arrays, no shell; never looks above the repository for a .git, never prompts.
  */
-function readGit(dir, args, okCodes = [0]) {
-  const env = { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(dir)), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' };
+function readGit(dir, args, okCodes = [0], timeout = GIT_TIMEOUT_MS) {
+  let real;
   try {
-    const out = execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', dir, ...args], { encoding: 'utf8', env, timeout: GIT_TIMEOUT_MS, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    real = fs.realpathSync(dir);
+  } catch {
+    return null;
+  }
+  // No inherited GIT_* (GIT_DIR, GIT_CONFIG_*) may point git elsewhere; protocols are allowlisted (no ext::).
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  Object.assign(env, { GIT_CEILING_DIRECTORIES: path.dirname(real), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GIT_ALLOW_PROTOCOL: 'https:ssh:file' });
+  // Settings a repo's own .git/config could use to run a command; the command line wins over it.
+  const safe = ['core.fsmonitor=false', 'core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=5', 'core.gitProxy='];
+  try {
+    const out = execFileSync('git', [...safe.flatMap((setting) => ['-c', setting]), '-C', real, ...args], { encoding: 'utf8', env, timeout, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
     return { code: 0, out };
   } catch (error) {
     return typeof error?.status === 'number' && okCodes.includes(error.status) ? { code: error.status, out: String(error.stdout ?? '') } : null;
@@ -1075,7 +1086,7 @@ function personalFiles(dir) {
 function gitRemotes(dir) {
   const config = readText(path.join(dir, '.git', 'config'));
   if (config === null) return null;
-  return new Set([...config.matchAll(/^\s*\[remote\s+"([^"]{1,100})"\]/gm)].map((match) => match[1]));
+  return new Set([...config.matchAll(/^[ \t]*\[remote[ \t]+"([^"]{1,100})"\]/gm)].map((match) => match[1]));
 }
 
 const IDENTITY = /\bgit\s+(?:-c\s+user\.(?:name|email)=|config\b[^\n]{0,200}?\buser\.(?:name|email)\s+["']?[^\s"'`-])|\bgit\s+commit\b[^\n]{0,200}?--author\b|\bGIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL)\b|<[^<>\s]{1,100}@users\.noreply\.github\.com>/i;
@@ -1376,7 +1387,7 @@ function checkContext(findings, file) {
   if (text.length > PROJECT_INSTRUCTIONS_LIMIT) {
     findings.push(finding('D-context-size', 'issue', 'owner-paste', `Project instructions are ${text.length} characters (limit ${PROJECT_INSTRUCTIONS_LIMIT})`, 'Shorten them to Project-level rules.'));
   }
-  const namesBase = prBase(text) !== undefined;
+  const namesBase = text.split('\n').some((line) => line.length < 2000 && PR_INTO.test(line));
   if (!namesBase) {
     findings.push(finding('D-context-pr-base', 'issue', 'owner-paste', 'the Project instructions name no pull-request base branch; threads then use the repo default',
       'Add a line such as: Pull requests go into `dev`.'));
@@ -1388,13 +1399,21 @@ function checkContext(findings, file) {
   }
 }
 
-/** The first PR base branch the Project instructions name ("Pull requests go into `dev`"); undefined when none. */
+const PR_INTO = /\b(?:PRs?|pull requests?)\b.*\binto\s+`?[\w./-]+/i;
+// The first "into" after the PR words, then a backticked branch, skipping a determiner ("into the `dev` branch").
+const PR_BASE = /\b(?:PRs?|pull requests?)\b.*?\binto\s+(?:(?:the|a|an|our|this|that|its|each|every)\s+)?`([A-Za-z0-9][\w./-]{0,99})`/i;
+
+/**
+ * The PR base branch the Project instructions name in backticks ("Pull requests go into `dev`").
+ * Undefined when none is backticked, or when lines name different bases: then there is nothing certain to check.
+ */
 function prBase(text) {
+  const bases = new Set();
   for (const line of text.split('\n')) {
-    const match = line.length < 2000 && /\b(?:PRs?|pull requests?)\b.*\binto\s+`?([\w./-]+)/i.exec(line);
-    if (match) return match[1].replace(/\.+$/, '');
+    const match = line.length < 2000 && PR_BASE.exec(line);
+    if (match) bases.add(match[1].replace(/[./-]+$/, ''));
   }
-  return undefined;
+  return bases.size === 1 ? [...bases][0] : undefined;
 }
 
 /** Each cloned repo with an origin must have the PR base the Project instructions name. */
@@ -1405,9 +1424,14 @@ function checkContextBase(findings, file, repos, offline) {
   if (!/^[A-Za-z0-9][\w./-]{0,99}$/.test(base) || base.includes('..')) return;
   const missing = [];
   const unchecked = [];
+  // One deadline for all repos, so blackholed remotes cannot stack up 10 s each.
+  const deadline = Date.now() + 3 * GIT_TIMEOUT_MS;
   for (const repo of repos) {
-    if (!gitRemotes(repo.dir)?.has('origin')) continue;
-    const result = readGit(repo.dir, ['ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${base}`], [0, 2]);
+    // Ask git, so a worktree (.git is a file) is checked too.
+    const remotes = readGit(repo.dir, ['remote']);
+    if (!remotes?.out.split('\n').includes('origin')) continue;
+    const left = deadline - Date.now();
+    const result = left < 1000 ? null : readGit(repo.dir, ['ls-remote', '--upload-pack=git-upload-pack', '--exit-code', '--heads', 'origin', `refs/heads/${base}`], [0, 2], Math.min(GIT_TIMEOUT_MS, left));
     if (!result) unchecked.push(repo.name);
     else if (result.code === 2) missing.push(repo.name);
   }
@@ -1417,7 +1441,7 @@ function checkContextBase(findings, file, repos, offline) {
   }
   if (unchecked.length > 0) {
     findings.push(finding('D-context-base-unchecked', 'note', 'thread', `could not check that ${unchecked.join(', ')} ${unchecked.length === 1 ? 'has' : 'have'} a ${base} branch (git ls-remote failed)`,
-      `Check by hand in each repo: git ls-remote --heads origin refs/heads/${base}`));
+      `Check by hand in each repo: git ls-remote --heads origin refs/heads/${base}, or list its branches through the GitHub tools.`));
   }
 }
 

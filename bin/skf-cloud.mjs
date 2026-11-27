@@ -6,7 +6,8 @@
 //
 //   install  Write the declared rules, subagents and skills into ~/.claude. Reads the
 //            declaration from SKF_REF, SKF_RULES, SKF_AGENTS, SKF_SKILLS and
-//            SKF_PROJECT_RULES_FILE, then the skill-forge.json of every repository cloned in
+//            SKF_PROJECT_RULES_FILE, plus the default skills (claude-project-steward; off
+//            with SKF_DEFAULT_SKILLS=0), then the skill-forge.json of every repository cloned in
 //            SKF_REPOS_DIR (default: the working directory, /home/user in a setup script) and
 //            installs each registry skill they declare once, unless SKF_SKILLS already provides
 //            it (SKF_FROM_REPOS=0 turns that off). Logs to ~/skf-setup.log and always exits 0: a
@@ -47,7 +48,9 @@ const FETCH_TIMEOUT_MS = 20000;
 const GIT_TIMEOUT_MS = 10000;
 const INSTALL_DEADLINE_MS = Number(process.env.SKF_DEADLINE_MS) || 90000;
 const PROCESS_SKILLS = ['coding-discipline', 'security-baseline', 'code-quality', 'testing-strategy'];
-const ALWAYS_USEFUL_SKILLS = [...PROCESS_SKILLS, 'claude-project-steward'];
+// Environment-level skills every setup installs after SKF_SKILLS; SKF_DEFAULT_SKILLS=0 turns them off.
+const DEFAULT_SKILLS = ['claude-project-steward'];
+const ALWAYS_USEFUL_SKILLS = [...PROCESS_SKILLS, ...DEFAULT_SKILLS];
 const REPO_BYTES_BUDGET = 8 * 1024;
 const REPO_READ_CAP = 256 * 1024;
 const PROJECT_INSTRUCTIONS_LIMIT = 16000;
@@ -244,12 +247,14 @@ async function fetchBytes(base, ref, rel, deadline) {
 
 function readDeclaration(env) {
   const list = (value) => (value || '').split(/[\s,]+/).filter(Boolean);
+  const defaults = env.SKF_DEFAULT_SKILLS !== '0';
   return {
     ref: env.SKF_REF || '',
     base: env.SKF_BASE || DEFAULT_BASE,
     rules: env.SKF_RULES || '',
     agents: env.SKF_AGENTS || '',
-    skills: list(env.SKF_SKILLS),
+    skills: [...new Set([...list(env.SKF_SKILLS), ...(defaults ? DEFAULT_SKILLS : [])])],
+    defaults,
     projectRulesFile: env.SKF_PROJECT_RULES_FILE || '',
     fromRepos: env.SKF_FROM_REPOS !== '0',
     reposDir: env.SKF_REPOS_DIR || process.cwd()
@@ -500,7 +505,7 @@ async function runInstall() {
   const lines = [];
   const log = (line) => lines.push(line);
   const decl = readDeclaration(process.env);
-  log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'} from-repos=${decl.fromRepos ? decl.reposDir : 'off'}`);
+  log(`skf-cloud install ${new Date().toISOString()} ref=${decl.ref} rules=${decl.rules || '-'} agents=${decl.agents || '-'} skills=${decl.skills.join(',') || '-'} defaults=${decl.defaults ? DEFAULT_SKILLS.join(',') : 'off'} from-repos=${decl.fromRepos ? decl.reposDir : 'off'}`);
   try {
     const previous = readState();
     let needs = new Map();

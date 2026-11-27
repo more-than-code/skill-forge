@@ -364,7 +364,6 @@ SKF_EOF
 SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
 [ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
 export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
-export SKF_SKILLS="claude-project-steward"   # extras; repo-declared skills install on their own
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
   && node /tmp/skf-cloud.mjs install || true
@@ -391,16 +390,25 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
 - Repositories declare skills; the environment installs them. `install` also reads the
   `skill-forge.json` of every repository cloned in its working directory (`/home/user` in a
   setup script; `SKF_REPOS_DIR` overrides it) and installs each registry skill under
-  `skills.dependencies` **once**, unless `SKF_SKILLS` already provides it (the higher level
-  wins), at the version `SKF_REF` pins, and only if that version satisfies every declaring
+  `skills.dependencies` **once**, unless the environment level (`SKF_SKILLS` or the default
+  steward) already provides it (the higher level wins), at the version `SKF_REF` pins, and only if that version satisfies every declaring
   repository's range. Otherwise that one skill is skipped and recorded (out of range, not in
   the registry, or `workstation-only`), not failed. `skills.local` skills stay committed in
   their repository and are not installed. So repositories commit `skill-forge.json` and its
   lock but no registry skill copies, and `SKF_SKILLS` shrinks to environment extras.
-  `SKF_FROM_REPOS=0` installs exactly what the explicit-list setup did (same files) and
+  `SKF_FROM_REPOS=0` installs exactly what the explicit-list setup did (same files, plus the
+  default steward unless `SKF_DEFAULT_SKILLS=0`) and
   keeps doctor's explicit-list findings. Every repository cloned for the Project is trusted
   to add registry skills for all of its threads. The repo reading needs this version of the
   file: on a fixed pin, shrink `SKF_SKILLS` only in the same change that moves `SKF_REF` to it.
+- `claude-project-steward` installs by default, after `SKF_SKILLS` and before the repos'
+  skills, so the setup block needs no `SKF_SKILLS` line for it (`docs/DEFAULT-SKILLS.md`). A
+  script that still lists it gets the same single copy. Only the literal `SKF_DEFAULT_SKILLS=0`
+  turns the default off, for example in a Project that has the steward as a claude.ai account
+  skill and does not want a second copy. A fixed `SKF_REF`, or the block's fallback sha, older
+  than this change runs the older script, which ignores the default: keep the steward in
+  `SKF_SKILLS` there. `SKF_SKILLS` is only for other environment extras, such as process skills no
+  repository declares; leave it out when there are none.
 - `install --top-up [--repos-dir <dir>]` (default `SKF_REPOS_DIR`, then `/home/user`, like
   `doctor`) runs inside a thread when a repository declared a skill
   after the environment snapshot was built (it is rebuilt when the setup script changes or

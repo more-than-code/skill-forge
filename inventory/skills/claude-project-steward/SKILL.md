@@ -11,7 +11,7 @@ A Claude Project thread loads, at start and only at start:
 |---|---|---|
 | Topic line (Project settings > General) | What the Project is, 1–2 sentences | Owner pastes |
 | Project instructions (Project settings > Memory, ≤16,000 chars) | How this Project works across repos: repo ownership, one item per thread, PR base branch, contract numbering, who approves and merges | Owner pastes |
-| `~/.claude` from the environment's setup script | Workflow rules (`rules/skill-forge.md`), Project rules (`rules/project.md`), subagents, every registry skill the repos' `skill-forge.json` declare (once each) plus `SKF_SKILLS` extras | Owner pastes the declaration; repos declare skills by PR |
+| `~/.claude` from the environment's setup script | Workflow rules (`rules/skill-forge.md`), Project rules (`rules/project.md`), subagents, every registry skill the repos' `skill-forge.json` declare (once each), this steward (installed by default) and any `SKF_SKILLS` extras | Owner pastes the declaration; repos declare skills by PR |
 | Each repo's `CLAUDE.md` (= `@AGENTS.md`) on its **default branch** | That repo's facts and its own gates | Threads, by PR |
 | Account connectors, plugins, claude.ai skills | Tools | Owner, in claude.ai |
 
@@ -106,7 +106,7 @@ SKF_EOF
 SKF_REF=$(git ls-remote https://github.com/more-than-code/skill-forge refs/heads/main 2>/dev/null | cut -f1)
 [ ${#SKF_REF} -eq 40 ] || SKF_REF=<40-char known-good commit sha>   # fallback if GitHub is unreachable
 export SKF_REF SKF_RULES=cloud SKF_AGENTS=claude-code
-export SKF_SKILLS="claude-project-steward <process skills not every repo declares>"
+export SKF_SKILLS="<process skills not every repo declares>"   # drop this line when empty
 export SKF_PROJECT_RULES_FILE=/tmp/skf-project-rules.md
 curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_REF/bin/skf-cloud.mjs" -o /tmp/skf-cloud.mjs \
   && node /tmp/skf-cloud.mjs install || true
@@ -126,7 +126,10 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   pin installs only `SKF_SKILLS`, so with an older pin keep listing every skill in `SKF_SKILLS`.
 - `SKF_SKILLS`: environment extras only. Every registry skill a repo's `skill-forge.json`
   declares is installed from it automatically, once, at the version `SKF_REF` pins (it must
-  satisfy every declaring repo's range). Add this skill, plus any of the four process skills
+  satisfy every declaring repo's range). This skill installs by default and needs no entry
+  (`SKF_DEFAULT_SKILLS=0` turns that off, for example when the owner has it as a claude.ai
+  account skill and wants one copy); a fixed pin or fallback sha older than that change still
+  needs it in `SKF_SKILLS`. Add any of the four process skills
   (`coding-discipline security-baseline code-quality testing-strategy`) that not every repo
   declares. `SKF_FROM_REPOS=0` turns the repo reading off (the old explicit-list behaviour).
   On a fixed pin, shrink `SKF_SKILLS` in the same paste that moves `SKF_REF`, never before it.

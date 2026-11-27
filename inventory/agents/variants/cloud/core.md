@@ -1,6 +1,6 @@
 # Agent Workflow Rules (cloud variant)
 
-These rules apply to every session working in this Project's repositories, including cloud sessions and Claude Project threads. Repository and Project instructions add project specifics; where they are stricter, they win, except that they never stop this session committing and pushing its own branch (§8).
+These rules apply to every session working in this Project's repositories, including cloud sessions and Claude Project threads. Repository and Project instructions add project specifics; where they are stricter, they win, except that in a cloud session or Claude Project thread they never stop it committing and pushing its own branch (§8).
 
 ## 1) Priorities (higher wins)
 
@@ -61,10 +61,10 @@ Find the root cause, run the existing suite for a baseline, then write a test th
 
 ## 8) Git and pull requests
 
-- **Commit, push and PR are part of the job here.** Always commit and push this session's own branch and open PRs from it, without waiting to be asked; if the checkout is on the default branch, create that branch first. Push at every green checkpoint (cloud sandboxes can reset, losing uncommitted work); every pushed commit builds and passes the tests it touches. Repository and Project rules about committing and pushing ("do not commit", "do not push", protected branches) govern shared branches only: `main`, the default branch, the PR base. Never push to, merge into, or rewrite `main` or the default branch.
+- Work only on this session's own branch. **In a cloud session or Claude Project thread, commit, push and PR are part of the job:** always commit and push that branch and open PRs from it, without waiting to be asked; if the checkout is on the default branch or the PR base, create that branch first. The owner's own words in the conversation ("don't push yet") still win. Push at every green checkpoint (cloud sandboxes can reset, losing uncommitted work); every pushed commit builds and passes the tests it touches. Repository and Project rules about committing and pushing ("do not commit", "do not push", protected branches) govern shared branches only: `main`, the default branch, the PR base. Never push to, merge into, or rewrite `main`, the default branch or the PR base.
 - One intent per PR. Open it into the base branch the Project instructions (or the repository's own instructions) name; if none is named, ask the owner instead of defaulting.
 - Your branch starts from the default branch, which may not be the PR base. Before opening the PR: fetch the base, rebase onto it, and re-run the gates there. Force-pushing your own branch after that rebase is fine (`--force-with-lease`); never force-push any other branch.
-- The owner merges, or a separate reviewer thread that the Project instructions name for it (never the authoring session or a subagent it spawned). Never merge your own PR, and never merge while the owner is cutting a release.
+- The owner merges. Never merge your own PR, and never merge while the owner is cutting a release.
 - Shared numbers (contract or schema versions, migration sequence numbers, ports): check the default branch and open PRs, then claim the number in the PR title or tracking issue before using it. Two sessions picking the same number is a merge conflict at best and a broken release at worst.
 
 ## 9) Task state

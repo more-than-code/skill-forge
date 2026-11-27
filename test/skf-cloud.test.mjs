@@ -405,7 +405,8 @@ test('doctor flags a repo line that forbids committing or pushing, which the clo
     'Do not commit or push without asking.',
     'Do not commit/push.',
     'Never push.',
-    'DO NOT COMMIT.'
+    'DO NOT COMMIT.',
+    'Do not push unless explicitly asked.'
   ]) assert.equal(await flagged(text), true, text);
   for (const text of [
     'Never push to main; pull requests go into dev.',
@@ -415,6 +416,7 @@ test('doctor flags a repo line that forbids committing or pushing, which the clo
     'Do not commit:\n- .env\n- build output',
     'Do not commit\ngenerated files.',
     'Do not commit, e.g. build output.',
+    'Do not commit; use make release.',
     'Commits and pushes: cloud sessions and Project threads follow the shared workflow rules (Git and pull requests).',
     '<!-- >>> skill-forge instructions cloud@0.1.1 >>> -->\nA repository\'s blanket "do not commit unless asked / do not push" default is for local sessions.\nDo not push.\n<!-- <<< skill-forge instructions <<< -->'
   ]) assert.equal(await flagged(text), false, text);

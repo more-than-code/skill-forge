@@ -61,9 +61,9 @@ const WORKSTATION_PHRASES = [/tasks\/todo\.md/, /tasks\/lessons\.md/, /external[
 // the repo should point at them instead. The ban must end its sentence on the same line or carry an ask-first
 // qualifier; a rule about where or what to commit ("never push to main", "do not commit generated
 // files", "do not commit without running tests") is a repository fact. Checked line by line with
-// Markdown emphasis and code marks removed, and only in repository prose: Project instructions may
-// restrict threads on purpose.
-const REPO_COMMIT_BAN = /\b(?:do not|don['\u2019]t|never)\s+(?:commit|push)(?:\s*(?:\/|,|or|and)\s*(?:commit|push))?(?:\s*[.;!]|\s+unless\s+(?:the user|you are|you're|asked|told)\b|\s+without\s+(?:asking|being asked|explicit|permission|approval)\b)/i;
+// Markdown emphasis and code marks removed, and only in repository prose: Project instructions are
+// the owner's Project-level rules, so doctor leaves them alone.
+const REPO_COMMIT_BAN = /\b(?:do not|don['\u2019]t|never)\s+(?:commit|push)(?:\s*(?:\/|,|or|and)\s*(?:commit|push))?(?:\s*[.!]|\s+unless\s+(?:the user|you are|you're|asked|told|explicitly)\b|\s+without\s+(?:asking|being asked|explicit|permission|approval)\b)/i;
 const hasCommitBan = (prose) => prose.split('\n').some((line) => REPO_COMMIT_BAN.test(line.replace(/[*_`]/g, '')));
 
 const hashBytes = (bytes) => `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;

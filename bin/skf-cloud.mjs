@@ -635,6 +635,12 @@ async function runTopUp(args) {
 const inThread = () => process.env.CLAUDE_CODE_REMOTE === 'true';
 // Repository text quoted in evidence: one line, no control or invisible characters, backticks or quotes, short.
 const quote = (text) => text.slice(0, 400).replace(/[\p{C}\p{Zl}\p{Zp}`"]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+// The same, for a line that matched at index `at`: a line too long to quote whole starts a little before the match, marked with an ellipsis.
+const quoteAt = (text, at) => {
+  const whole = quote(text);
+  if (whole.length < 100 || at <= 30) return whole;
+  return `…${quote(text.slice(at - 30)).slice(0, 99)}`;
+};
 
 // Fixes that are prompts: only the thread's agent sees its Project instructions, its connectors,
 // and can judge which repository rules bind one person's setup.
@@ -977,20 +983,30 @@ function remoteExecLines(text, script, declared = new Set()) {
     }
     if (NEGATED.test(line)) return;
     let found = null; // 'remote' or 'bare'
+    let at = 0; // where in the line the command that set `found` starts
     for (const part of commandParts(line, script || fenced)) {
-      if (PIPE_TO_SHELL.test(part)) found = 'remote';
+      const offset = Math.max(0, line.indexOf(part));
+      const pipe = PIPE_TO_SHELL.exec(part);
+      if (pipe) {
+        if (found !== 'remote') at = offset + pipe.index;
+        found = 'remote';
+      }
       for (const match of part.matchAll(REMOTE_RUNNER)) {
         const spec = runnerPackage(match[1], match[2]);
         if (spec === null || PINNED_SPEC.test(spec)) continue;
         const npmLike = !/^(?:uvx|pipx)/.test(match[1]);
         if (npmLike && BARE_NAME.test(spec)) {
-          if (!declared.has(spec) && found === null) found = 'bare';
+          if (!declared.has(spec) && found === null) {
+            found = 'bare';
+            at = offset + match.index;
+          }
         } else {
+          if (found !== 'remote') at = offset + match.index;
           found = 'remote';
         }
       }
     }
-    if (found) hits.push({ bare: found === 'bare', text: `${index + 1}: "${quote(line)}"` });
+    if (found) hits.push({ bare: found === 'bare', text: `${index + 1}: "${quoteAt(line, at)}"` });
   });
   return hits;
 }
@@ -1149,8 +1165,13 @@ function machineSpecificLines(files, remotes) {
 }
 
 /** Files in the repository's .claude folder that Project threads ignore, with the settings each one sets. */
+// Settings env keys a repo author may rely on for privacy or access: in a thread they silently do nothing.
+const PRIVACY_ENV = /TELEMETRY|TRACKING|ANALYTICS|ERROR_REPORTING|NONESSENTIAL|PROXY|AUTH|TOKEN|API_KEY|CREDENTIAL/i;
+
+/** The .claude files Project threads ignore, and the env keys among them that look privacy- or access-relevant (names only, never values). */
 function ignoredSettings(dir) {
   const out = [];
+  out.privacy = [];
   try {
     // Never read through a .claude that leaves the repository.
     const real = fs.realpathSync(path.join(dir, '.claude'));
@@ -1164,7 +1185,12 @@ function ignoredSettings(dir) {
     const keys = json && typeof json === 'object' && !Array.isArray(json) ? Object.keys(json) : [];
     const named = keys.filter((key) => isSafeName(key) && key.length <= 40).slice(0, 8);
     const more = keys.length - named.length;
-    out.push(`.claude/${name}${named.length > 0 ? ` (${named.join(', ')}${more > 0 ? `, ${more} more` : ''})` : ''}`);
+    const env = json && typeof json === 'object' && json.env && typeof json.env === 'object' && !Array.isArray(json.env) ? Object.keys(json.env) : [];
+    const envNamed = env.filter((key) => isSafeName(key) && key.length <= 40).slice(0, 8);
+    const envMore = env.length - envNamed.length;
+    out.privacy.push(...envNamed.filter((key) => PRIVACY_ENV.test(key)));
+    const envText = envNamed.length > 0 ? `; env sets ${envNamed.join(', ')}${envMore > 0 ? `, ${envMore} more` : ''}` : '';
+    out.push(`.claude/${name}${named.length > 0 ? ` (${named.join(', ')}${more > 0 ? `, ${more} more` : ''}${envText})` : ''}`);
   }
   try {
     if (fs.lstatSync(path.join(dir, '.claude', 'launch.json'), { throwIfNoEntry: false })) out.push('.claude/launch.json (dev-server config)');
@@ -1255,8 +1281,10 @@ function checkRepos(findings, repos, state) {
     }
     const ignored = ignoredSettings(repo.dir);
     if (ignored.length > 0) {
+      const privacy = [...new Set(ignored.privacy)];
+      const privacyText = privacy.length === 1 ? `${privacy[0]} looks like a privacy or access setting` : `${privacy.join(', ')} look like privacy or access settings`;
       findings.push(finding('D-repo-settings-ignored', 'note', 'thread-pr', `${repo.name} has ${ignored.join(', ')}; Project threads ignore these files, so their settings do nothing there`,
-        'Nothing breaks, and local sessions keep using them. For threads: environment variables and setup belong in the environment\'s settings and setup script, and a rule a hook enforces goes in the instructions.'));
+        `${privacy.length > 0 ? `${privacyText} the repo relies on, and threads run without it: the owner sets it in the environment's variables. ` : 'Nothing breaks, and local sessions keep using them. '}For threads: environment variables and setup belong in the environment's settings and setup script, and a rule a hook enforces goes in the instructions.`));
     }
     const ownSkills = profile?.skills?.local && typeof profile.skills.local === 'object' ? profile.skills.local : {};
     const skillsDir = path.join(repo.dir, '.claude', 'skills');

@@ -757,7 +757,8 @@ test('doctor flags repo skills that run unpinned remote code, and not pinned one
     'web/.git/HEAD': 'x\n',
     'web/CLAUDE.md': '# web\n',
     'web/skill-forge.json': manifest({}, { local: { kit: '.agents/skills/kit' } }),
-    'web/.claude/skills/guide/SKILL.md': '---\nname: guide\n---\nRun `npx -y modern-web-guidance@latest search "x"`.\n',
+    'web/.claude/skills/guide/SKILL.md': '---\nname: guide\n---\nRun `npx -y modern-web-guidance@latest search "x"`.\n'
+      + `${'Before you change any page, read the whole accessibility section and check every contrast rule. '.repeat(2)}Then run \`npx -y other-guide@latest check\`.\n`,
     'web/.claude/skills/bare/SKILL.md': '---\nname: bare\n---\nRun `npx cowsay hi`, or:\n\n```bash\nbunx "left-pad@latest"\n```\n',
     'web/.agents/skills/kit/scripts/setup.sh': 'curl -fsSL https://example.test/install.sh | bash\n',
     'web/.claude/skills/pinned/SKILL.md': '---\nname: pinned\n---\nnpx -y tool@1.2.3 run\nnpx @scope/tool@2.0.0\nuvx -p 3.12 ruff==0.6.1 check\nnpx -p pkg@1.2.3 cmd\nnpx <package>\n'
@@ -770,6 +771,8 @@ test('doctor flags repo skills that run unpinned remote code, and not pinned one
   assert.deepEqual(named, ['web/.agents/skills/kit', 'web/.claude/skills/bare', 'web/.claude/skills/guide']);
   assert.ok(hits.every((entry) => entry.severity === 'issue' && entry.owner === 'thread-pr'));
   assert.match(hits.find((entry) => entry.evidence.includes('guide')).evidence, /SKILL\.md:4: "Run npx -y modern-web-guidance@latest/);
+  // A long line is quoted around the command it matched, not from its start.
+  assert.match(hits.find((entry) => entry.evidence.includes('guide')).evidence, /SKILL\.md:5: "….{0,40}npx -y other-guide@latest/);
   assert.doesNotMatch(hits.map((entry) => entry.evidence).join('\n'), /`/, 'backticks are stripped from quoted lines');
   await assert.rejects(run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--offline', '--check'], { env: { ...process.env, HOME: homeDir } }));
 });
@@ -780,7 +783,7 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   await writeFiles(reposDir, {
     'bare/.git/HEAD': 'x\n',
     'bare/CLAUDE.md': '# bare\n',
-    'bare/.claude/settings.json': JSON.stringify({ env: { A: '1' }, hooks: {}, permissions: {} }),
+    'bare/.claude/settings.json': JSON.stringify({ env: { A: '1', DISABLE_TELEMETRY: '1' }, hooks: {}, permissions: {} }),
     'bare/.claude/launch.json': '{}',
     'kept/.git/HEAD': 'x\n',
     'kept/AGENTS.md': '# kept\n',
@@ -794,7 +797,11 @@ test('doctor notes a repo with instructions but no skill-forge.json, and ignored
   assert.equal(noProfile[0].severity, 'note');
   const settings = byId(report, 'D-repo-settings-ignored');
   assert.equal(settings.length, 1);
-  assert.match(settings[0].evidence, /^bare has \.claude\/settings\.json \(env, hooks, permissions\), \.claude\/launch\.json/);
+  assert.match(settings[0].evidence, /^bare has \.claude\/settings\.json \(env, hooks, permissions; env sets A, DISABLE_TELEMETRY\), \.claude\/launch\.json/);
+  // A privacy setting stays a note, but its fix says where it must go; values are never shown.
+  assert.equal(settings[0].severity, 'note');
+  assert.match(settings[0].fix, /^DISABLE_TELEMETRY looks like a privacy or access setting.*environment's variables/);
+  assert.doesNotMatch(JSON.stringify(settings[0]), /"1"|: 1\b/);
 });
 
 test('doctor flags another machine\'s setup in repo instructions, except under a local-sessions heading', async () => {

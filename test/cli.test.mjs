@@ -2526,6 +2526,19 @@ test('$HOME provides a skill: no project copy, status "home"; an out-of-range $H
   await assert.rejects(fx.skf(['sync', '--check']), /\$HOME has demo-skill@0\.1\.0, outside this repo's range 0\.2\.0/);
 });
 
+test('a CRLF .gitignore keeps CRLF in the block, and removing the block drops its CRLF blank line', async () => {
+  const fx = await generatedFixture();
+  await fs.writeFile(path.join(fx.dir, '.gitignore'), 'node_modules/\r\ndist/\r\n');
+  await fx.skf(['project', 'generated', 'ignored']);
+  const crlfBlock = GENERATED_BLOCK.replace(/\n/g, '\r\n');
+  assert.equal(await fx.gitignore(), `node_modules/\r\ndist/\r\n\r\n${crlfBlock}`, 'one line ending throughout');
+  await fx.skf(['sync', '--check']);
+  await fx.skf(['sync']);
+  assert.equal(await fx.gitignore(), `node_modules/\r\ndist/\r\n\r\n${crlfBlock}`, 'idempotent');
+  await fx.skf(['project', 'generated', 'committed']);
+  assert.equal(await fx.gitignore(), 'node_modules/\r\ndist/\r\n', 'block and its blank line removed');
+});
+
 test('project generated committed removes the block and copies everything again; a refusal changes nothing', async () => {
   const fx = await generatedFixture();
   await fx.skf(['project', 'generated', 'ignored']);

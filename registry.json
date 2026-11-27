@@ -592,20 +592,6 @@
         "mcp",
         "claude-projects"
       ]
-    },
-    {
-      "type": "skill",
-      "name": "skf-diagnose",
-      "version": "0.1.0",
-      "scope": "custom",
-      "path": "inventory/skills/skf-diagnose",
-      "installable": true,
-      "tags": [
-        "cloud",
-        "claude-projects",
-        "setup",
-        "diagnosis"
-      ]
     }
   ],
   "managedAgents": [

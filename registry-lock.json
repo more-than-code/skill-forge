@@ -58,9 +58,10 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-bW/bUjCvjamML7TWtVcQ1bEe8vn96dXBdG2/QqXW9fs=",
+      "integrity": "sha256-bTVJVn3W9zks53itgYJCUX2BdnKfNa1RexMADMUoU9w=",
       "files": {
-        "SKILL.md": "sha256-5BD1zGcI9rP5l/boBd6E9gbXPv3H73CdKjoDIu4Gkx4="
+        "diagnose.md": "sha256-GMfRjLZrJV3I3VgDl9p0rnci/DYnELZkX5V6SgnO5GI=",
+        "SKILL.md": "sha256-6PvY7ZwU18lvwN3cfA4b0spGvWfUJINOVTO+d1CSrpI="
       }
     },
     "inventory/skills/code-quality": {
@@ -442,17 +443,6 @@
       "integrity": "sha256-q+TFouWGk1XtYt1VlpA9+d+q2OsvK6IcGlzwUVPqZWI=",
       "files": {
         "SKILL.md": "sha256-7xh8HodRHlR2AlaVv0HMBFO/GRtPEt2RJjwEmCH19e4="
-      }
-    },
-    "inventory/skills/skf-diagnose": {
-      "name": "skf-diagnose",
-      "version": "0.1.0",
-      "type": "skill",
-      "scope": "custom",
-      "installable": true,
-      "integrity": "sha256-kJxKPq3C2p2GRkzLQ8cBzvgAeLns78DK1lBBa+x5oTQ=",
-      "files": {
-        "SKILL.md": "sha256-EDfwxunTtqJ92HKr4TBrOLo4mo+2pBdnv4PwVCu2SH8="
       }
     },
     "inventory/skills/skill-forge-authoring": {

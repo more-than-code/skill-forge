@@ -418,13 +418,17 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   machine or person can follow (a push to a remote the clone lacks or to `main`/`master`, a
   fixed commit identity, a personal home path; skipped under a "local"/"workstation" heading),
   a repo with instructions but no `skill-forge.json`, and committed `.claude/settings.json`,
-  `settings.local.json` or `launch.json`, which threads ignore)
+  `settings.local.json` or `launch.json`, which threads ignore, a tracked `CLAUDE.local.md` or
+  `.claude/settings.local.json` or a `.gitignore` that does not cover them, and instructions
+  kept only in `CLAUDE.md` with no `AGENTS.md`)
   and, with `--context`, the Project-instructions text (missing or empty, length, missing PR
-  base, restated workflow rules). In a thread (`CLAUDE_CODE_REMOTE=true`) it adds three
+  base, restated workflow rules) and, unless `--offline`, whether each repo's `origin` has the
+  PR base branch it names (`git ls-remote`). These checks run read-only git commands in each
+  repo. In a thread (`CLAUDE_CODE_REMOTE=true`) it adds three
   prompts for the agent, as notes: check the Project instructions when `--context` was not
   given, judge each repo's instructions against what a thread can follow, and report the
   session's failing or unused connectors to the owner in one note. Unpinned remote code,
-  machine-specific lines and missing Project instructions are issues, so they fail `--check`. It also reports when the
+  machine-specific lines, tracked personal files, a missing PR base branch and missing Project instructions are issues, so they fail `--check`. It also reports when the
   environment's `SKF_REF` is behind the registry's
   `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it), and
   lists the registry skills at `SKF_REF` that nothing installs and no repo declares, keeps

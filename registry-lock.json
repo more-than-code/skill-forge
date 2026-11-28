@@ -379,6 +379,17 @@
         "SKILL.md": "sha256-hoA12WYCsn+PYTm5kcB+5B616uOi1qy9XKxGmadlrtg="
       }
     },
+    "inventory/skills/quiet-ui-style-guide": {
+      "name": "quiet-ui-style-guide",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-Sz5iAD30iCB0fjNKV0LhX7JfIrg3F2V8V4Kghz7DGwY=",
+      "files": {
+        "SKILL.md": "sha256-+gmccEH0Hi0urQhVKgUtcrazyJiUaqfvcVIeRV1R28c="
+      }
+    },
     "inventory/skills/review-checklist": {
       "name": "review-checklist",
       "version": "0.1.0",

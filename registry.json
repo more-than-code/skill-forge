@@ -620,6 +620,19 @@
         "marketing",
         "site"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "quiet-ui-style-guide",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/quiet-ui-style-guide",
+      "installable": true,
+      "tags": [
+        "frontend",
+        "design",
+        "ui"
+      ]
     }
   ],
   "managedAgents": [

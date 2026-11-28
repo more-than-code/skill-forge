@@ -58,10 +58,10 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-8fFsvZpB2WDJhJcvMRpWx3/2Bhlldmcczw8QqZUHk7g=",
+      "integrity": "sha256-EsaFxNpVXAW4RsukF9+LBBt7vPEks1zfSQbnM8B0q7g=",
       "files": {
         "diagnose.md": "sha256-jhqpuBUon1zRHdt17rZLyrD2ivVwdo81G0RfHNost3Y=",
-        "SKILL.md": "sha256-soPf9tuP+n5ElS4Ix9ejUm8M24LJPz+OzE3JlQP0yv0="
+        "SKILL.md": "sha256-W/URT9xwmUxnZArPVsie2WR/24l4Cnp013+kRrdppoI="
       }
     },
     "inventory/skills/code-quality": {

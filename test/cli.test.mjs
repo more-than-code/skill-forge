@@ -244,6 +244,22 @@ test('landing-page skill carries the site doctrine and stays host-agnostic', asy
   assert.match(skill, /Other hosts \(/, 'hosting must not be tied to one provider');
 });
 
+test('computerless-ops skill surveys first, protects the approval gate and never requires a migration', async () => {
+  const skill = await fs.readFile(path.join(REPO_ROOT, 'inventory', 'skills', 'computerless-ops', 'SKILL.md'), 'utf8');
+  for (const marker of ['**Partial adoption is the normal path.**', '**No product views.**', '**Survey first.**', '**Never see a secret.**',
+    '**non-exportable**', '**short-lived federated credentials**', '**explicitly denied**', '### 6. Phone check',
+    '**Protect the gate itself**', '**No standing admin rights.**', 'never read values', 'never requires it']) {
+    assert.ok(skill.includes(marker), `computerless-ops lacks: ${marker}`);
+  }
+  assert.match(skill, /skipped until\s+SKF Cloud offers it/);
+  assert.match(skill, /Never ask the user to\s+migrate/);
+  const order = ['## 0. Discovery survey', '### 1. Inventory', '### 2. Keys off the laptop', '### 3. CI does the release',
+    '### 4. Break-glass', '### 5. Agent permissions', '### 6. Phone check', '### 7. Optional: retire'].map((s) => skill.indexOf(s));
+  assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), 'step order');
+  const migration = await fs.readFile(path.join(REPO_ROOT, 'inventory', 'skills', 'local-to-cloud-migration', 'SKILL.md'), 'utf8');
+  assert.match(migration, /`computerless-ops`: can follow a migration/);
+});
+
 test('composed grok agents resolve placeholders to built-in agent names', async () => {
   const dir = await tempDir('skf-compose-grok-');
   const target = path.join(dir, 'AGENTS.md');

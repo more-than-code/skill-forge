@@ -237,3 +237,5 @@ or servers now name the cloud location, or drop the pointer.
   a whole project from a machine.
 - `disk-cleanup`: caches, container images, simulators and SDK packages on a Mac that
   stays in use.
+- `computerless-ops`: can follow a migration, to move releases, signing, deploys and host
+  access to phone-approved paths; it never requires one.

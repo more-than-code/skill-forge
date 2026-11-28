@@ -34,27 +34,34 @@ when to use which token.
 - `tokens.css`: generated from `tokens.json`. Never edit it by hand.
 - `scripts/tokens.mjs`: `css` prints `tokens.css`; `check` tests every declared pair in
   both modes.
-- `scripts/color.mjs`: WCAG 2.2 ratio and APCA Lc for any two colours; importable or
-  `node scripts/color.mjs <fg> <bg> [text|large-text|ui]`.
+- `scripts/color.mjs`: WCAG 2.2 ratio and APCA Lc for two hex or `rgb()` colours;
+  importable or `node scripts/color.mjs '#262624' '#f7f7f5' [text|large-text|ui]` (quote
+  the `#` in a shell).
+
+Both CLIs exit 0 on pass, 1 on a WCAG failure and 2 on bad input (unknown token, no
+pairs declared, unsupported colour), so a typo never reads as a pass or as a contrast
+failure.
 
 Node 18 or later; no dependencies.
 
 ## Adopt the tokens in a repo
 
-1. Copy `tokens.json`, `scripts/` and the generated `tokens.css` into the repo (for
-   example `src/styles/tokens/`). Keep the names; swap the values for the product's own
-   (with `brand-palette-roles` when starting from brand colours).
-2. Load `tokens.css` before every other stylesheet. Feature CSS uses `var(--…)` only:
-   no hex values, no pixel sizes that a token covers.
-3. Add the pre-paint script below to `<head>` so the stored theme applies before first
-   paint.
-4. Run `node scripts/tokens.mjs check` and fix every WCAG failure before shipping.
+1. Copy `tokens.json` and `scripts/` into the repo (for example `src/styles/tokens/`).
+   Keep the names; swap the values for the product's own (with `brand-palette-roles`
+   when starting from brand colours).
+2. From that folder, generate the CSS: `node scripts/tokens.mjs css > tokens.css`.
+3. Run `node scripts/tokens.mjs check` and fix every WCAG failure.
+4. Load `tokens.css` before every other stylesheet (how feature code uses tokens is
+   `ui-portability-baseline` and `quiet-ui-style-guide`).
+5. Add the pre-paint script below to `<head>` so the stored theme and motion setting
+   apply before first paint.
 
 `tokens.css` uses `light-dark()` with `color-scheme`, so each value is written once and
 there is no second dark block to keep in step. `light-dark()` is Baseline 2024
-(Chrome 123, Firefox 120, Safari 17.5). A product that must support older browsers
-generates a fallback from the same `tokens.json` (a `prefers-color-scheme: dark` block
-plus a `[data-theme="dark"]` block, both written by the generator, never by hand).
+(Chrome 123, Firefox 120, Safari 17.5). The generator does not emit a fallback for older
+browsers; a product that needs one extends `tokens.mjs` to write a
+`prefers-color-scheme: dark` block and a `[data-theme="dark"]` block from the same
+`tokens.json`, rather than hand-copying dark values.
 
 ## Colour roles
 
@@ -71,7 +78,7 @@ Names describe the role, never the hue, so a re-theme changes values only.
 | `--line-strong` | A control's border when the border is its only visual cue |
 | `--edge` (colour `--edge-color`) | 1px inset hairline (`box-shadow`) that outlines a card without a border |
 | `--ring` | Soft decorative halo; never the focus indicator |
-| `--focus` | Keyboard focus indicator |
+| `--focus` | Keyboard focus indicator colour; geometry is `--focus-width` and `--focus-offset` |
 | `--accent`, `--accent-ink`, `--accent-wash` | The one accent as a fill; as text and links; as a tinted background |
 | `--on-fill` | Text and icons on `--accent` fills |
 | `--series-1` … `--series-6` | Chart categories only, never state |
@@ -82,18 +89,23 @@ Names describe the role, never the hue, so a re-theme changes values only.
 Value rules the preset meets, and any replacement values must meet:
 
 - **No pure white or black.** Light surface `#F7F7F5` with ink `#262624` (about 14:1);
-  dark surface `#151517` with ink `#E4E3DF` (about 13:1).
+  dark surface `#151517` with ink `#E4E3DF` (about 14:1).
 - **One accent.** A second brand colour goes into a series slot, not a second accent.
 - **Text is 4.5:1 on every surface it can sit on, in both themes,** captions included
-  (WCAG 1.4.3). `--accent-ink` meets it on `--bg`, `--surface` and `--accent-wash`;
-  `--on-fill` on `--accent`.
+  (WCAG 1.4.3): `--ink`, `--ink-2` and `--ink-3` on every surface and on `--accent-wash`;
+  `--ink` and `--ink-2` on the status washes; `--accent-ink` on `--bg`, `--surface` and
+  `--accent-wash`; `--on-fill` on `--accent`.
 - **Graphics that carry meaning are 3:1** against adjacent colours (WCAG 1.4.11):
-  `--focus`, `--line-strong`, `--accent`, the status colours (also on their own wash) and
-  every series colour.
+  `--focus` and `--line-strong` on every surface, `--accent`, the status colours (also on
+  their own wash) and every series colour. The focus outline is drawn
+  `--focus-offset` outside the element, so it sits on the surface, not on an accent fill.
+- **Series colours are checked against the background only,** not for telling them
+  apart from each other or under colour-vision deficiency; label series directly or
+  check that separately.
 - **Status colours carry no text.** A badge is `-wash` background, `--ink` text and a
   status-coloured dot or icon, so state never depends on colour-on-colour text.
-- **Disabled text is exempt** from contrast minimums (WCAG 1.4.3), so it must not be the
-  only signal: pair it with the disabled attribute and a non-colour cue.
+- **Disabled text is exempt** from contrast minimums (WCAG 1.4.3). The preset has no
+  separate disabled fill or border: `--ink-disabled` on the control's normal surface.
 
 ## Other scales
 
@@ -107,6 +119,7 @@ Values are in `tokens.json`; the CSS names are:
   then system fonts, then Noto Sans / Noto Sans SC for Linux and Android, so no weight is
   synthesised. Rename the aliases freely; keep three weights mapped to three faces.
 - Spacing: `--space-1` … `--space-8` on a 4px base (4, 8, 12, 16, 24, 32, 48, 64).
+- Focus: `--focus-width` (2px), `--focus-offset` (2px).
 - Radius: `--r-sm`, `--r-md`, `--r-lg`, `--r-xl`, `--r-pill`.
 - Motion: `--t-fast` (120ms), `--t-med` (220ms), `--t-slow` (320ms); `--ease-out`,
   `--ease-in-out`.
@@ -125,26 +138,31 @@ loads.
 ```html
 <meta name="color-scheme" content="light dark">
 <script>
-  // Pre-paint: inline in <head>, before any stylesheet.
+  // Pre-paint: inline in <head>, before any stylesheet. Under a strict CSP, allow it by hash.
   try {
+    const root = document.documentElement;
     const t = localStorage.getItem('theme');
     if (t === 'light' || t === 'dark') {
-      document.documentElement.dataset.theme = t;
-      document.querySelector('meta[name="color-scheme"]').content = t;
+      root.dataset.theme = t;
+      const meta = document.querySelector('meta[name="color-scheme"]');
+      if (meta) meta.content = t;
     }
+    const m = localStorage.getItem('motion');
+    if (m === 'on' || m === 'off') root.dataset.motion = m;
   } catch {}
 </script>
 ```
 
 ```js
-// mode: 'system' | 'light' | 'dark'
+// mode: 'system' | 'light' | 'dark'; anything else (a stale or foreign stored value) is 'system'.
 function applyTheme(mode) {
+  if (mode !== 'light' && mode !== 'dark') mode = 'system';
   const root = document.documentElement;
   root.classList.add('theme-switching'); // tokens.css disables transitions for this frame
   if (mode === 'system') delete root.dataset.theme;
   else root.dataset.theme = mode;
-  document.querySelector('meta[name="color-scheme"]').content =
-    mode === 'system' ? 'light dark' : mode;
+  const meta = document.querySelector('meta[name="color-scheme"]');
+  if (meta) meta.content = mode === 'system' ? 'light dark' : mode;
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
 }
 function setTheme(mode) {
@@ -160,20 +178,30 @@ not a two-state toggle that loses "follow system".
 
 ## Motion
 
-- Durations and curves come from the tokens; no literal `ms` or `cubic-bezier()` in
-  feature CSS.
-- `tokens.css` honours `prefers-reduced-motion: reduce` (durations to 0, animations cut
-  to 1ms, view transitions off) unless the user set `data-motion="on"` on `<html>`;
-  `data-motion="off"` applies the same reduction regardless of the OS. Offer the user
-  setting next to the theme switch, persisted the same way.
+`tokens.css` honours `prefers-reduced-motion: reduce` (durations to 0, animations cut to
+1ms and one iteration, smooth scrolling and view transitions off) unless the user set
+`data-motion="on"` on `<html>`; `data-motion="off"` applies the same reduction
+regardless of the OS. The one-iteration cut also stops indeterminate spinners, so a
+busy state needs a non-animated cue too. The pre-paint script restores the setting;
+the control sets it:
+
+```js
+// value: 'system' | 'on' | 'off'
+function setMotion(value) {
+  const root = document.documentElement;
+  if (value === 'on' || value === 'off') root.dataset.motion = value;
+  else delete root.dataset.motion;
+  try { value === 'on' || value === 'off' ? localStorage.setItem('motion', value) : localStorage.removeItem('motion'); } catch {}
+}
+```
 
 ## Forced colours (Windows high contrast)
 
 Forced colours drop `box-shadow`, so `--edge`, `--shadow` and `--ring` disappear and
 custom colours are replaced by system colours. `tokens.css` maps `--focus` and
 `--line-strong` to system colours under `@media (forced-colors: active)` and leaves
-fills to the browser (mapping `--accent`/`--on-fill` to `Highlight`/`HighlightText`
-hides button labels behind the browser's text backplate). Components that draw an outline or a focus indicator
+fills to the browser (in Chromium, mapping `--accent`/`--on-fill` to
+`Highlight`/`HighlightText` hid button labels behind the text backplate). Components that draw an outline or a focus indicator
 with `box-shadow` (including `--edge`) also set `outline: 1px solid transparent`, which
 is invisible normally and turns into a visible system-coloured outline in forced
 colours.
@@ -203,11 +231,8 @@ colours.
 
 ## The default preset
 
-The preset was harvested from a production app's quiet, neutral design system and then
-corrected where it failed the checks above: darker light-mode `--ink-3`, `--accent`,
-status and series colours to reach 4.5:1 and 3:1; a real `--focus` token (the source's
-halo was about 1.2:1); `--line-strong` for controls; `-wash` backgrounds for all four
-states; one shadow geometry for both themes. With the preset as shipped, the checker
-reports 0 WCAG failures and a few APCA advisories in dark mode (`--ink-3` captions are
-about Lc 52): acceptable at WCAG AA, worth revisiting if the product adopts APCA as its
-target.
+A quiet, neutral light and dark theme with px type sizes for dense app UI (switch the
+`font-size` group to `rem` if the product should follow the user's browser font size).
+The checker reports 0 WCAG failures on it and some APCA advisories in dark mode
+(`--ink-3` captions are about Lc 52, `--ink-2` about Lc 59): acceptable at WCAG AA, worth
+revisiting if the product adopts APCA as its target.

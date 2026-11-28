@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
-import os from 'os';
-import path from 'path';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const run = promisify(execFile);
@@ -72,14 +72,67 @@ test('check CLI exits 1 on a WCAG failure and 0 on the preset', async () => {
     broken.color['ink-3'].$value = '#aaaaaa';
     const file = path.join(dir, 'tokens.json');
     await fs.writeFile(file, JSON.stringify(broken));
-    await assert.rejects(run('node', [path.join(SCRIPTS, 'tokens.mjs'), 'check', file, '--json']), (err) => {
+    await assert.rejects(run(process.execPath, [path.join(SCRIPTS, 'tokens.mjs'), 'check', file, '--json']), (err) => {
       assert.equal(err.code, 1);
       const out = JSON.parse(err.stdout);
       assert.ok(out.failures.some((f) => f.fg === 'ink-3' && f.mode === 'light'));
       return true;
     });
-    const ok = await run('node', [path.join(SCRIPTS, 'tokens.mjs'), 'check', '--json']);
+    const ok = await run(process.execPath, [path.join(SCRIPTS, 'tokens.mjs'), 'check', '--json']);
     assert.equal(JSON.parse(ok.stdout).failures.length, 0);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('every colour hex matches its components', () => {
+  for (const t of flatten(tokens).filter((x) => x.type === 'color')) {
+    for (const v of [t.value, t.dark]) {
+      if (typeof v === 'string') continue; // alias
+      const fromComponents = '#' + v.components.map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+      assert.equal(fromComponents, v.hex.toLowerCase(), t.path);
+    }
+  }
+});
+
+test('parseColor reads the common CSS forms and rejects non-sRGB DTCG colours', async () => {
+  const { parseColor } = await import(path.join(SCRIPTS, 'color.mjs'));
+  assert.deepEqual(parseColor('#0f08'), { r: 0, g: 255, b: 0, a: 136 / 255 });
+  assert.deepEqual(parseColor('rgb(10 20 30 / 50%)'), { r: 10, g: 20, b: 30, a: 0.5 });
+  assert.deepEqual(parseColor({ r: 1, g: 2, b: 3 }), { r: 1, g: 2, b: 3, a: 1 });
+  assert.throws(() => parseColor({ colorSpace: 'display-p3', components: [1, 0, 0] }), /srgb only/);
+  assert.throws(() => parseColor('red'), /unsupported colour/);
+});
+
+test('translucent foregrounds are checked after compositing', () => {
+  assert.ok(Math.abs(wcagRatio('rgba(0,0,0,.5)', '#ffffff') - wcagRatio('#808080', '#ffffff')) < 0.05);
+  assert.ok(Math.abs(apcaLc('rgba(0,0,0,.5)', '#ffffff') - apcaLc('#808080', '#ffffff')) < 0.5);
+});
+
+test('bad input is an error, not a pass or a contrast failure', async () => {
+  assert.throws(() => checkTokens({ color: tokens.color }), /no contrast pairs/);
+  const dup = structuredClone(tokens);
+  dup.color.extra = { $value: '{color.missing}', $extensions: {} };
+  assert.throws(() => buildCss(dup), /unknown alias \{color\.missing\}/);
+  const renamed = structuredClone(tokens);
+  renamed.duration.quick = renamed.duration.fast;
+  delete renamed.duration.fast;
+  assert.throws(() => buildCss(renamed), /--t-fast/);
+  const clash = structuredClone(tokens);
+  clash.radius.sm.$extensions = { 'com.skillforgecloud.css': { name: 'r-md' } };
+  assert.throws(() => buildCss(clash), /two tokens map to --r-md/);
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'uidt space-'));
+  try {
+    const file = path.join(dir, 'tokens.json');
+    await fs.writeFile(file, JSON.stringify(dup));
+    await assert.rejects(run(process.execPath, [path.join(SCRIPTS, 'tokens.mjs'), 'css', file]), (err) => err.code === 2);
+    // The CLIs run from a path with a space (copied skill), not silently skipped.
+    await fs.cp(SCRIPTS, path.join(dir, 'scripts'), { recursive: true });
+    const out = await run(process.execPath, [path.join(dir, 'scripts', 'color.mjs'), '#262624', '#F7F7F5']);
+    assert.match(out.stdout, /pass/);
+    await assert.rejects(run(process.execPath, [path.join(dir, 'scripts', 'color.mjs'), '#777', '#fff']), (err) => err.code === 1 && /4\.47:1 FAIL/.test(err.stdout));
+    await assert.rejects(run(process.execPath, [path.join(dir, 'scripts', 'color.mjs'), 'nope', '#fff']), (err) => err.code === 2);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

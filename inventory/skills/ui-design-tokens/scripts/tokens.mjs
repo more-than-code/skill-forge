@@ -1,12 +1,13 @@
 // Build tokens.css from a DTCG tokens.json, and check the contrast pairs it declares.
 //   node tokens.mjs css   [tokens.json]          print the generated CSS
-//   node tokens.mjs check [tokens.json] [--json] WCAG 2.2 gate, APCA advisory; exit 1 on a WCAG fail
+//   node tokens.mjs check [tokens.json] [--json] WCAG 2.2 gate, APCA advisory; exit 1 on a WCAG fail,
+//                                                 2 on bad input (unknown token, no pairs, bad colour)
 // Dependency-free; Node >= 18.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseColor, checkPair } from './color.mjs';
+import { parseColor, checkPair, isMain } from './color.mjs';
 
 const X = 'com.skillforgecloud';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -39,7 +40,7 @@ export function flatten(tree) {
       return;
     }
     for (const [k, child] of Object.entries(node)) {
-      if (k.startsWith('$') || typeof child !== 'object') continue;
+      if (k.startsWith('$') || !child || typeof child !== 'object' || Array.isArray(child)) continue;
       walk(child, [...keys, k], type, prefix, prefixDepth);
     }
   };
@@ -49,19 +50,31 @@ export function flatten(tree) {
 
 const aliasPath = (v) => (typeof v === 'string' && /^\{[^}]+\}$/.test(v) ? v.slice(1, -1) : null);
 
+function aliasVar(ref, byPath) {
+  const target = byPath.get(ref);
+  if (!target) throw new Error(`unknown alias {${ref}}`);
+  if (!target.cssName) throw new Error(`alias {${ref}} points at a token with no CSS name`);
+  return `var(--${target.cssName})`;
+}
+
 function cssColor(v, byPath) {
   const ref = aliasPath(v);
-  if (ref) return `var(--${byPath.get(ref).cssName})`;
+  if (ref) return aliasVar(ref, byPath);
   const c = parseColor(v);
-  if (c.a === 1) return v.hex ?? `rgb(${c.r} ${c.g} ${c.b})`;
+  if (c.a === 1) return `#${[c.r, c.g, c.b].map((x) => Math.round(x).toString(16).padStart(2, '0')).join('')}`;
   return `rgb(${[c.r, c.g, c.b].map(Math.round).join(' ')} / ${c.a})`;
 }
 
-const dim = (v) => `${v.value}${v.unit}`;
+function dim(v, byPath) {
+  const ref = aliasPath(v);
+  if (ref && byPath) return aliasVar(ref, byPath);
+  if (!v || typeof v.value !== 'number' || typeof v.unit !== 'string') throw new Error(`bad dimension ${JSON.stringify(v)}`);
+  return `${v.value}${v.unit}`;
+}
 
 function cssValue(t, byPath) {
   const ref = aliasPath(t.value);
-  if (ref && t.type !== 'color') return `var(--${byPath.get(ref).cssName})`;
+  if (ref && t.type !== 'color') return aliasVar(ref, byPath);
   switch (t.type) {
     case 'color': {
       const light = cssColor(t.value, byPath);
@@ -69,21 +82,24 @@ function cssValue(t, byPath) {
       return light === dark ? light : `light-dark(${light}, ${dark})`;
     }
     case 'dimension':
-      return dim(t.value);
     case 'duration':
-      return `${t.value.value}${t.value.unit}`;
+      return dim(t.value, byPath);
     case 'cubicBezier':
       return `cubic-bezier(${t.value.join(', ')})`;
     case 'fontFamily':
-      return t.value.map((f) => (/^[\w-]+$/.test(f) && !/\s/.test(f) ? f : `"${f}"`)).join(', ');
+      return t.value
+        .map((f) => (/^-?[A-Za-z_][\w-]*$/.test(f) ? f : `"${String(f).replace(/["\\]/g, '\\$&')}"`))
+        .join(', ');
     case 'fontWeight':
     case 'number':
+      if (typeof t.value !== 'number') throw new Error(`${t.path}: expected a number, got ${JSON.stringify(t.value)}`);
       return String(t.value);
     case 'shadow':
       return [].concat(t.value)
         .map((l) => {
           const color = cssColor(l.color, byPath);
-          return `${l.inset ? 'inset ' : ''}${dim(l.offsetX)} ${dim(l.offsetY)} ${dim(l.blur)} ${dim(l.spread)} ${color}`;
+          const d = (k) => dim(l[k], byPath);
+          return `${l.inset ? 'inset ' : ''}${d('offsetX')} ${d('offsetY')} ${d('blur')} ${d('spread')} ${color}`;
         })
         .join(', ');
     default:
@@ -108,6 +124,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
   :root:not([data-motion="on"]) { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
   :root:not([data-motion="on"]) *, :root:not([data-motion="on"]) *::before, :root:not([data-motion="on"]) *::after {
     animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
   :root:not([data-motion="on"])::view-transition-group(*),
   :root:not([data-motion="on"])::view-transition-old(*),
@@ -116,6 +133,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 :root[data-motion="off"] { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
 :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
   animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
 }
 :root[data-motion="off"]::view-transition-group(*),
 :root[data-motion="off"]::view-transition-old(*),
@@ -131,20 +149,29 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 /* Font aliases: local faces only, one per weight token, so no weight is synthesised. */
 @font-face { font-family: "App Sans"; src: local("Segoe UI Light"), local("SegoeUI-Light"); font-weight: 100 349; }
 @font-face { font-family: "App Sans"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 350 549; }
-@font-face { font-family: "App Sans"; src: local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 550 900; }
+@font-face { font-family: "App Sans"; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"), local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 550 900; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Light"), local("MicrosoftYaHeiLight"), local("PingFangSC-Light"); font-weight: 100 349; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei"), local("MicrosoftYaHei"), local("PingFangSC-Regular"); font-weight: 350 549; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Bold"), local("MicrosoftYaHei-Bold"), local("PingFangSC-Semibold"); font-weight: 550 900; }
 `;
 
+const STATIC_NAMES = ['t-fast', 't-med', 't-slow', 'focus', 'line-strong'];
+
 /** Generate tokens.css text from a parsed tokens.json. */
 export function buildCss(tree) {
   const tokens = flatten(tree);
   const byPath = new Map(tokens.map((t) => [t.path, t]));
+  const names = new Set();
+  for (const t of tokens.filter((x) => x.cssName)) {
+    if (names.has(t.cssName)) throw new Error(`two tokens map to --${t.cssName}`);
+    names.add(t.cssName);
+  }
+  // The fixed rules below reference these names; a rename must not silently disable them.
+  for (const n of STATIC_NAMES) if (!names.has(n)) throw new Error(`tokens.css rules need --${n}, which no token defines`);
   const lines = tokens
     .filter((t) => t.cssName)
     .map((t) => `  --${t.cssName}: ${cssValue(t, byPath)};`);
-  const notEmitted = tokens.filter((t) => !t.cssName).map((t) => `${t.path} = ${dim(t.value)}`);
+  const notEmitted = tokens.filter((t) => !t.cssName).map((t) => `${t.path} = ${cssValue(t, byPath)}`.replace(/\*\//g, ''));
   return [
     '/* Generated from tokens.json by scripts/tokens.mjs css. Do not edit by hand. */',
     notEmitted.length ? `/* Not custom properties (use the literal values): ${notEmitted.join(', ')} */` : null,
@@ -173,6 +200,7 @@ export function checkTokens(tree) {
   const tokens = flatten(tree);
   const byPath = new Map(tokens.map((t) => [t.path, t]));
   const pairs = tree.$extensions?.[`${X}.contrast`]?.pairs ?? [];
+  if (!pairs.length) throw new Error(`no contrast pairs declared ($extensions["${X}.contrast"].pairs)`);
   const results = [];
   for (const mode of ['light', 'dark']) {
     for (const [fg, bg, use] of pairs) {
@@ -191,7 +219,7 @@ export function checkTokens(tree) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const [cmd, ...rest] = process.argv.slice(2);
   const json = rest.includes('--json');
   const file = rest.find((a) => !a.startsWith('--')) ?? DEFAULT_TOKENS;
@@ -202,6 +230,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error(`cannot read ${file}: ${err.message}`);
     process.exit(2);
   }
+  try {
   if (cmd === 'css') {
     process.stdout.write(buildCss(tree));
   } else if (cmd === 'check') {
@@ -218,6 +247,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(failures.length ? 1 : 0);
   } else {
     console.error('usage: node tokens.mjs css|check [tokens.json] [--json]');
+    process.exit(2);
+  }
+  } catch (err) {
+    console.error(err.message);
     process.exit(2);
   }
 }

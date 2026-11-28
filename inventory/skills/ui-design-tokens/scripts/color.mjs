@@ -1,14 +1,24 @@
 // Dependency-free colour maths for contrast checks: parse sRGB colours, composite
 // translucent colours over a background, WCAG 2.2 contrast ratio and APCA Lc.
-// Node >= 18 or any modern browser; no imports.
+// Node >= 18; the exported functions also run in a browser. No dependencies.
+
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /** Parse #rgb, #rgba, #rrggbb, #rrggbbaa, rgb()/rgba() into {r,g,b,a} (0-255, alpha 0-1). */
 export function parseColor(input) {
   if (input && typeof input === 'object' && Array.isArray(input.components)) {
-    const [r, g, b] = input.components.map((c) => c * 255);
-    return { r, g, b, a: input.alpha ?? 1 };
+    // DTCG colour object: only sRGB is supported. The hex, when present, is what CSS ships.
+    if (input.colorSpace !== 'srgb') throw new Error(`unsupported colorSpace ${JSON.stringify(input.colorSpace)} (srgb only)`);
+    const a = input.alpha ?? 1;
+    if (input.hex) return { ...parseColor(input.hex), a };
+    const [r, g, b] = input.components.map((c) => {
+      if (typeof c !== 'number') throw new Error(`unsupported colour component ${JSON.stringify(c)}`);
+      return Math.round(c * 255);
+    });
+    return { r, g, b, a };
   }
-  if (input && typeof input === 'object' && 'r' in input) return input;
+  if (input && typeof input === 'object' && 'r' in input) return { a: 1, ...input };
   const s = String(input).trim().toLowerCase();
   let m = s.match(/^#([0-9a-f]{3,8})$/);
   if (m && [3, 4, 6, 8].includes(m[1].length)) {
@@ -100,7 +110,8 @@ export function checkPair(fg, bg, use = 'text') {
   const ratio = wcagRatio(fg, bg);
   const lc = apcaLc(fg, bg);
   return {
-    ratio: Math.round(ratio * 100) / 100,
+    ratio: Math.floor(ratio * 100) / 100, // floor, so a displayed 4.5 never hides a fail
+
     lc: Math.round(lc * 10) / 10,
     pass: ratio >= target.wcag,
     apcaPass: Math.abs(lc) >= target.apca,
@@ -111,7 +122,16 @@ export function checkPair(fg, bg, use = 'text') {
 export { hex as toHex };
 
 // CLI: node color.mjs <fg> <bg> [text|large-text|ui]
-if (import.meta.url === `file://${process.argv[1]}`) {
+/** True when this module is the script Node was started with (robust to spaces and symlinks). */
+export function isMain(metaUrl) {
+  try {
+    return Boolean(process.argv[1]) && fileURLToPath(metaUrl) === fs.realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain(import.meta.url)) {
   const [fg, bg, use = 'text'] = process.argv.slice(2);
   if (!fg || !bg) {
     console.error('usage: node color.mjs <fg> <bg> [text|large-text|ui]');

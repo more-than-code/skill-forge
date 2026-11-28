@@ -518,13 +518,13 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-2LUbY9DlpmO/nUtw3kJ1SpGzkAq0op5h4HhaF4t7NdM=",
+      "integrity": "sha256-7yCLyFTaf/inpFJMvrl2X5pJD8zZy13hFxZ6DMxXyTs=",
       "files": {
-        "scripts/color.mjs": "sha256-uxf2ROZnQ5E1Ib9ugXolJ3NrfB0RsS3OQQ0VgdsEzmc=",
-        "scripts/tokens.mjs": "sha256-2RTkW+PS/kSEFeSIUOOGrQqaLZoDmmJuE975L46hdtI=",
-        "SKILL.md": "sha256-hLN25C4G6QH+lT4q21EAz5rvJLOjc12WKcTZ+uD0Ub8=",
-        "tokens.css": "sha256-44oTn9ZZkvmiU15xbu+5o0mBM6tRU0H/wfp4sgc4Ls8=",
-        "tokens.json": "sha256-a9lqpUtfV2FXv/XABgMvFmmZmlQ35sAQBhs9ZmtcyAI="
+        "scripts/color.mjs": "sha256-hDw70Z4wKele12FDYphZXrtasw7rRFy0lW9WGFMoryI=",
+        "scripts/tokens.mjs": "sha256-pr1bLupVMDs4l2sT2Biex6cm7Q4LkT5EK7AekOcoeIY=",
+        "SKILL.md": "sha256-gDeIsZh7dI78VeV+aNXFPJpiuzTb2MyLf3vpie+a1nU=",
+        "tokens.css": "sha256-qmNfe9+8zHwvQK+6nu09CSc/vK3PNzg7Qg5Nt7NcEZo=",
+        "tokens.json": "sha256-eitgaqObeVAyBIwdaLLLbK2/guAGdO8dCGy5OH8aiL8="
       }
     },
     "inventory/skills/ui-portability-baseline": {

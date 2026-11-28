@@ -13,7 +13,7 @@
   --ink-disabled: light-dark(#9b9a95, #6b6a66);
   --line: light-dark(rgb(30 30 28 / 0.08), rgb(255 255 255 / 0.07));
   --line-2: light-dark(rgb(30 30 28 / 0.14), rgb(255 255 255 / 0.12));
-  --line-strong: light-dark(#888782, #7e7d77);
+  --line-strong: light-dark(#83827d, #7e7d77);
   --edge-color: light-dark(rgb(30 30 28 / 0.09), rgb(255 255 255 / 0.08));
   --ring: light-dark(rgb(38 38 36 / 0.08), rgb(255 255 255 / 0.08));
   --focus: var(--accent-ink);
@@ -76,6 +76,8 @@
   --shadow: 0px 1px 2px 0px var(--shadow-near), 0px 8px 24px 0px var(--shadow-far);
   --shadow-sm: 0px 1px 2px 0px var(--shadow-near);
   --edge: inset 0px 0px 0px 1px var(--edge-color);
+  --focus-width: 2px;
+  --focus-offset: 2px;
 }
 
 /* Theme: no data-theme follows the system; data-theme forces one mode. */
@@ -92,6 +94,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
   :root:not([data-motion="on"]) { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
   :root:not([data-motion="on"]) *, :root:not([data-motion="on"]) *::before, :root:not([data-motion="on"]) *::after {
     animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
   :root:not([data-motion="on"])::view-transition-group(*),
   :root:not([data-motion="on"])::view-transition-old(*),
@@ -100,6 +103,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 :root[data-motion="off"] { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
 :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
   animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
 }
 :root[data-motion="off"]::view-transition-group(*),
 :root[data-motion="off"]::view-transition-old(*),
@@ -115,7 +119,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 /* Font aliases: local faces only, one per weight token, so no weight is synthesised. */
 @font-face { font-family: "App Sans"; src: local("Segoe UI Light"), local("SegoeUI-Light"); font-weight: 100 349; }
 @font-face { font-family: "App Sans"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 350 549; }
-@font-face { font-family: "App Sans"; src: local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 550 900; }
+@font-face { font-family: "App Sans"; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"), local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 550 900; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Light"), local("MicrosoftYaHeiLight"), local("PingFangSC-Light"); font-weight: 100 349; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei"), local("MicrosoftYaHei"), local("PingFangSC-Regular"); font-weight: 350 549; }
 @font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Bold"), local("MicrosoftYaHei-Bold"), local("PingFangSC-Semibold"); font-weight: 550 900; }

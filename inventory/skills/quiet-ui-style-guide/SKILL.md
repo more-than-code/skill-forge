@@ -57,22 +57,25 @@ Related skills, not repeated here:
   strokes break up at small sizes.
 - **Fonts never depend on `local()` alone.** Aliases that map system fonts (Segoe UI,
   Microsoft YaHei 微软雅黑, PingFang 苹方) to the three weight ranges work only where those
-  fonts are installed; Linux and Android fall back to whatever is there. Use the font stack
-  in `ui-design-tokens`, which ends with a web-font fallback (Latin and CJK) and a generic
-  family. Load web fonts with `font-display: swap`, split CJK fonts by `unicode-range` so a
-  page downloads only the subsets it uses, and match the fallback's metrics
-  (`size-adjust`) so the swap does not shift the layout.
+  fonts are installed; Linux and Android fall back to whatever is there. The preset stack
+  in `ui-design-tokens` names installed faces only, so a product that must look the same
+  everywhere adds a self-hosted web font (Latin and CJK) before the generic family: load it
+  with `font-display: swap`, split CJK fonts by `unicode-range` so a page downloads only the
+  subsets it uses, and match the fallback's metrics (`size-adjust`) so the swap does not
+  shift the layout.
 - **Line height from the `--lh-*` tokens**: `--lh-tight` for headings and big numbers,
   `--lh-snug` for labels, list rows and table cells, `--lh-body` for running text. Chinese
   paragraphs need more room than Latin text: use `--lh-cjk` for them.
-- **Survive user text settings.** Sizes resolve to `rem` so text zoom works; layouts
+- **Survive user text settings.** The preset's `--fs-*` are `px`; before adopting this
+  guide, a product switches the font-size group to `rem` so it follows the user's browser
+  font size (`ui-design-tokens` says how). Layouts
   survive 200% zoom (WCAG 1.4.4), reflow at 320 CSS px without horizontal scrolling
   (1.4.10), and the text-spacing override of 1.4.12 (line height 1.5, paragraph spacing 2x,
   letter spacing 0.12em, word spacing 0.16em) without clipping or overlap.
 - **Text colour from the ink tokens only**: `--ink` for text, `--ink-2` for secondary,
   `--ink-3` for the weakest captions, each only on the surfaces `ui-design-tokens`
-  documents as passing 4.5:1 (WCAG 1.4.3); never use a lighter grey, a series colour or a raw hex
-  for text. No pure white or pure black text or surfaces (不用纯白和纯黑); text on a
+  documents as passing 4.5:1 (WCAG 1.4.3); never use a lighter grey, a series or status
+  colour, or a raw hex for text. No pure white or pure black text or surfaces (不用纯白和纯黑); text on a
   coloured fill uses `--on-fill`.
 
 ## 2. Radius (圆角)
@@ -143,8 +146,8 @@ Colour values, theme mechanics and contrast pairs are in `ui-design-tokens`; the
 coverage is in `ui-portability-baseline`. The usage rules for this style:
 
 - **Greyscale first** (黑白灰为主): colour only for brand logos, status dots, numbers
-  that are a real alarm, and error states (section 7). Cards, charts and tags are
-  greyscale; the primary button is ink, not a hue.
+  that are a real alarm, error marks (section 7), the focus indicator and links. Cards,
+  charts and tags are greyscale; the primary button is ink, not a hue.
 - **Series colours** (`--series-*`) only to tell categories apart, always next to a text
   label. **Status colours** (`--good`, `--warning`, `--serious`, `--critical`) only for
   status, always with an icon or text, never as a category colour. Colour is never the only
@@ -161,15 +164,16 @@ Every interactive control defines all of these, using tokens only:
 - **Focus**: a visible `--focus` indicator on `:focus-visible`, never removed without a
   replacement (WCAG 2.4.7), at least 3:1 against what is next to it (1.4.11), and not
   hidden behind sticky headers or panels (2.4.11).
-- **Selected / on**: colour change only, plus the rail marker of section 5; for underline tabs, a bold label and
-  the ink underline, with the label's bold width reserved so the row does not shift.
+- **Selected / on**: colour change only, plus the rail marker of section 5; for underline
+  tabs, a bold label and the ink underline, with the label's bold width reserved so the row does not shift.
   Expose the state to assistive technology (`aria-selected`, `aria-pressed` or
   `aria-current`).
 - **Disabled**: `--ink-disabled` text and no hover. If a control is disabled for a reason
   the user can fix, say why next to it.
-- **Error**: the field's border and a message below it in `--critical` (a pair
-  `ui-design-tokens` documents as passing 4.5:1), with text saying what to fix, tied to the field
-  (`aria-describedby`) and announced.
+- **Error**: a `--critical` field border and a `--critical` icon or dot; the message below
+  the field is `--ink` or `--ink-2` text (status colours are never text: `--critical` on
+  `--surface` is about 4.2:1, under 1.4.3), says what to fix, is tied to the field
+  (`aria-describedby`) and is announced.
 - **Loading**: keep the layout's size (a skeleton or an inline spinner); do not shift
   content.
 - **Real controls**: anything clickable is a `button`, link or input, reachable by
@@ -177,8 +181,9 @@ Every interactive control defines all of these, using tokens only:
   is not a label); decorative icons and emoji are `aria-hidden`.
 - **Target size**: every target is at least 24×24 CSS px, or an undersized target has
   clearance so that a 24px circle centred on it overlaps no other target or its circle
-  (WCAG 2.5.8; inline links in text are exempt). The smallest button in the default preset
-  is exactly 24px high; do not go below it.
+  (WCAG 2.5.8; inline links in text are exempt). 24px is the floor for pointer use; the
+  default preset's smallest button is 24px high. At phone width and on touch devices,
+  targets are at least 44×44px.
 - `--line-strong` is the control border and must meet 3:1 (WCAG 1.4.11) where the border
   is what shows the control's edge; `--line` and `--line-2` are decorative dividers and are
   never the only boundary of a control.
@@ -187,7 +192,7 @@ Every interactive control defines all of these, using tokens only:
 
 - **One focus per page** (一页一个重点): the page opens with one sentence saying the next
   step ("Next: …", 「下一步：…」) beside one primary button. The primary button is a solid
-  `--ink` fill with `--on-fill` text; every other button is outline or text.
+  `--ink` fill with `--surface` text; every other button is outline or text.
 - **Big number plus one line**: at most 2 to 3 KPI cards, the number at `--fs-3xl`, one grey
   line below. A metric that is always 0 is left out.
 - **Lists show 3 to 5 rows by default**, each with a title and one secondary fact (date or
@@ -241,7 +246,8 @@ Common failure signals in a diff: raw hex or `px` for colour, type, radius or sp
 - [ ] Font sizes, weights and line heights come from tokens; no text below `--fs-xs` except
       axis labels, avatar initials and count badges.
 - [ ] Only the three weights, each a real face; no light weight below `--fs-lg`.
-- [ ] Font stack has a web-font fallback, not `local()` alone.
+- [ ] Fonts do not depend on `local()` alone where the product must look the same on Linux
+      and Android (a self-hosted web font before the generic family).
 - [ ] Text uses `--ink`, `--ink-2` or `--ink-3` only; no pure white or black.
 - [ ] Radius: containers `--r-lg`, controls `--r-md`, tags `--r-sm`; inner one step smaller
       than outer; pills only on thin bars and count badges.
@@ -262,7 +268,7 @@ Common failure signals in a diff: raw hex or `px` for colour, type, radius or sp
 - [ ] Filters read as a sentence; edit forms are label-left rows; edit pages are edit-left,
       preview-right.
 - [ ] Every control has hover, visible focus, selected, disabled, error and loading states
-      as section 7 says; targets at least 24×24px.
+      as section 7 says; targets at least 24×24px (44×44px on touch).
 - [ ] Clickable things are real controls; fields have visible labels; decorative icons are
       hidden from assistive technology.
 - [ ] Layout survives 200% zoom, 320px reflow and the text-spacing override; no horizontal

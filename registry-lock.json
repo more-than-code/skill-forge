@@ -294,6 +294,17 @@
         "SKILL.md": "sha256-3ihNJppKlt+AFf6CBjhLWuYE4Y8GL2YjYMzY1fghxOU="
       }
     },
+    "inventory/skills/local-to-cloud-migration": {
+      "name": "local-to-cloud-migration",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-NtmxmTJwQj48rBzQbH1M0nQuNnNRTHdUwlKdUKvFhIg=",
+      "files": {
+        "SKILL.md": "sha256-H7n4NkhO5xz5jaAUYuXswH0YNfkP55+QIbqC1IZ2Ync="
+      }
+    },
     "inventory/skills/migration-deprecation": {
       "name": "migration-deprecation",
       "version": "0.1.0",

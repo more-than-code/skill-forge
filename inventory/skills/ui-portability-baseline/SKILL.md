@@ -120,4 +120,5 @@ Before completing UI work, check:
 
 - Use broader frontend engineering skills for architecture, state, layout, accessibility, and component design.
 - Use repo-specific design-system skills for strict primitive, token, lint, and governance enforcement.
+- Use `ui-design-tokens` for the token values themselves (colour roles in light and dark, type, spacing, radius, motion, shadow) and its contrast checker, and `quiet-ui-style-guide` for the rules on using them.
 - Use this skill when the goal is maintainable and portable UI without full strict enforcement.

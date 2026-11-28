@@ -21,7 +21,7 @@ Every line belongs in exactly one layer. Facts behind this table (tested 2026-11
 - Repos declare registry skills in `skill-forge.json` (with its lock) and commit no copies; the setup script installs each declared name once. A copy committed anyway is listed again as `<repo>:<name>` (the environment copy runs). Skills a repo writes itself (`skills.local`) stay committed.
 - A subagent in both: the repo copy wins.
 - Path-scoped rules (`paths:` frontmatter) do not load in threads. Put area detail in `AGENTS.md`.
-- Threads start from each repo's default branch; the PR tool has no default base, so the Project instructions must name it.
+- Threads start from each repo's default branch; the PR tool has no default base, so the Project instructions must name it. A Project with one repo may name it in that repo's `AGENTS.md` instead (doctor then asks you to confirm the line).
 - Nothing you change reaches the **current** thread, with one exception: `install --top-up` adds a missing skill that becomes usable in this thread after a moment. Pasted settings, a changed setup script and merged PRs reach **new** threads; the environment snapshot is rebuilt when the setup script changes or about weekly, so a skill a repo declares after that needs the top-up until then.
 
 You cannot edit Project settings, the environment or the account. You draft the exact text and the owner pastes it. You never merge.
@@ -159,8 +159,9 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
 
 **Topic line:** one or two sentences: what the Project is and which repo owns what.
 
-**Project instructions:** Project-level rules only, about 10–15 lines. Always name the PR base
-("Pull requests go into `dev`"), even when it is the default branch. Never restate engineering
+**Project instructions:** Project-level rules only, about 10–15 lines. Name the PR base
+("Pull requests go into `dev`"), even when it is the default branch, unless the Project has one
+repo whose own instructions name it; then the owner may leave them empty. Never restate engineering
 workflow rules (tiers, gates, review, git hygiene): the environment carries them.
 
 ## 3. Fix repositories by PR
@@ -212,4 +213,5 @@ open it and ask the owner to merge it promptly. Never push to the default branch
 
 Tell the owner to start a **new** thread (after pasting or merging) and run step 1 there.
 Done when doctor shows no issues and the thread reports one rules file, each skill name once,
-the subagents present, and Project instructions naming the PR base.
+the subagents present, and the PR base named (in the Project instructions, or for a one-repo
+Project in that repo's instructions).

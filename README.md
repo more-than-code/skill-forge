@@ -45,6 +45,7 @@ inventory/
   agents/                  # managed instruction core and overlays (global installs and project variants)
   subagents/               # managed subagent definitions
   hooks/                   # managed runtime hook scripts (usage stats)
+showcase/<skill>/          # optional Site showcase per skill (not installed; see docs/SHOWCASE.md)
 test/                      # node:test CLI suite (npm test)
 docs/
   DESIGN.md                # architecture, roadmap, design decisions
@@ -53,6 +54,7 @@ docs/
   PLATFORM.md              # multi-tenant platform design (approved, not built)
   CONSOLE.md                # web console design (approved, not built)
   EVALS.md                 # evaluation workflow, suites and metrics (approved, not built)
+  SHOWCASE.md              # skill showcase format and rules for the Site
   DD-WORKER-JOBS.md        # draft requirements for the Defect Drainer worker (generic jobs, BYOK)
   platform-architecture.svg # platform diagram
   brand/logo/mark.svg      # the brand mark; apps and `skf site` copy it from here, never redraw it

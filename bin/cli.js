@@ -10,6 +10,7 @@ import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import inquirer from 'inquirer';
+import { SHOWCASE_DIR, SHOWCASE_NAME, validateShowcases } from '../lib/showcase.js';
 import {
   RANGE_PATTERN,
   SEMVER_PATTERN,
@@ -551,6 +552,9 @@ async function validateRegistry() {
   }
 
   await validateInstructionVariants(registry, errors);
+
+  const showcaseSkills = new Set((registry.skills || []).filter((skill) => skill.type === 'skill' && skill.installable !== false).map((skill) => skill.name));
+  for (const error of validateShowcases(REPO_ROOT, showcaseSkills)) reportValidationError(errors, error);
 
   const agentCore = getAgentCore(registry);
   if (agentCore) {
@@ -2463,6 +2467,11 @@ skillCommand
       const resolvedSkillPath = assertPathWithinInventorySkills(skill.path);
       registry.skills = registry.skills.filter((entry) => entry !== skill);
       await fs.remove(resolvedSkillPath);
+      // Its showcase (docs/SHOWCASE.md) goes with it, or validate would fail on the orphan folder.
+      // Only when no other registry entry keeps the name, and only a plain skill-name folder.
+      if (SHOWCASE_NAME.test(skill.name) && !registry.skills.some((entry) => entry.name === skill.name)) {
+        await fs.remove(path.join(REPO_ROOT, SHOWCASE_DIR, skill.name));
+      }
       await writeRegistry(registry);
       await writeLock({ silent: options.json });
       const { errors, warnings } = await validateRegistry();

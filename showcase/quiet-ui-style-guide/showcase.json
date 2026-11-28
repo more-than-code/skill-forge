@@ -1,0 +1,54 @@
+{
+  "value": "A calm, dense interface people can look at all day: greyscale first, hairlines instead of shadows, one primary action per page, and a checklist to review a diff or a screenshot against.",
+  "howItWorks": {
+    "title": "Values come from the tokens; this skill decides where each one goes",
+    "stages": [
+      {
+        "name": "ui-design-tokens",
+        "lines": [
+          "sizes, weights,",
+          "radii, colours"
+        ]
+      },
+      {
+        "name": "Usage rules",
+        "lines": [
+          "type, weight, radius",
+          "at most two nested boxes",
+          "motion on page change"
+        ],
+        "accent": true
+      },
+      {
+        "name": "Page or component",
+        "lines": [
+          "one primary action",
+          "component states"
+        ]
+      },
+      {
+        "name": "Style checklist",
+        "lines": [
+          "run on a diff",
+          "or a screenshot"
+        ]
+      }
+    ]
+  },
+  "workflow": [
+    "Load ui-design-tokens alongside it; every value comes from there.",
+    "Lay out the page with its rules: hairline panels, few weights, spacing from the scale.",
+    "Give each page one primary action and quiet secondary ones.",
+    "Run the style checklist on the diff or a screenshot before review."
+  ],
+  "inAction": [
+    {
+      "caption": "Left before, right after: the skill catalog went from 42 separate cards to one panel with ruled rows and hairline edges. The skill is written for app screens; on this public listing page only its panel, row and spacing rules were applied, and tags stay filled chips.",
+      "source": "skill-forge-site, before: main at efa4216 (the live site); after: the tokens change, merged into dev as c246dfe, 2026-11-28",
+      "image": {
+        "file": "catalog-before-after.png",
+        "alt": "Skill Forge catalog page: separate boxed cards on the left, one ruled list on the right"
+      }
+    }
+  ]
+}

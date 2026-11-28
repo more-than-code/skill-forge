@@ -1,0 +1,53 @@
+{
+  "value": "A product site that sells what the team saves or wins, shows each point with a picture, and says only what ships today, with every claim traced to the code in a claims ledger.",
+  "howItWorks": {
+    "title": "Facts flow from the product branch to the page, and guards keep them true",
+    "stages": [
+      {
+        "name": "Inputs",
+        "lines": [
+          "brand assets, the owner's",
+          "strategy, the product",
+          "branch"
+        ]
+      },
+      {
+        "name": "Claims ledger",
+        "lines": [
+          "one row per claim",
+          "with its proof"
+        ],
+        "accent": true
+      },
+      {
+        "name": "Spec, then build",
+        "lines": [
+          "value, see it in action,",
+          "use cases, components,",
+          "comparison, call to action"
+        ]
+      },
+      {
+        "name": "Guards",
+        "lines": [
+          "gated wording, no real",
+          "names, no stray URLs",
+          "or client JavaScript"
+        ]
+      }
+    ]
+  },
+  "workflow": [
+    "Gather assets, the owner's strategy and the facts from the product's current branch.",
+    "Start a claims ledger: every claim with the file, test or doc that proves it.",
+    "Post a short spec with a visual per section, then build in rounds with a preview each.",
+    "Gate unreleased wording behind a build flag and let guard tests fail the build."
+  ],
+  "inAction": [
+    {
+      "caption": "Three items of the skill's checklist that the live home page did not meet when the skill was run on it (abridged).",
+      "source": "landing-page checklist on the skillforgecloud.com home page, skill-forge-site main at efa4216, 2026-11-28",
+      "excerpt": "Not met: Value first; section order as in doctrine 4; each point has a visual\nNot met: Claims ledger complete\nNot met: Comparison rows are buyer questions, sourced and dated"
+    }
+  ]
+}

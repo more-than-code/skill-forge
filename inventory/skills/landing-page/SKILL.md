@@ -116,9 +116,9 @@ the next round.
   - red: failed, blocked, high severity
 - Contrast meets WCAG AA (4.5:1 for body text) in both themes, including text on its
   tint and white text on stage fills. Check it with a tool, not by eye.
-- For the token values themselves (light/dark tokens, theme switch) and a contrast
-  checker, use the `ui-design-tokens` skill; these rules still decide how the site uses
-  them.
+- When the product has no design tokens to reuse, start from the `ui-design-tokens`
+  skill (light/dark token values, theme switch, contrast checker); these rules still
+  decide how the site uses them.
 
 ## 4. The comparison
 

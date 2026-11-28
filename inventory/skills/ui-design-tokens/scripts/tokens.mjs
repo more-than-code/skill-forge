@@ -1,5 +1,6 @@
 // Build tokens.css from a DTCG tokens.json, and check the contrast pairs it declares.
-//   node tokens.mjs css   [tokens.json]          print the generated CSS
+//   node tokens.mjs css   [tokens.json] [--out tokens.css]  print the CSS, or write it to a file
+//                                                 only after generation succeeds
 //   node tokens.mjs check [tokens.json] [--json] WCAG 2.2 gate, APCA advisory; exit 1 on a WCAG fail,
 //                                                 2 on bad input (unknown token, no pairs, bad colour)
 // Dependency-free; Node >= 18.
@@ -222,7 +223,13 @@ export function checkTokens(tree) {
 if (isMain(import.meta.url)) {
   const [cmd, ...rest] = process.argv.slice(2);
   const json = rest.includes('--json');
-  const file = rest.find((a) => !a.startsWith('--')) ?? DEFAULT_TOKENS;
+  const outAt = rest.indexOf('--out');
+  const out = outAt === -1 ? null : rest[outAt + 1];
+  if (outAt !== -1 && !out) {
+    console.error('--out needs a file path');
+    process.exit(2);
+  }
+  const file = rest.find((a, i) => !a.startsWith('--') && (outAt === -1 || i !== outAt + 1)) ?? DEFAULT_TOKENS;
   let tree;
   try {
     tree = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -232,7 +239,14 @@ if (isMain(import.meta.url)) {
   }
   try {
   if (cmd === 'css') {
-    process.stdout.write(buildCss(tree));
+    const css = buildCss(tree); // throws before anything is written
+    if (out) {
+      const tmp = `${out}.tmp-${process.pid}`;
+      fs.writeFileSync(tmp, css);
+      fs.renameSync(tmp, out);
+    } else {
+      process.stdout.write(css);
+    }
   } else if (cmd === 'check') {
     const { results, failures, advisories } = checkTokens(tree);
     if (json) {
@@ -246,7 +260,7 @@ if (isMain(import.meta.url)) {
     }
     process.exit(failures.length ? 1 : 0);
   } else {
-    console.error('usage: node tokens.mjs css|check [tokens.json] [--json]');
+    console.error('usage: node tokens.mjs css [tokens.json] [--out file] | check [tokens.json] [--json]');
     process.exit(2);
   }
   } catch (err) {

@@ -137,3 +137,37 @@ test('bad input is an error, not a pass or a contrast failure', async () => {
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('meaningful graphics are checked on every surface', () => {
+  const pairs = tokens.$extensions['com.skillforgecloud.contrast'].pairs;
+  const surfaces = ['bg', 'plane', 'surface', 'surface-2', 'surface-3'];
+  const fgs = ['focus', 'line-strong', 'accent', 'good', 'warning', 'serious', 'critical', ...[1, 2, 3, 4, 5, 6].map((i) => `series-${i}`)];
+  for (const fg of fgs) {
+    for (const bg of surfaces) assert.ok(pairs.some(([f, b, u]) => f === fg && b === bg && u === 'ui'), `${fg} on ${bg}`);
+  }
+});
+
+test('rgb() channels above 255 or alpha above 1 are rejected', async () => {
+  const { parseColor } = await import(path.join(SCRIPTS, 'color.mjs'));
+  assert.throws(() => parseColor('rgb(300 0 0)'), /out of range/);
+  assert.throws(() => parseColor('rgba(0,0,0,2)'), /out of range/);
+});
+
+test('css --out leaves the existing file alone when generation fails', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'uidt-out-'));
+  try {
+    const bad = structuredClone(tokens);
+    bad.color.extra = { $value: '{color.missing}' };
+    const file = path.join(dir, 'tokens.json');
+    const out = path.join(dir, 'tokens.css');
+    await fs.writeFile(file, JSON.stringify(bad));
+    await fs.writeFile(out, 'previous');
+    await assert.rejects(run(process.execPath, [path.join(SCRIPTS, 'tokens.mjs'), 'css', file, '--out', out]), (err) => err.code === 2);
+    assert.equal(await fs.readFile(out, 'utf8'), 'previous');
+    await run(process.execPath, [path.join(SCRIPTS, 'tokens.mjs'), 'css', '--out', out]);
+    assert.equal(await fs.readFile(out, 'utf8'), buildCss(tokens));
+    assert.deepEqual((await fs.readdir(dir)).sort(), ['tokens.css', 'tokens.json']);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

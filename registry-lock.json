@@ -267,9 +267,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-FAuunvW7SPfVEv0L3Ax+L+kePcgTSF4hwvRiNHv5FlE=",
+      "integrity": "sha256-5c1IjCAPySR/2qrG59oot/NVo1KYVH3e8WScTyCBY0E=",
       "files": {
-        "SKILL.md": "sha256-EiYwBDwvIaC/A0OjxyWlD6pWzlgdo4ir60R14/laEWk="
+        "SKILL.md": "sha256-wPI8B+zj1wf0ggVZEYCfVMamXHuoOSMHcJNhiIWLlD4="
       }
     },
     "inventory/skills/llm-integration": {

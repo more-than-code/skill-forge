@@ -1,0 +1,53 @@
+{
+  "value": "A product site that sells what the team saves or wins, shows each point with a picture, and says only what ships today, with every claim traced to the code in a claims ledger.",
+  "howItWorks": {
+    "title": "Facts flow from the product branch to the page, and guards keep them true",
+    "stages": [
+      {
+        "name": "Inputs",
+        "lines": [
+          "brand assets, the owner's",
+          "strategy, the product",
+          "branch"
+        ]
+      },
+      {
+        "name": "Claims ledger",
+        "lines": [
+          "one row per claim",
+          "with its proof"
+        ],
+        "accent": true
+      },
+      {
+        "name": "Spec, then build",
+        "lines": [
+          "value, see it in action,",
+          "use cases, components,",
+          "comparison, call to action"
+        ]
+      },
+      {
+        "name": "Guards",
+        "lines": [
+          "gated wording, no real",
+          "names, no stray URLs",
+          "or client JavaScript"
+        ]
+      }
+    ]
+  },
+  "workflow": [
+    "Gather assets, the owner's strategy and the facts from the product's current branch.",
+    "Start a claims ledger: every claim with the file, test or doc that proves it.",
+    "Post a short spec with a visual per section, then build in rounds with a preview each.",
+    "Gate unreleased wording behind a build flag and let guard tests fail the build."
+  ],
+  "inAction": [
+    {
+      "caption": "The skill's checklist run on our own home page found content gaps, not design gaps. These are the input to the home page redesign now in progress.",
+      "source": "landing-page checklist on skillforgecloud.com home, 2026-11-28",
+      "excerpt": "Palette with tints, AA contrast in both themes: met (design tokens)\nA visual for each key point: missing\nSee it in action walkthrough: missing\nUse cases and comparison: missing\nClaims ledger in the site repo: missing"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "value": "Brands hand over one to four colours; a page or deck needs about a dozen. This skill derives the rest in a fixed, checkable way, so every surface uses a named role and the result is readable before anyone looks.",
+  "howItWorks": {
+    "title": "A few brand seeds become eleven checked roles",
+    "stages": [
+      {
+        "name": "Seeds and a look",
+        "lines": [
+          "primary, secondary,",
+          "accent, background;",
+          "light or dark"
+        ]
+      },
+      {
+        "name": "palette.mjs",
+        "lines": [
+          "harmony fills the gaps",
+          "nudges the brand colour",
+          "until it reads"
+        ],
+        "accent": true
+      },
+      {
+        "name": "11 roles",
+        "lines": [
+          "brand, accent, deep,",
+          "paper, soft, card, line,",
+          "tint, ink, ink-2"
+        ]
+      },
+      {
+        "name": "Checks and output",
+        "lines": [
+          "WCAG 2.2, APCA,",
+          "colour-blind simulation",
+          "CSS or PowerPoint slots"
+        ]
+      }
+    ]
+  },
+  "workflow": [
+    "Collect the brand's seed colours and the look (light or dark).",
+    "Run palette.mjs with the seeds; it reports every role and every contrast check.",
+    "Fix any failing pair by changing a seed or the look, never by hand-editing a role.",
+    "Emit the roles as CSS variables or PowerPoint theme colour slots."
+  ],
+  "inAction": [
+    {
+      "caption": "Skill Forge's own brand colours, orange #F97316 and slate #1E293B, run in the light look. The orange was moved to #E96800 so it reaches 3:1 on the paper colour; the teal accent was derived by the split harmony.",
+      "source": "palette.mjs --primary '#F97316' --secondary '#1E293B' --look light, 2026-11-28",
+      "swatches": [
+        {
+          "name": "brand",
+          "hex": "#E96800"
+        },
+        {
+          "name": "secondary",
+          "hex": "#1E293B"
+        },
+        {
+          "name": "accent",
+          "hex": "#009EA1"
+        },
+        {
+          "name": "deep",
+          "hex": "#3D2820"
+        },
+        {
+          "name": "paper",
+          "hex": "#F7F6F2"
+        },
+        {
+          "name": "soft",
+          "hex": "#ECEBE7"
+        },
+        {
+          "name": "card",
+          "hex": "#FCFCFA"
+        },
+        {
+          "name": "line",
+          "hex": "#D9D8D5"
+        },
+        {
+          "name": "tint",
+          "hex": "#F8E3D6"
+        },
+        {
+          "name": "ink",
+          "hex": "#1E1D1B"
+        },
+        {
+          "name": "ink-2",
+          "hex": "#635F59"
+        }
+      ]
+    },
+    {
+      "caption": "Two of the checks in the same run's report.",
+      "source": "palette.mjs JSON report, same run",
+      "excerpt": "ink on paper   WCAG 15.57 (min 4.5)  APCA 98.4  pass\nink on card    WCAG 16.39 (min 4.5)  APCA 101.9  pass"
+    }
+  ]
+}

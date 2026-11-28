@@ -10,6 +10,7 @@ import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import inquirer from 'inquirer';
+import { validateShowcases } from '../lib/showcase.js';
 import {
   RANGE_PATTERN,
   SEMVER_PATTERN,
@@ -551,6 +552,9 @@ async function validateRegistry() {
   }
 
   await validateInstructionVariants(registry, errors);
+
+  const showcaseSkills = new Set((registry.skills || []).filter((skill) => skill.installable !== false).map((skill) => skill.name));
+  for (const error of validateShowcases(REPO_ROOT, showcaseSkills)) reportValidationError(errors, error);
 
   const agentCore = getAgentCore(registry);
   if (agentCore) {

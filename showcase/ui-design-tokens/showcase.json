@@ -1,0 +1,69 @@
+{
+  "value": "Every colour, size, radius and gap lives in one token file, in light and dark, and a test fails the build when a colour pair drops below WCAG AA. On our own Site it also caught a real bug: the logo disappeared on the dark header.",
+  "howItWorks": {
+    "title": "One token file drives the page, and CI checks every colour pair",
+    "stages": [
+      {
+        "name": "Brand colours",
+        "lines": [
+          "#F97316 and #1E293B",
+          "via brand-palette-roles"
+        ]
+      },
+      {
+        "name": "tokens.json",
+        "lines": [
+          "one source of truth:",
+          "colour, type, spacing,",
+          "radius, motion"
+        ],
+        "accent": true
+      },
+      {
+        "name": "tokens.css",
+        "lines": [
+          "generated, light-dark()",
+          "forced colours and",
+          "reduced motion"
+        ]
+      },
+      {
+        "name": "Contrast check",
+        "lines": [
+          "every declared pair,",
+          "both themes, WCAG 2.2",
+          "gate, APCA advisory"
+        ]
+      }
+    ]
+  },
+  "workflow": [
+    "Seed the colour roles from the brand colours (brand-palette-roles does this step).",
+    "Fill tokens.json with the skill's role names, then generate tokens.css.",
+    "Replace every literal colour, size and gap in the CSS with a token.",
+    "Run the contrast check and add a test so a stale tokens.css or a failing pair fails CI."
+  ],
+  "inAction": [
+    {
+      "caption": "Dark mode before and after. Before, the logo's slate tile matched the header and vanished; after, it keeps a hairline edge on a neutral dark canvas.",
+      "source": "skillforgecloud.com, before: live site; after: design-tokens branch of skill-forge-site, 2026-11-28",
+      "image": {
+        "file": "home-dark-before-after.png",
+        "alt": "Skill Forge home page in dark mode, the live site on the left and the token version on the right"
+      }
+    },
+    {
+      "caption": "Light mode before and after: a warm paper canvas, the brand orange as the primary button with dark text, links in a darker orange that passes 4.5:1.",
+      "source": "skillforgecloud.com, before: live site; after: design-tokens branch of skill-forge-site, 2026-11-28",
+      "image": {
+        "file": "home-light-before-after.png",
+        "alt": "Skill Forge home page in light mode, the live site on the left and the token version on the right"
+      }
+    },
+    {
+      "caption": "The contrast check on the Site's tokens.",
+      "source": "tokens.mjs check on skill-forge-site, 2026-11-28",
+      "excerpt": "132 pairs checked in light and dark\n0 WCAG 2.2 failures\n4 APCA advisories (reported, not blocking)"
+    }
+  ]
+}

@@ -188,7 +188,7 @@
     {
       "type": "skill",
       "name": "ui-portability-baseline",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "scope": "custom",
       "path": "inventory/skills/ui-portability-baseline",
       "installable": true,
@@ -611,7 +611,7 @@
     {
       "type": "skill",
       "name": "landing-page",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "custom",
       "path": "inventory/skills/landing-page",
       "installable": true,
@@ -619,6 +619,19 @@
         "frontend",
         "marketing",
         "site"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "ui-design-tokens",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/ui-design-tokens",
+      "installable": true,
+      "tags": [
+        "frontend",
+        "design-tokens",
+        "accessibility"
       ]
     },
     {

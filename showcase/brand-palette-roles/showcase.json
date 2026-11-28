@@ -1,5 +1,5 @@
 {
-  "value": "Brands hand over one to four colours; a page or deck needs about a dozen. This skill derives the rest in a fixed, checkable way, so every surface uses a named role and the result is readable before anyone looks.",
+  "value": "Brands hand over one to four colours; a deck or report needs about a dozen. This skill derives the rest in a fixed, checkable way, so every slide uses named roles and the result is readable before anyone looks.",
   "howItWorks": {
     "title": "A few brand seeds become eleven checked roles",
     "stages": [
@@ -23,9 +23,9 @@
       {
         "name": "11 roles",
         "lines": [
-          "brand, accent, deep,",
-          "paper, soft, card, line,",
-          "tint, ink, ink-2"
+          "brand, secondary, accent,",
+          "deep, paper, soft, card,",
+          "line, tint, ink, ink-2"
         ]
       },
       {
@@ -46,7 +46,7 @@
   ],
   "inAction": [
     {
-      "caption": "Skill Forge's own brand colours, orange #F97316 and slate #1E293B, run in the light look. The orange was moved to #E96800 so it reaches 3:1 on the paper colour; the teal accent was derived by the split harmony.",
+      "caption": "Skill Forge's own brand colours, orange #F97316 and slate #1E293B, in the light look. The orange was moved to #E96800 to reach 3:1 and APCA 45 on paper; the teal accent was derived by the split harmony.",
       "source": "palette.mjs --primary '#F97316' --secondary '#1E293B' --look light, 2026-11-28",
       "swatches": [
         {
@@ -96,9 +96,9 @@
       ]
     },
     {
-      "caption": "Two of the checks in the same run's report.",
-      "source": "palette.mjs JSON report, same run",
-      "excerpt": "ink on paper   WCAG 15.57 (min 4.5)  APCA 98.4  pass\nink on card    WCAG 16.39 (min 4.5)  APCA 101.9  pass"
+      "caption": "Two of the checks from the same run's JSON report, summarised one per line.",
+      "source": "palette.mjs JSON report, same run, 2026-11-28",
+      "excerpt": "ink on paper: WCAG 15.57 (min 4.5), APCA 98.4, pass\nink on card: WCAG 16.39 (min 4.5), APCA 101.9, pass"
     }
   ]
 }

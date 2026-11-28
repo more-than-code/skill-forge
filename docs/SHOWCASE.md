@@ -25,14 +25,15 @@ folder holds no other files. The Site copies showcases when its catalog snapshot
 
 | Field | Holds |
 |---|---|
-| `value` | Two lines: what the skill saves or wins for a team. Not its mechanics |
-| `howItWorks.title` | The finding the diagram makes, as a sentence |
-| `howItWorks.stages` | 2 to 6 boxes drawn left to right: `name`, 1 to 4 short `lines`, optional `accent: true` on the one box that matters most |
-| `workflow` | 2 to 6 steps, in order, as the agent does them |
-| `inAction` | 1 to 6 items, each with a `caption`, a `source` (what was run, where, and the date) and exactly one of: `image` (`file`, `alt`), `excerpt` (plain text output, newlines kept) or `swatches` (`name`, `hex` as `#RRGGBB`) |
+| `value` | About two lines (at most 400 characters): what the skill saves or wins for a team. Not its mechanics |
+| `howItWorks.title` | The finding the diagram makes, as a sentence (at most 120 characters) |
+| `howItWorks.stages` | 2 to 4 boxes drawn left to right: `name` (at most 18 characters), 1 to 4 `lines` (at most 26 each), optional `accent: true` on at most one box, the one that matters most |
+| `workflow` | 2 to 6 steps (at most 200 characters each), in order, as the skill's own text lays them out |
+| `inAction` | 1 to 6 items, each with a `caption` (at most 300 characters), a `source` (at most 200: what was run, on which commit, and the date) and exactly one of: `image` (`file`, `alt`), `excerpt` (at most 1500 characters, newlines kept: the tool's output as printed, or say in the caption that it is a summary) or `swatches` (`name` of at most 10 characters, `hex` as `#RRGGBB`) |
 
-Text is plain: no Markdown, HTML or links. The Site draws the diagram and swatches itself with its
-own design tokens, so a showcase holds no SVG, CSS or script.
+All text is shown as plain text: Markdown, HTML and links appear literally, so leave them out. The Site draws the diagram and swatches itself with its
+own design tokens, so a showcase holds no SVG, CSS or script. SVG text does not wrap, which is why
+the box and swatch lengths are capped. Images must be real PNG, JPEG or WebP files, not links.
 
 ## Rules
 
@@ -45,6 +46,7 @@ These follow the `landing-page` skill's doctrine:
   is captioned "Illustrative".
 - **No private data.** No customer, project, person, host or private repository names in images or
   excerpts; crop or trim them.
-- **Before and after** images say which side is which in the image and name both in `source`.
+- **Before and after** images say which side is which in the image, the caption and the alt text, and
+  `source` names the commit of each side (not "the live site" or a branch, which move).
 - **Public only when shipped.** An image of unreleased work goes in only once the change it shows
   is merged where the Site's snapshot reads it.

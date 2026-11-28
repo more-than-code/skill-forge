@@ -553,7 +553,7 @@ async function validateRegistry() {
 
   await validateInstructionVariants(registry, errors);
 
-  const showcaseSkills = new Set((registry.skills || []).filter((skill) => skill.installable !== false).map((skill) => skill.name));
+  const showcaseSkills = new Set((registry.skills || []).filter((skill) => skill.type === 'skill' && skill.installable !== false).map((skill) => skill.name));
   for (const error of validateShowcases(REPO_ROOT, showcaseSkills)) reportValidationError(errors, error);
 
   const agentCore = getAgentCore(registry);

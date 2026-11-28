@@ -45,9 +45,9 @@
   ],
   "inAction": [
     {
-      "caption": "The skill's checklist run on our own home page found content gaps, not design gaps. These are the input to the home page redesign now in progress.",
-      "source": "landing-page checklist on skillforgecloud.com home, 2026-11-28",
-      "excerpt": "Palette with tints, AA contrast in both themes: met (design tokens)\nA visual for each key point: missing\nSee it in action walkthrough: missing\nUse cases and comparison: missing\nClaims ledger in the site repo: missing"
+      "caption": "Three items of the skill's checklist that the live home page did not meet when the skill was run on it.",
+      "source": "landing-page checklist on the skillforgecloud.com home page, skill-forge-site main at efa4216, 2026-11-28",
+      "excerpt": "Not met: Value first; section order as in doctrine 4; each point has a visual\nNot met: Claims ledger complete\nNot met: Comparison rows are buyer questions, sourced and dated"
     }
   ]
 }

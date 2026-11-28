@@ -246,8 +246,8 @@ Design notes:
   holds exactly one version per skill; sync resolves every dependency to that
   version and fails if it falls outside the declared range. Vendoring makes
   this acceptable: the pinned bodies travel with the repository, so reproducing
-  an old configuration is a checkout, not a registry lookup. (A version archive
-  remains possible future work; see open items.)
+  an old configuration is a checkout, not a registry lookup. (Git commits are the
+  version archive; see the 2026-11-28 decision.)
 - `skills.local` declares hand-authored project skills so sync can tell them
   apart from vendored copies, include them in the fingerprint, and refuse name
   collisions instead of overwriting.
@@ -667,10 +667,10 @@ any new component.
   `skill list/read --json` no longer emit it. Agents, subagents and hooks still
   carry it. `diff-global` filters on that field, so it now lists nothing — it
   remains only to print its deprecation notice, and can be removed outright.
-- No registry version archive: only the current version of each skill is
-  resolvable. Vendoring shrinks the need (pinned bodies live in consumer repos),
-  but re-resolving an older version from the registry would require a
-  content-addressed archive.
+- No registry version archive, by decision (2026-11-28, Key Design Decisions):
+  the inventory holds one version per skill and git commits are the archive.
+  Still open: a lookup from a skill version to its commit (release tags or a
+  generated index), added when the eval job's `previous` baseline needs it.
 - `install --yes` still prompts interactively for the target path; `--yes` should
   imply the default path for scripted use.
 - Codex/Copilot equivalents for the stats hook (no hook support today — revisit as
@@ -719,4 +719,5 @@ any new component.
 | 2026-11-26 | Cloud sessions and Claude Project threads commit and push their own branch without being asked; repository and Project rules about committing and pushing govern shared branches only (`main`, the default branch, the PR base): an own branch is isolated and reaches them only through a PR someone else merges. The owner merges; a separate reviewer thread the Project instructions name may merge reviewed, gate-green PRs into a base that is not `main` or the default branch (Joe, 2026-11-27, decision card: "Yes, into dev only") | Repo `AGENTS.md` files say "do not commit unless asked, do not push" for workstation sessions, while threads are expected to push a branch and open a PR; the cloud rules let stricter repo text win, so the two clashed (Deploybot harness review). One shared rule in the cloud variant's §8 (plus a scoped note in `full` §15 Git operations, which repos also render), which repos point to instead of carrying their own line (PR #2). `skf-cloud doctor` flags common phrasings of a blanket ban in repo prose, with the pointer as the fix, but not Project instructions, which may restrict threads on purpose |
 | 2026-11-27 | `skf-cloud install` installs `claude-project-steward` by default, after `SKF_SKILLS`; `SKF_DEFAULT_SKILLS=0` turns it off ([DEFAULT-SKILLS.md](DEFAULT-SKILLS.md)) | Every Project's setup script repeated `SKF_SKILLS="claude-project-steward"`, and no repo declares the steward because it manages the Project's environment, not a repo. The script every setup runs adds it itself; one name hardcoded beside doctor's `ALWAYS_USEFUL_SKILLS` instead of a registry field. `state.json` and doctor JSON keep their shape |
 | 2026-11-27 | Approved and built (PR #14): `skf-cloud.mjs ensure` installs a repo's declared skills on any machine, only when missing, into the ignored `<repo>/.claude/skills/`, with `claude-project-steward` as the agent-facing entry point (one published `AGENTS.md` line that points at it and bootstraps it) and a pinned SessionStart hook in the repo's `.claude/settings.json` as the deterministic trigger ([REPO-SKILL-INSTALL.md](REPO-SKILL-INSTALL.md)) | Local collaborators without `skf` (any OS) got none of the declared skills. Finishes the resolver target planned on 2026-11-25 (target `<repo>/.claude`, `$HOME` higher); Node built-ins, no symlinks, no tracked change (`.git/info/exclude`); an installed copy at or above the declared version is kept, an older one gets a loud warning and is not silently replaced (Joe), and a repo copy cannot override a user-level one because Claude Code ranks personal skills above project ones; repos with the `skf sync` link are left to sync. The steward owns it (Joe): it already finds and suggests what to install, so repo lines point at it, never at another skill or a repo script |
+| 2026-11-28 | The inventory keeps one version per skill. Older versions are reached by git commit: a Project's `SKF_REF` pins the whole registry, and any version stays readable at `<sha>:inventory/skills/<name>/`. A version-to-commit lookup (release tags such as `skill/<name>@<version>`, or a generated index) is added only when the eval job's `previous` baseline needs it | Two Projects on two versions are already covered by their own pins. Evals need the old version's commit, not a second copy in the tree. Per-version folders would change the registry and lock formats, turn semver ranges into version selectors (resolver, skf-cloud, doctor, MCP), copy a folder on every bump and leave old copies to drift; the only gain, mixing versions of different skills inside one Project, has no user yet. Version history for people lives in the Console, built from `registry.json` git history (owner approval, 2026-11-28) |
 | 2026-11-28 | Revises the 2026-11-27 doctor row: with exactly one repo, empty Project instructions (`D-context-missing`) or instructions naming no PR base (`D-context-pr-base`) are a **note** owned by `thread`, whose fix asks the agent to confirm the repo's own instructions name the base; two or more repos (read-only references included) and no repos keep the issue ([#13](https://github.com/more-than-code/skill-forge/issues/13), Joe approved 2026-11-28) | Workflow rules §8 already accept a base the repository's own instructions name, so a one-repo Project's instructions only repeated its `AGENTS.md` (Marketing OS). The repo text is judged by the agent, not parsed: `prBase()` reads English only and Marketing OS names its base in Chinese. Doctor cannot tell read-only repos apart. Doctor JSON keeps `version: 1`: same ids and shape |

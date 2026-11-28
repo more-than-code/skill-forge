@@ -596,7 +596,7 @@
     {
       "type": "skill",
       "name": "local-to-cloud-migration",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "custom",
       "path": "inventory/skills/local-to-cloud-migration",
       "installable": true,
@@ -619,6 +619,21 @@
         "frontend",
         "marketing",
         "site"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "computerless-ops",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/computerless-ops",
+      "installable": true,
+      "tags": [
+        "ops",
+        "security",
+        "cloud",
+        "release",
+        "claude-projects"
       ]
     }
   ],

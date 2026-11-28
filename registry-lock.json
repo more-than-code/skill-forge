@@ -98,6 +98,17 @@
         "SKILL.md": "sha256-lwDN5zA4HH2gq7vc8cfApqQciRJI+oHGiUTN5/c0Cno="
       }
     },
+    "inventory/skills/computerless-ops": {
+      "name": "computerless-ops",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-GWpVn7s2Lf8XvK3NvhQUQ8m1AdfBsx+Cfu/EYapfwHY=",
+      "files": {
+        "SKILL.md": "sha256-Q504FK0q6Xa2I6Ygw678fHPQEDhK83Q7903LTHyFhK8="
+      }
+    },
     "inventory/skills/data-migration": {
       "name": "data-migration",
       "version": "0.1.0",
@@ -296,13 +307,13 @@
     },
     "inventory/skills/local-to-cloud-migration": {
       "name": "local-to-cloud-migration",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-NtmxmTJwQj48rBzQbH1M0nQuNnNRTHdUwlKdUKvFhIg=",
+      "integrity": "sha256-mbEkn8zzwicpB98/b83LeNlcZZdtZMitfpO3UvncRAE=",
       "files": {
-        "SKILL.md": "sha256-H7n4NkhO5xz5jaAUYuXswH0YNfkP55+QIbqC1IZ2Ync="
+        "SKILL.md": "sha256-ZBxFxN9xa319Sys/potneLWuR6MvvW5iTAwXPttrXOQ="
       }
     },
     "inventory/skills/migration-deprecation": {

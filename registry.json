@@ -592,6 +592,19 @@
         "mcp",
         "claude-projects"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "landing-page",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/landing-page",
+      "installable": true,
+      "tags": [
+        "frontend",
+        "marketing",
+        "site"
+      ]
     }
   ],
   "managedAgents": [

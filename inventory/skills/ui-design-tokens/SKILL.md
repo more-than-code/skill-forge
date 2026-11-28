@@ -49,7 +49,9 @@ Node 18 or later; no dependencies.
 1. Copy `tokens.json` and `scripts/` into the repo (for example `src/styles/tokens/`).
    Keep the names; swap the values for the product's own (with `brand-palette-roles`
    when starting from brand colours).
-2. From that folder, generate the CSS: `node scripts/tokens.mjs css > tokens.css`.
+2. From that folder, generate the CSS: `node scripts/tokens.mjs css --out tokens.css`
+   (`--out` writes only after generation succeeds; a shell `>` would empty the file on
+   an error).
 3. Run `node scripts/tokens.mjs check` and fix every WCAG failure.
 4. Load `tokens.css` before every other stylesheet (how feature code uses tokens is
    `ui-portability-baseline` and `quiet-ui-style-guide`).
@@ -96,8 +98,9 @@ Value rules the preset meets, and any replacement values must meet:
   `--ink` and `--ink-2` on the status washes; `--accent-ink` on `--bg`, `--surface` and
   `--accent-wash`; `--on-fill` on `--accent`.
 - **Graphics that carry meaning are 3:1** against adjacent colours (WCAG 1.4.11):
-  `--focus` and `--line-strong` on every surface, `--accent`, the status colours (also on
-  their own wash) and every series colour. The focus outline is drawn
+  `--focus`, `--line-strong`, `--accent`, the status colours and every series colour,
+  each on all five surfaces (`--bg`, `--plane`, `--surface` … `--surface-3`); status
+  colours also on their own wash. The focus outline is drawn
   `--focus-offset` outside the element, so it sits on the surface, not on an accent fill.
 - **Series colours are checked against the background only,** not for telling them
   apart from each other or under colour-vision deficiency; label series directly or
@@ -169,8 +172,15 @@ function setTheme(mode) {
   applyTheme(mode);
   try { mode === 'system' ? localStorage.removeItem('theme') : localStorage.setItem('theme', mode); } catch {}
 }
-// Keep other tabs in step.
-addEventListener('storage', (e) => { if (e.key === 'theme') applyTheme(e.newValue ?? 'system'); });
+// Keep other tabs in step. A null key means localStorage.clear(): back to the defaults.
+addEventListener('storage', (e) => {
+  if (e.key === 'theme' || e.key === null) applyTheme(e.key === null ? 'system' : e.newValue);
+  if (e.key === 'motion' || e.key === null) {
+    const m = e.key === null ? null : e.newValue;
+    if (m === 'on' || m === 'off') document.documentElement.dataset.motion = m;
+    else delete document.documentElement.dataset.motion;
+  }
+});
 ```
 
 The control offers all three states (a segmented control or menu: System, Light, Dark),
@@ -212,7 +222,7 @@ colours.
    value; write a `$description` saying what it is for.
 2. If it is text or a meaningful graphic, add its pairs to the contrast `pairs` list
    (`text`, `large-text` or `ui`) against every background it can sit on.
-3. Regenerate: `node scripts/tokens.mjs css > tokens.css`.
+3. Regenerate: `node scripts/tokens.mjs css --out tokens.css`.
 4. Check: `node scripts/tokens.mjs check` (add `--json` for machine output). Exit 1 means
    a WCAG failure: fix the value, never drop the pair. APCA results below the advisory
    level (`|Lc|` 60 text, 45 large text, 30 UI) are reported, not blocking; mention them

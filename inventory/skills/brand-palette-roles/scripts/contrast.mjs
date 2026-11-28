@@ -6,9 +6,7 @@
 // Exit 0 when every pair reaches WCAG AA for body text (4.5:1), 1 when one does not, 2 on bad input.
 // Dependency-free; Node 18+.
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { normHex, contrastRatio, apcaLc } from './color.mjs';
+import { normHex, contrastRatio, apcaLc, isMain } from './color.mjs';
 
 export function checkPair(text, background) {
   const fg = normHex(text);
@@ -54,4 +52,4 @@ function main() {
   process.exitCode = rows.every((r) => r.aa) ? 0 : 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isMain(import.meta.url)) main();

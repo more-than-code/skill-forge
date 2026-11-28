@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const run = promisify(execFile);
@@ -260,4 +262,49 @@ test('contrast CLI: AA gate and bad input', async () => {
   assert.equal(rows[0].wcag, 21);
   assert.equal(rows[1].wcag, 21);
   assert.ok(rows[1].apca < 0);
+});
+
+test('both CLIs run through a symlinked skill directory, as consumers install it', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'bpr-link-'));
+  try {
+    const link = path.join(dir, 'brand-palette-roles');
+    await fs.symlink(path.dirname(SCRIPTS), link, 'dir');
+    const run2 = async (script, args) => {
+      try {
+        const { stdout } = await run(process.execPath, [path.join(link, 'scripts', script), ...args]);
+        return { code: 0, stdout };
+      } catch (e) {
+        return { code: e.code, stdout: e.stdout };
+      }
+    };
+    const fail = await run2('contrast.mjs', ['#E86A2B', '#F7F6F2']);
+    assert.equal(fail.code, 1);
+    assert.match(fail.stdout, /2\.97:1 \(fails\)/);
+    const css = await run2('palette.mjs', ['--primary', '#2E6F5E', '--format', 'css']);
+    assert.equal(css.code, 0);
+    assert.match(css.stdout, /--brand: #2E6F5E;/);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('--prefix names the CSS variables and rejects anything but a plain name', async () => {
+  const ok = await cli('palette.mjs', ['--primary', '#2E6F5E', '--format', 'css', '--prefix', 'deck-']);
+  assert.equal(ok.code, 0);
+  assert.match(ok.stdout, /--deck-brand: #2E6F5E;/);
+  assert.doesNotMatch(ok.stdout, /^ {2}--brand:/m);
+  for (const bad of ['x;}', 'Deck-', '-deck', 'a'.repeat(30)]) {
+    const r = await cli('palette.mjs', ['--primary', '#2E6F5E', '--format', 'css', '--prefix', bad]);
+    assert.equal(r.code, 2, bad);
+  }
+});
+
+test('contrast maths agrees with the ui-design-tokens checker', async () => {
+  const tokens = await import(path.join(REPO_ROOT, 'inventory', 'skills', 'ui-design-tokens', 'scripts', 'color.mjs'));
+  const pairs = [['#000000', '#FFFFFF'], ['#777777', '#FFFFFF'], ['#1E1D1B', '#F7F6F2'], ['#F3F2EE', '#0F131C'],
+    ['#3A6DF0', '#0F131C'], ['#E86A2B', '#F7F6F2'], ['#2E6F5E', '#F4F1EB'], ['#FFFFFF', '#888888']];
+  for (const [fg, bg] of pairs) {
+    assert.ok(Math.abs(color.contrastRatio(fg, bg) - tokens.wcagRatio(fg, bg)) < 1e-9, `${fg} on ${bg} WCAG`);
+    assert.ok(Math.abs(color.apcaLc(fg, bg) - tokens.apcaLc(fg, bg)) < 1e-6, `${fg} on ${bg} APCA`);
+  }
 });

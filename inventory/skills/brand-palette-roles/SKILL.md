@@ -70,7 +70,9 @@ node scripts/palette.mjs --preset cinematic --primary '#B0463A'                 
 ```
 
 Options: `--name TEXT` names the PowerPoint colour scheme (letters, digits, spaces, `_ . -` only, at most
-60 characters; defaults to the preset key); `--help` prints the usage. Every colour the scripts print
+60 characters; defaults to the preset key); `--prefix NAME-` prefixes the CSS variables
+(`--prefix deck-` gives `--deck-brand`), lowercase letters, digits and hyphens only; `--help` prints
+the usage. Every colour the scripts print
 is a generated `#RRGGBB`, so the CSS and PowerPoint text is safe to paste as is; do not hand-edit it.
 
 Paths are relative to this skill's directory. The scripts need only Node 18+, no packages. Exit 0 means
@@ -115,6 +117,9 @@ second check):
 
 - `bodyTextOk: false` on brand, secondary or accent means that colour is for shapes and large text
   (24 px or more, or 18.7 px bold) only. Set body-size text in ink or ink-2.
+- The APCA targets are stricter than `ui-design-tokens` (body 75 and non-text 45 here, against 60 and
+  30 there) on purpose: slides and posters are read at a distance, projected or printed, so the
+  roles aim for APCA's body-copy level. WCAG minimums are the same in both skills.
 - A `FAIL` cannot ship. Change the seed, the look or the background and run again; never hand-edit a
   role to dodge the check.
 - For any other pair (a logo colour on a photo band, a chart label), use
@@ -138,6 +143,25 @@ purpose (a one-accent look) is reported as `same`, not flagged.
   from `ui-design-tokens` or the output's chart tooling, and keep them consistent across the document.
 - A dark look still needs a light version for print and PDF hand-outs: build it with `--look light`
   from the same seeds rather than inverting colours.
+
+### Relation to ui-design-tokens
+
+Decks, reports and posters use the 11 roles. An app keeps the `ui-design-tokens` names: copy the
+values this script derives into that skill's `tokens.json`, then regenerate `tokens.css`. Never paste
+this script's CSS block next to `tokens.css`: `accent`, `ink`, `ink-2` and `line` exist in both and
+mean different things (here `accent` is the highlight colour; there `--accent` is the one brand accent),
+so the later block would silently redefine them. When both must sit on one page, use `--prefix`.
+
+| Role here | ui-design-tokens name | Note |
+|---|---|---|
+| brand | `--accent`, and `--accent-ink` when it reaches 4.5:1 on `--bg` | the one accent |
+| tint | `--accent-wash` | |
+| paper | `--bg` | |
+| soft | `--plane` or `--surface-2` | |
+| card | `--surface` | |
+| ink, ink-2, line | `--ink`, `--ink-2`, `--line` | same meaning |
+| secondary, accent | `--series-1`, `--series-2` | a second brand colour is a series colour in an app, never a second accent |
+| deep | none | deck-only emphasis band |
 
 ### PowerPoint theme slots
 

@@ -3,7 +3,7 @@
 //
 //   node palette.mjs --primary '#2E6F5E' [--secondary HEX] [--accent HEX] [--background HEX]
 //                    [--look light|dark] [--harmony split|complementary|analogous|triadic]
-//                    [--preset KEY] [--format json|css|pptx] [--name TEXT]
+//                    [--preset KEY] [--format json|css|pptx] [--name TEXT] [--prefix NAME-]
 //
 // Exit 0 when every WCAG check passes, 1 when one fails, 2 on bad input.
 // Dependency-free; Node 18+.
@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { normHex, oklch, fromOklch, mix, deltaE, contrastRatio, apcaLc, cvdMinDelta } from './color.mjs';
+import { normHex, oklch, fromOklch, mix, deltaE, contrastRatio, apcaLc, cvdMinDelta, isMain } from './color.mjs';
 
 export const ROLES = ['brand', 'secondary', 'accent', 'deep', 'paper', 'soft', 'card', 'line', 'tint', 'ink', 'ink-2'];
 
@@ -262,8 +262,10 @@ export function presetDetails(key) {
   return { ...rest, font: { key: p.font, ...fonts[p.font] } };
 }
 
-const OPTIONS = new Set(['primary', 'secondary', 'accent', 'background', 'look', 'harmony', 'preset', 'format', 'name']);
-const USAGE = 'usage: palette.mjs --primary HEX [--secondary HEX] [--accent HEX] [--background HEX] [--look light|dark] [--harmony split|complementary|analogous|triadic] [--preset KEY] [--format json|css|pptx] [--name TEXT]\n';
+const OPTIONS = new Set(['primary', 'secondary', 'accent', 'background', 'look', 'harmony', 'preset', 'format', 'name', 'prefix']);
+// A CSS custom-property prefix such as `deck-`, so the roles never redefine an app's own tokens.
+const PREFIX = /^[a-z][a-z0-9-]{0,23}$/;
+const USAGE = 'usage: palette.mjs --primary HEX [--secondary HEX] [--accent HEX] [--background HEX] [--look light|dark] [--harmony split|complementary|analogous|triadic] [--preset KEY] [--format json|css|pptx] [--name TEXT] [--prefix NAME-]\n';
 
 function parseArgs(argv) {
   const out = {};
@@ -287,12 +289,14 @@ function main() {
     for (const k of ['primary', 'secondary', 'accent', 'background', 'look', 'harmony']) if (args[k]) input[k] = args[k];
     const format = args.format ?? 'json';
     if (!['json', 'css', 'pptx'].includes(format)) throw new Error('format must be json, css or pptx');
+    const prefix = args.prefix ?? '';
+    if (prefix && !PREFIX.test(prefix)) throw new Error('prefix must be lowercase letters, digits and hyphens, starting with a letter (e.g. deck-)');
     const result = buildPalette(input);
-    if (format === 'css') process.stdout.write(toCss(result));
+    if (format === 'css') process.stdout.write(toCss(result, prefix));
     else if (format === 'pptx') process.stdout.write(toPptxText(result, args.name ?? args.preset));
     else {
       const preset = args.preset ? presetDetails(args.preset) : undefined;
-      process.stdout.write(JSON.stringify({ ...result, preset, css: toCss(result), pptx: pptxSlots(result) }, null, 2) + '\n');
+      process.stdout.write(JSON.stringify({ ...result, preset, css: toCss(result, prefix), pptx: pptxSlots(result) }, null, 2) + '\n');
     }
     for (const c of result.checks) {
       if (!c.pass) process.stderr.write(`FAIL ${c.pair}: ${c.wcag}:1 is below ${c.wcagMin}:1\n`);
@@ -306,4 +310,4 @@ function main() {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isMain(import.meta.url)) main();

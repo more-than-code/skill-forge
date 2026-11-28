@@ -7,7 +7,19 @@
 //
 // Colours enter and leave as "#RRGGBB" strings.
 
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** True when the module at metaUrl is the script Node was started with, also through a symlink. */
+export function isMain(metaUrl) {
+  try {
+    return Boolean(process.argv[1]) && fileURLToPath(metaUrl) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
 
 export function parseHex(input) {
   const m = HEX.exec(String(input).trim());

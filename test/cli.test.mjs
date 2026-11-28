@@ -437,6 +437,32 @@ test('skill write/read/list/delete manage an inventory skill end-to-end', async 
   assert.match(stdout, /Registry validation passed/);
 });
 
+test('validate fails on a showcase without a skill, and skill delete removes the showcase with its skill', async () => {
+  const fx = await skillForgeFixture();
+  const name = 'test-showcased-skill';
+  await fx.runWithStdin(['skill', 'write', name, '--set-version', '0.1.0', '--json'], `---\nname: ${name}\ndescription: Fixture.\n---\n\nBody.\n`);
+  const showcase = {
+    value: 'Saves a team time.',
+    howItWorks: { title: 'Two parts', stages: [{ name: 'In', lines: ['a'] }, { name: 'Out', lines: ['b'] }] },
+    workflow: ['One', 'Two'],
+    inAction: [{ caption: 'Output', source: 'script', excerpt: 'ok' }]
+  };
+  for (const skill of [name, 'no-such-skill']) {
+    await fs.mkdir(path.join(fx.root, 'showcase', skill), { recursive: true });
+    await fs.writeFile(path.join(fx.root, 'showcase', skill, 'showcase.json'), JSON.stringify(showcase));
+  }
+  const failed = await fx.run(['validate']).catch((error) => error);
+  assert.equal(failed.code, 1);
+  assert.match(`${failed.stdout}${failed.stderr}`, /showcase\/no-such-skill does not match an installable registry skill/);
+  await fs.rm(path.join(fx.root, 'showcase', 'no-such-skill'), { recursive: true });
+  assert.match((await fx.run(['validate'])).stdout, /Registry validation passed/);
+
+  const deleted = await fx.run(['skill', 'delete', name, '--yes', '--json']);
+  assert.deepEqual(JSON.parse(deleted.stdout), { action: 'deleted', name, warnings: [] });
+  assert.equal(await fs.access(path.join(fx.root, 'showcase', name)).then(() => true, () => false), false);
+  assert.match((await fx.run(['validate'])).stdout, /Registry validation passed/);
+});
+
 test('skill authoring pipeline rejects hardcoded absolute home and self-vendor paths', async () => {
   const fx = await skillForgeFixture();
   const name = 'test-hardcoded-path-skill';

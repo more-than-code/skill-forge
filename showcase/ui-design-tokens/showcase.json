@@ -1,13 +1,13 @@
 {
   "value": "Every colour, type size, spacing step, radius and motion value lives in one token file, in light and dark, and its checker fails (exit 1) when a declared colour pair drops below WCAG AA in either theme.",
   "howItWorks": {
-    "title": "One token file drives the page, and CI checks every colour pair",
+    "title": "One token file drives the page, and a checker tests every colour pair",
     "stages": [
       {
-        "name": "Brand colours",
+        "name": "Your colours",
         "lines": [
-          "#F97316 and #1E293B",
-          "via brand-palette-roles"
+          "swap the preset's values",
+          "or brand-palette-roles"
         ]
       },
       {
@@ -46,7 +46,7 @@
   "inAction": [
     {
       "caption": "Dark mode, left before and right after the tokens. Before, the logo's slate tile matched the header and disappeared; after, it keeps a hairline edge on a neutral dark canvas.",
-      "source": "skill-forge-site, before: main at efa4216 (the live site); after: tokens commit 3fb0918, 2026-11-28",
+      "source": "skill-forge-site, before: main at efa4216 (the live site); after: the tokens change, merged into dev as c246dfe, 2026-11-28",
       "image": {
         "file": "home-dark-before-after.png",
         "alt": "Skill Forge home page in dark mode: on the left the logo tile blends into the header, on the right it has a visible edge"
@@ -54,7 +54,7 @@
     },
     {
       "caption": "Light mode, left before and right after: a warm paper canvas, the brand orange as the primary button with dark text, and darker orange links.",
-      "source": "skill-forge-site, before: main at efa4216 (the live site); after: tokens commit 3fb0918, 2026-11-28",
+      "source": "skill-forge-site, before: main at efa4216 (the live site); after: the tokens change, merged into dev as c246dfe, 2026-11-28",
       "image": {
         "file": "home-light-before-after.png",
         "alt": "Skill Forge home page in light mode: cool white canvas on the left, warm paper canvas with an orange primary button on the right"
@@ -62,7 +62,7 @@
     },
     {
       "caption": "The checker's summary line for the Site's tokens, as printed (the four advisories are listed above it and do not fail the check).",
-      "source": "tokens.mjs check on skill-forge-site at 3fb0918, 2026-11-28",
+      "source": "tokens.mjs check on skill-forge-site dev at c246dfe, 2026-11-28",
       "excerpt": "132 pairs checked (light and dark): 0 WCAG failures, 4 APCA advisories"
     }
   ]

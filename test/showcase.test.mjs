@@ -125,6 +125,47 @@ test('lengths that would overflow the Site layout and bidi controls are errors',
   }
 });
 
+test('a linked showcase.json or folder, an oversized showcase.json and count caps are errors', () => {
+  const real = fixture({ 'real-skill': { 'showcase.json': JSON.stringify(valid()), 'shot.png': PNG } });
+  const linked = fixture({ 'linked-skill': {} });
+  fs.symlinkSync(path.join(real, 'showcase', 'real-skill', 'showcase.json'), path.join(linked, 'showcase', 'linked-skill', 'showcase.json'));
+  fs.symlinkSync(path.join(real, 'showcase', 'real-skill'), path.join(linked, 'showcase', 'real-skill'));
+  const errors = validateShowcases(linked, new Set(['linked-skill', 'real-skill']));
+  assert.ok(errors.some((e) => /linked-skill has no showcase.json \(a regular file, not a link\)/.test(e)));
+  assert.ok(errors.some((e) => /showcase\/real-skill is not a folder/.test(e)));
+
+  const huge = fixture({ 'known-skill': { 'showcase.json': JSON.stringify(valid()).padEnd(65 * 1024, ' '), 'shot.png': PNG } });
+  assert.ok(validateShowcases(huge, new Set(['known-skill'])).some((e) => /showcase.json is larger than 64 KB/.test(e)));
+
+  const many = valid();
+  many.workflow = Array(7).fill('step');
+  many.inAction = Array(7).fill(many.inAction[1]);
+  const capErrors = [];
+  checkShowcaseData(many, 'showcase/x', capErrors);
+  for (const pattern of [/workflow must be a list of 2 to 6/, /inAction must be a list of 1 to 6/]) {
+    assert.ok(capErrors.some((e) => pattern.test(e)), `expected ${pattern} in ${capErrors.join('; ')}`);
+  }
+  const swatchErrors = [];
+  const fewer = valid();
+  fewer.inAction[2].swatches = Array(17).fill({ name: 'a', hex: '#000000' });
+  checkShowcaseData(fewer, 'showcase/x', swatchErrors);
+  assert.ok(swatchErrors.some((e) => /swatches must be a list of 1 to 16/.test(e)));
+});
+
+test('jpg and webp images are checked by their bytes', () => {
+  const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(16)]);
+  const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(8)]);
+  const withImage = (file, body) => {
+    const data = valid();
+    data.inAction[0].image.file = file;
+    return fixture({ 'known-skill': { 'showcase.json': JSON.stringify(data), [file]: body } });
+  };
+  assert.deepEqual(validateShowcases(withImage('shot.jpg', JPG), new Set(['known-skill'])), []);
+  assert.deepEqual(validateShowcases(withImage('shot.webp', WEBP), new Set(['known-skill'])), []);
+  assert.ok(validateShowcases(withImage('shot.jpg', PNG), new Set(['known-skill'])).some((e) => /shot.jpg is not a jpg image/.test(e)));
+  assert.ok(validateShowcases(withImage('shot.webp', JPG), new Set(['known-skill'])).some((e) => /shot.webp is not a webp image/.test(e)));
+});
+
 test('the committed showcases are valid', () => {
   const registry = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'registry.json'), 'utf8'));
   const names = new Set(registry.skills.filter((s) => s.type === 'skill' && s.installable !== false).map((s) => s.name));

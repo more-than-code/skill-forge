@@ -44,7 +44,7 @@
   "inAction": [
     {
       "caption": "Left before, right after: the skill catalog went from 42 separate cards to one panel with ruled rows and hairline edges. The skill is written for app screens; on this public listing page only its panel, row and spacing rules were applied, and tags stay filled chips.",
-      "source": "skill-forge-site, before: main at efa4216 (the live site); after: tokens commit 3fb0918, 2026-11-28",
+      "source": "skill-forge-site, before: main at efa4216 (the live site); after: the tokens change, merged into dev as c246dfe, 2026-11-28",
       "image": {
         "file": "catalog-before-after.png",
         "alt": "Skill Forge catalog page: separate boxed cards on the left, one ruled list on the right"

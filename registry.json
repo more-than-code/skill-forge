@@ -592,6 +592,34 @@
         "mcp",
         "claude-projects"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "local-to-cloud-migration",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/local-to-cloud-migration",
+      "installable": true,
+      "tags": [
+        "migration",
+        "cloud",
+        "claude-projects",
+        "workstation",
+        "cleanup"
+      ]
+    },
+    {
+      "type": "skill",
+      "name": "landing-page",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/landing-page",
+      "installable": true,
+      "tags": [
+        "frontend",
+        "marketing",
+        "site"
+      ]
     }
   ],
   "managedAgents": [

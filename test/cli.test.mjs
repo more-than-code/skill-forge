@@ -232,6 +232,18 @@ test('review-checklist skill uses the reviewers\' rubric and covers the required
   assert.match(checklist, /\*\*APPROVE\*\* only when there is no Critical or High finding/);
 });
 
+test('landing-page skill carries the site doctrine and stays host-agnostic', async () => {
+  const skill = await fs.readFile(path.join(REPO_ROOT, 'inventory', 'skills', 'landing-page', 'SKILL.md'), 'utf8');
+  for (const marker of ['**Business value first.**', '**Demonstrate, don\'t describe.**', '**Siblings are references, not templates.**',
+    '**Facts only.**', '"Illustrative interface"', '**One place per action.**', 'claims ledger', 'WCAG AA',
+    'prefers-reduced-motion', '**CI checks, it never deploys:**', 'explicit yes', 'skipped is not passed', 'scrollWidth']) {
+    assert.ok(skill.includes(marker), `landing-page lacks: ${marker}`);
+  }
+  const order = ['Value:', 'See it in action:', 'Use cases:', 'Components:', 'Comparison:', 'Call to action.'].map((s) => skill.indexOf(s));
+  assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), 'section order');
+  assert.match(skill, /Other hosts \(/, 'hosting must not be tied to one provider');
+});
+
 test('composed grok agents resolve placeholders to built-in agent names', async () => {
   const dir = await tempDir('skf-compose-grok-');
   const target = path.join(dir, 'AGENTS.md');

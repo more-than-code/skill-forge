@@ -261,6 +261,17 @@
         "SKILL.md": "sha256-cBO4AHpiJeQ6YpF7RkAaV5L9FSZv8KN4cpPcirveqis="
       }
     },
+    "inventory/skills/landing-page": {
+      "name": "landing-page",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-5c1IjCAPySR/2qrG59oot/NVo1KYVH3e8WScTyCBY0E=",
+      "files": {
+        "SKILL.md": "sha256-wPI8B+zj1wf0ggVZEYCfVMamXHuoOSMHcJNhiIWLlD4="
+      }
+    },
     "inventory/skills/llm-integration": {
       "name": "llm-integration",
       "version": "0.1.0",
@@ -281,6 +292,17 @@
       "integrity": "sha256-wWpl3RUJYocvbH4muZysT0+Flxy0Xbpkl/Bg2pl3ZfI=",
       "files": {
         "SKILL.md": "sha256-3ihNJppKlt+AFf6CBjhLWuYE4Y8GL2YjYMzY1fghxOU="
+      }
+    },
+    "inventory/skills/local-to-cloud-migration": {
+      "name": "local-to-cloud-migration",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-NtmxmTJwQj48rBzQbH1M0nQuNnNRTHdUwlKdUKvFhIg=",
+      "files": {
+        "SKILL.md": "sha256-H7n4NkhO5xz5jaAUYuXswH0YNfkP55+QIbqC1IZ2Ync="
       }
     },
     "inventory/skills/migration-deprecation": {

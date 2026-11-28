@@ -611,7 +611,7 @@
     {
       "type": "skill",
       "name": "landing-page",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "scope": "custom",
       "path": "inventory/skills/landing-page",
       "installable": true,
@@ -624,7 +624,7 @@
     {
       "type": "skill",
       "name": "ui-design-tokens",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "scope": "custom",
       "path": "inventory/skills/ui-design-tokens",
       "installable": true,

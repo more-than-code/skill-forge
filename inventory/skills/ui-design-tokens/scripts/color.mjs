@@ -31,7 +31,9 @@ export function parseColor(input) {
   if (m) {
     let a = 1;
     if (m[4] !== undefined) a = m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
-    return { r: +m[1], g: +m[2], b: +m[3], a };
+    const rgb = [+m[1], +m[2], +m[3]];
+    if (rgb.some((v) => v > 255) || a > 1) throw new Error(`colour out of range: ${JSON.stringify(input)}`);
+    return { r: rgb[0], g: rgb[1], b: rgb[2], a };
   }
   throw new Error(`unsupported colour: ${JSON.stringify(input)}`);
 }

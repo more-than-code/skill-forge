@@ -385,9 +385,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-FlNBcai1xoKzHUT7GIbCziI5c0Ln1FgZ8/tK6n5FzVU=",
+      "integrity": "sha256-SmhgiSZJUzzfxYY0yyc6RZqQoUm5xov169rTOzxcyWU=",
       "files": {
-        "SKILL.md": "sha256-s++U78XmW9wW64EU4RhuHa6xEco0xZ1NqE6D4YXA8v4="
+        "SKILL.md": "sha256-eNPiIQps31UMhhAGoaGBk6rSE3aY9rboh7AKenx0JGI="
       }
     },
     "inventory/skills/review-checklist": {

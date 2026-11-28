@@ -64,8 +64,7 @@ Related skills, not repeated here:
   (`size-adjust`) so the swap does not shift the layout.
 - **Line height from the `--lh-*` tokens**: `--lh-tight` for headings and big numbers,
   `--lh-snug` for labels, list rows and table cells, `--lh-body` for running text. Chinese
-  paragraphs need more room than Latin text: use the CJK line-height token where
-  `ui-design-tokens` ships one, otherwise never less than `--lh-body`.
+  paragraphs need more room than Latin text: use `--lh-cjk` for them.
 - **Survive user text settings.** Sizes resolve to `rem` so text zoom works; layouts
   survive 200% zoom (WCAG 1.4.4), reflow at 320 CSS px without horizontal scrolling
   (1.4.10), and the text-spacing override of 1.4.12 (line height 1.5, paragraph spacing 2x,
@@ -180,8 +179,9 @@ Every interactive control defines all of these, using tokens only:
   clearance so that a 24px circle centred on it overlaps no other target or its circle
   (WCAG 2.5.8; inline links in text are exempt). The smallest button in the default preset
   is exactly 24px high; do not go below it.
-- `--line-2` is the control border and must meet 3:1 (WCAG 1.4.11) where the border is what shows the
-  control's edge; `--line` is decorative only and is never the only boundary of a control.
+- `--line-strong` is the control border and must meet 3:1 (WCAG 1.4.11) where the border
+  is what shows the control's edge; `--line` and `--line-2` are decorative dividers and are
+  never the only boundary of a control.
 
 ## 8. Page patterns (安静的页面)
 

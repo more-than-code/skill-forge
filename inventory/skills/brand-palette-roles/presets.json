@@ -1,0 +1,62 @@
+{
+  "default": "default",
+  "fonts": {
+    "hei": { "zh": "黑体", "kind": "sans", "css": "\"Inter\", \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif", "pptx": "Microsoft YaHei" },
+    "song": { "zh": "宋体", "kind": "serif", "css": "\"Songti SC\", \"Noto Serif SC\", SimSun, serif", "pptx": "SimSun" },
+    "kai": { "zh": "楷体", "kind": "script", "css": "\"Kaiti SC\", STKaiti, KaiTi, serif", "pptx": "KaiTi" }
+  },
+  "presets": [
+    {
+      "key": "default", "name": "Default", "zh": "默认", "look": "light", "font": "hei",
+      "seeds": { "primary": "#3A6DF0", "secondary": "#648EF7", "accent": "#E86A2B" }
+    },
+    {
+      "key": "future_tech", "name": "Future tech", "zh": "未来科技", "look": "dark", "font": "hei",
+      "seeds": { "primary": "#4C7DFF", "secondary": "#98B6FF", "accent": "#4C7DFF", "background": "#0F131C" },
+      "fg": "#ECEAE5", "masterBackground": "aurora-mesh", "cover": "gradient",
+      "imagePrompt": "深邃空间感、精密光影线条、克制几何栅格、现代无衬线大标题、数据与科技秩序感"
+    },
+    {
+      "key": "cinematic", "name": "Cinematic", "zh": "电影质感", "look": "dark", "font": "hei",
+      "seeds": { "primary": "#E86A2B", "secondary": "#F2B880", "accent": "#E86A2B", "background": "#15100E" },
+      "fg": "#F3EFEA", "masterBackground": "architectural-frame", "cover": "gradient",
+      "imagePrompt": "暖橙铜色光影渲染、高对比电影宽画幅构图、暗部微颗粒质感、情绪张力强"
+    },
+    {
+      "key": "luxury_minimal", "name": "Luxury minimal", "zh": "高级极简", "look": "light", "font": "song",
+      "seeds": { "primary": "#7D6A52", "secondary": "#C7B8A1", "accent": "#7D6A52", "background": "#F7F6F2" },
+      "fg": "#22211F", "masterBackground": "paper-grain", "cover": "solid",
+      "imagePrompt": "建筑感大留白、精细 1px 线条分隔、低饱和自然纸色调、少即是多的高级商业气质"
+    },
+    {
+      "key": "editorial", "name": "Editorial", "zh": "现代编辑设计", "look": "light", "font": "song",
+      "seeds": { "primary": "#C83E2B", "secondary": "#E8A598", "accent": "#C83E2B", "background": "#F7F6F2" },
+      "fg": "#1F1F1D", "masterBackground": "swiss-blueprint", "cover": "solid",
+      "imagePrompt": "瑞士 12 栏网格系统、粗细字重对比、鲜明眉标页脚与准星细节"
+    },
+    {
+      "key": "spatial_3d", "name": "3D visual", "zh": "3D 视觉", "look": "dark", "font": "hei",
+      "seeds": { "primary": "#7B66FF", "secondary": "#C5BBFF", "accent": "#7B66FF", "background": "#14161D" },
+      "fg": "#EAE9E4", "masterBackground": "aurora-mesh", "cover": "abstract",
+      "imagePrompt": "立体几何浮雕、哑光陶瓷与金属微光泽材质、柔和三维光影空间、富有产品雕塑感"
+    },
+    {
+      "key": "commercial_photo", "name": "Commercial photo", "zh": "品牌商业摄影", "look": "light", "font": "hei",
+      "seeds": { "primary": "#2E6F5E", "secondary": "#8FC1B3", "accent": "#2E6F5E", "background": "#F4F1EB" },
+      "fg": "#24221F", "masterBackground": "architectural-frame", "cover": "solid",
+      "imagePrompt": "高清商业人文与场景摄影主导、真实肌肤与产品质感、干净通透自然日光影调"
+    },
+    {
+      "key": "abstract_art", "name": "Abstract art", "zh": "抽象艺术", "look": "dark", "font": "hei",
+      "seeds": { "primary": "#D85E8F", "secondary": "#F2BED3", "accent": "#D85E8F", "background": "#1A1320" },
+      "fg": "#F2EEF5", "masterBackground": "aurora-mesh", "cover": "abstract",
+      "imagePrompt": "大胆流动抽象色块、雕塑感有机曲线、画廊级艺术构图、富有先锋创意识别度"
+    },
+    {
+      "key": "glass_neo", "name": "Glass", "zh": "玻璃质感", "look": "dark", "font": "hei",
+      "seeds": { "primary": "#38B2AC", "secondary": "#A7E6E2", "accent": "#38B2AC", "background": "#11161F" },
+      "fg": "#ECEFF4", "masterBackground": "aurora-mesh", "cover": "gradient",
+      "imagePrompt": "半透明磨砂玻璃面板、细腻边缘高光、柔和景深背景晕染、现代科技 SaaS 质感"
+    }
+  ]
+}

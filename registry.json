@@ -620,6 +620,21 @@
         "marketing",
         "site"
       ]
+    },
+    {
+      "type": "skill",
+      "name": "brand-palette-roles",
+      "version": "0.1.0",
+      "scope": "custom",
+      "path": "inventory/skills/brand-palette-roles",
+      "installable": true,
+      "tags": [
+        "design",
+        "color",
+        "brand",
+        "decks",
+        "accessibility"
+      ]
     }
   ],
   "managedAgents": [

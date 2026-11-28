@@ -52,6 +52,21 @@
         "SKILL.md": "sha256-1Gtuhm5xLMfpfNJtvRtzQTvNmPmS7RuZAKgVk7mF56g="
       }
     },
+    "inventory/skills/brand-palette-roles": {
+      "name": "brand-palette-roles",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-TH0uwdlIESfH5cZl/tgqUY4g3K+C+0WA7jokt293v/c=",
+      "files": {
+        "presets.json": "sha256-pRjxdrLAxb4uwejobre467oNYA4pnhXl/kCO5vhYj3Q=",
+        "scripts/color.mjs": "sha256-PEmLrFtiJQUaPqNMsL8TZQXd8kqMVxZZi5eQna6J1TI=",
+        "scripts/contrast.mjs": "sha256-wFxUZ7SvJLs5yBzmTNK4rXKPdvY4T0cP3yiFgDh0VTw=",
+        "scripts/palette.mjs": "sha256-y+RuOFGboACSAzlQ79I1Tlh9vqA3ayy/Hw9eXCxsFp8=",
+        "SKILL.md": "sha256-GXPiXxvLrF6GVr5OZZUM43i32EsViP5xdRzSVy3s0wY="
+      }
+    },
     "inventory/skills/claude-project-steward": {
       "name": "claude-project-steward",
       "version": "0.3.0",

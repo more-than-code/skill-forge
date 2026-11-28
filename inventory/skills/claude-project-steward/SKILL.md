@@ -1,6 +1,6 @@
 ---
 name: claude-project-steward
-description: Set up, check and repair how a Claude Project's threads get their instructions, skills and subagents from Skill Forge — the cloud environment's setup script, the topic line, the Project instructions and each repository's CLAUDE.md/AGENTS.md. Activate when the owner asks to set up Skill Forge for a Project, to check a Project's setup or context, why threads miss rules or skills, or why rules load twice; also when a thread notices its workflow rules, skills or subagents missing or duplicated.
+description: Set up, check and repair how a Claude Project's threads get their instructions, skills and subagents from Skill Forge — the cloud environment's setup script, the topic line, the Project instructions and each repository's CLAUDE.md/AGENTS.md. Activate when the owner asks to set up Skill Forge for a Project, to check a Project's setup or context, why threads miss rules or skills, or why rules load twice; also when a thread notices its workflow rules, skills or subagents missing or duplicated, or when a local session finds a repo's declared skills missing.
 ---
 
 # Claude Project steward
@@ -203,6 +203,13 @@ One PR per repo, into the base the Project instructions name, on your own branch
   `D-skill-workstation-only`) keeps its copy until that is resolved. Say in the PR that a
   workstation checkout runs `skf sync` once after pulling it.
 
+- a repo whose collaborators use local sessions (not threads) gets, in the same PR, the
+  SessionStart hook and the one `AGENTS.md` line that section 5 relies on: run
+  `node ~/.claude/skill-forge/skf-cloud.mjs ensure --write-hook --repo <repo folder>`, commit the
+  `.claude/settings.json` it writes, and paste the line it prints into `AGENTS.md` as is (it pins the environment's `SKF_REF`, and refuses
+  a commit not on Skill Forge's main). Point a
+  repo's instruction line only at this skill, never at another skill or a repo script.
+
 Never edit a `skill-forge.lock.json` by hand.
 
 When a release flow means fixes reach the default branch only at release, say which findings
@@ -215,3 +222,33 @@ Tell the owner to start a **new** thread (after pasting or merging) and run step
 Done when doctor shows no issues and the thread reports one rules file, each skill name once,
 the subagents present, and the PR base named (in the Project instructions, or for a one-repo
 Project in that repo's instructions).
+
+## 5. Local sessions: install a repo's declared skills
+
+Only where `CLAUDE_CODE_REMOTE` is not `true` (a local Claude Code session, any OS). In a thread
+the environment's `install` and `install --top-up` install skills; there `ensure` is used only
+for `--write-hook` (section 3).
+
+The repo's SessionStart hook usually did it already, before you read anything. It runs a cached
+copy of the installer, `~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs`, which it fetched once
+(checked to be on Skill Forge's main and against the sha256 in the hook). Below, `SKF` means
+`node ~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs` with the sha from that file name (it
+takes its pin from its own name). When that file is not there, use the command in the repo's
+`AGENTS.md` line instead and put the arguments after ` -- ` (for example `node -e '…' -- --check --json`).
+
+1. Run discovery first, from the repo root: `SKF ensure --check --json`. It lists every copy of
+   each declared skill: `repo`, `parent` (a folder above the repo) or `user`
+   (`~/.claude/skills`), its version, which copy `wins` (a user copy always does) and
+   `duplicate`s. Exit 1 with valid JSON is normal: it means something is missing, incomplete
+   or older. Tell the user what is already installed and where, in a few sentences.
+2. Per `status`: `ok`, `newer` (kept, even past the range's upper bound) and `unknown` (a copy
+   no installer recorded; kept) need nothing. Never install a second copy of a skill
+   discovery found. A `parent`-only copy loads only in sessions started in that folder: say so.
+3. `older`: say which copy, its version, the range, and that it wins. Offer to upgrade it where
+   it is; on the user's yes run `SKF ensure --upgrade <name>`. It refuses a copy that Skill
+   Forge's installer did not write, an edited one, or a version outside another range it can
+   see; pass its reason on.
+4. `missing` or `incomplete`: run `SKF ensure` and report its one line. The skills load in the
+   same session; if one does not show up, ask the user to run `/reload-skills`.
+5. A repo whose `.claude/skills` is a symlink is managed by `skf sync` (`managedBy: "skf sync"`):
+   `ensure` leaves it alone.

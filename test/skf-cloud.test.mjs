@@ -19,6 +19,10 @@ const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(REPO, 'bin', 'cli.js');
 const CLOUD = path.join(REPO, 'bin', 'skf-cloud.mjs');
 const REF = 'a'.repeat(40);
+// The exact hook command --write-hook writes, from the script's own function (imported without running it).
+process.env.SKF_CLOUD_NO_MAIN = '1';
+const { bootstrapCommand } = await import(CLOUD);
+delete process.env.SKF_CLOUD_NO_MAIN;
 const CORE = '# Cloud rules\n\nUse `{{tool}}`.\n';
 const CLAUDE_BLOCK = '## Claude\n\nClaude notes.\n';
 const REVIEWER = '---\nname: reviewer\ndescription: Review.\n---\nReview.\n';
@@ -1415,4 +1419,39 @@ test('every default skill is an installable cloud skill in this repository\'s re
     assert.notEqual(skill.installable, false, `${name} is installable`);
     assert.ok(!skill.workstationOnly && !(skill.tags || []).includes('workstation-only'), `${name} is not workstation-only`);
   }
+});
+
+test('install --top-up checks the disk: a repo skill whose folder was deleted is added again', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await writeFiles(reposDir, { 'one/.git/HEAD': 'x\n', 'one/skill-forge.json': manifest({ beta: '^0.1.0' }) });
+  await install(mirror, homeDir, { ...DECL, SKF_SKILLS: '', SKF_REPOS_DIR: reposDir });
+  await fs.rm(path.join(homeDir, '.claude/skills/beta'), { recursive: true });
+  const env = { ...process.env, HOME: homeDir, SKF_REPOS_DIR: reposDir, SKF_BASE: mirror.base };
+  const { stdout } = await run('node', [CLOUD, 'install', '--top-up'], { env });
+  assert.match(stdout, /added: beta/);
+  assert.equal(await read(path.join(homeDir, '.claude/skills/beta/SKILL.md')), SKILL_B);
+});
+
+test('doctor: a settings file holding only the ensure hook is not reported; a hook pinned off SKF_REF is a note', async () => {
+  const mirror = await registryMirror();
+  const homeDir = await tempDir('skf-cloud-home-');
+  const reposDir = await tempDir('skf-cloud-repos-');
+  await install(mirror, homeDir, DECL);
+  const hookSettings = (ref) => JSON.stringify({ hooks: { SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command: bootstrapCommand(ref, 'e'.repeat(64), true) }] }] } });
+  await writeFiles(reposDir, {
+    'pinned/.git/HEAD': 'x\n', 'pinned/AGENTS.md': '# pinned\n', 'pinned/CLAUDE.md': '@AGENTS.md\n', 'pinned/skill-forge.json': manifest({}),
+    'pinned/.claude/settings.json': hookSettings(REF),
+    'stale/.git/HEAD': 'x\n', 'stale/AGENTS.md': '# stale\n', 'stale/CLAUDE.md': '@AGENTS.md\n', 'stale/skill-forge.json': manifest({}),
+    'stale/.claude/settings.json': hookSettings('d'.repeat(40)),
+    'mixed/.git/HEAD': 'x\n', 'mixed/AGENTS.md': '# mixed\n', 'mixed/CLAUDE.md': '@AGENTS.md\n', 'mixed/skill-forge.json': manifest({}),
+    'mixed/.claude/settings.json': JSON.stringify({ ...JSON.parse(hookSettings(REF)), permissions: {} })
+  });
+  const report = await doctor(homeDir, reposDir);
+  assert.deepEqual(byId(report, 'D-repo-settings-ignored').map((entry) => entry.evidence.split(' ')[0]), ['mixed']);
+  const pins = byId(report, 'D-repo-local-hook-pin');
+  assert.deepEqual(pins.map((entry) => entry.evidence.split(' ')[0]), ["stale's"]);
+  assert.equal(pins[0].severity, 'note');
+  assert.match(pins[0].fix, /ensure --write-hook/);
 });

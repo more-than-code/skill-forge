@@ -261,6 +261,17 @@
         "SKILL.md": "sha256-cBO4AHpiJeQ6YpF7RkAaV5L9FSZv8KN4cpPcirveqis="
       }
     },
+    "inventory/skills/landing-page": {
+      "name": "landing-page",
+      "version": "0.1.0",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-FAuunvW7SPfVEv0L3Ax+L+kePcgTSF4hwvRiNHv5FlE=",
+      "files": {
+        "SKILL.md": "sha256-EiYwBDwvIaC/A0OjxyWlD6pWzlgdo4ir60R14/laEWk="
+      }
+    },
     "inventory/skills/llm-integration": {
       "name": "llm-integration",
       "version": "0.1.0",

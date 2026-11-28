@@ -442,7 +442,7 @@ curl -fsSL "https://raw.githubusercontent.com/more-than-code/skill-forge/$SKF_RE
   prompts for the agent, as notes: check the Project instructions when `--context` was not
   given, judge each repo's instructions against what a thread can follow, and report the
   session's failing or unused connectors to the owner in one note. Unpinned remote code,
-  machine-specific lines, tracked personal files, a missing PR base branch and missing Project instructions are issues, so they fail `--check`. It also reports when the
+  machine-specific lines, tracked personal files, a missing PR base branch and missing Project instructions are issues, so they fail `--check`; with exactly one repo, missing Project instructions or a missing PR base in them are a note asking the agent to confirm the repo's own instructions name the base. It also reports when the
   environment's `SKF_REF` is behind the registry's
   `main` (`--offline` skips that; with the default block, re-saving the setup script fixes it), and
   lists the registry skills at `SKF_REF` that nothing installs and no repo declares, keeps

@@ -104,9 +104,9 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-GWpVn7s2Lf8XvK3NvhQUQ8m1AdfBsx+Cfu/EYapfwHY=",
+      "integrity": "sha256-RTeeXwQADUi8x/Ogyf771PX7AJz0jGfOnJx24BdZLLA=",
       "files": {
-        "SKILL.md": "sha256-Q504FK0q6Xa2I6Ygw678fHPQEDhK83Q7903LTHyFhK8="
+        "SKILL.md": "sha256-lOmoJcrRDSXZQ8O3svfu3FMZ4UTpo9kIIZGAPxAdKk4="
       }
     },
     "inventory/skills/data-migration": {

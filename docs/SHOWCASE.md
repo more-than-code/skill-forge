@@ -31,7 +31,7 @@ folder holds no other files. The Site copies showcases when its catalog snapshot
 | `workflow` | 2 to 6 steps (at most 200 characters each), in order, as the skill's own text lays them out |
 | `inAction` | 1 to 6 items, each with a `caption` (at most 300 characters), a `source` (at most 200: what was run, on which commit, and the date) and exactly one of: `image` (`file`, `alt`), `excerpt` (at most 1500 characters, newlines kept: the tool's output as printed, or say in the caption that it is a summary) or `swatches` (`name` of at most 10 characters, `hex` as `#RRGGBB`) |
 
-All text is shown as plain text: Markdown, HTML and links appear literally, so leave them out. The Site draws the diagram and swatches itself with its
+All text is in English (the Site shows no CJK characters; `validate` refuses them) and is shown as plain text: Markdown, HTML and links appear literally, so leave them out. The Site draws the diagram and swatches itself with its
 own design tokens, so a showcase holds no SVG, CSS or script. SVG text does not wrap, which is why
 the box and swatch lengths are capped. Images must be real PNG, JPEG or WebP files, not links.
 

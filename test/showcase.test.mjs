@@ -108,6 +108,7 @@ test('lengths that would overflow the Site layout and bidi controls are errors',
   data.howItWorks.stages[0].lines = ['y'.repeat(LIMITS.stageLine + 1)];
   data.inAction[2].swatches[0].name = 'z'.repeat(LIMITS.swatchName + 1);
   data.inAction[0].caption = 'reads \u202Ebackwards';
+  data.workflow[0] = '收集 the seeds';
   data.howItWorks.stages[1].accent = 'yes';
   const many = valid();
   many.howItWorks.stages = Array.from({ length: 5 }, (_, i) => ({ name: `S${i}`, lines: ['x'], accent: true }));
@@ -119,7 +120,7 @@ test('lengths that would overflow the Site layout and bidi controls are errors',
   assert.ok(manyErrors.some((e) => /more than one accent/.test(e)));
   const errors = [];
   checkShowcaseData(data, 'showcase/x', errors);
-  for (const pattern of [/stages\[0\].name is longer/, /lines\[0\] is longer/, /swatches\[0\].name is longer/, /inAction\[0\].caption must be/, /accent must be true or false/]) {
+  for (const pattern of [/stages\[0\].name is longer/, /lines\[0\] is longer/, /swatches\[0\].name is longer/, /inAction\[0\].caption must be/, /workflow\[0\] must be in English/, /accent must be true or false/]) {
     assert.ok(errors.some((e) => pattern.test(e)), `expected ${pattern} in ${errors.join('; ')}`);
   }
 });

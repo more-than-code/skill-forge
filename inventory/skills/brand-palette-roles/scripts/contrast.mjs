@@ -18,7 +18,7 @@ export function checkPair(text, background) {
   const abs = Math.abs(lc);
   return {
     fg, bg,
-    wcag: Number(ratio.toFixed(2)),
+    wcag: Math.floor(ratio * 100) / 100, // floored: WCAG never rounds a ratio up to a threshold
     aa: ratio >= 4.5, aaLarge: ratio >= 3, aaa: ratio >= 7, aaaLarge: ratio >= 4.5, nonText: ratio >= 3,
     apca: Number(lc.toFixed(1)),
     // APCA readability bands (|Lc|): 90 preferred body, 75 body, 60 content, 45 headlines, 30 non-text.

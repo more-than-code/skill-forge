@@ -58,13 +58,13 @@
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-TH0uwdlIESfH5cZl/tgqUY4g3K+C+0WA7jokt293v/c=",
+      "integrity": "sha256-TNxRVUyN+tRw5Cm11jKF4rSfLw+j8CgFSKoJL4XGR0o=",
       "files": {
         "presets.json": "sha256-pRjxdrLAxb4uwejobre467oNYA4pnhXl/kCO5vhYj3Q=",
-        "scripts/color.mjs": "sha256-PEmLrFtiJQUaPqNMsL8TZQXd8kqMVxZZi5eQna6J1TI=",
-        "scripts/contrast.mjs": "sha256-wFxUZ7SvJLs5yBzmTNK4rXKPdvY4T0cP3yiFgDh0VTw=",
-        "scripts/palette.mjs": "sha256-y+RuOFGboACSAzlQ79I1Tlh9vqA3ayy/Hw9eXCxsFp8=",
-        "SKILL.md": "sha256-GXPiXxvLrF6GVr5OZZUM43i32EsViP5xdRzSVy3s0wY="
+        "scripts/color.mjs": "sha256-U/7TtXplYGNnnC67vKUrLbWJwYYdPJOZUVqMuImtUcY=",
+        "scripts/contrast.mjs": "sha256-cvkwVPsyPgDj+tqp5rkA6ihWRspc7yxjxCWg7HjcWQE=",
+        "scripts/palette.mjs": "sha256-8uYgd1zC7GU9Kj2pnM8CzOeCHD1I4dD25Jb0VEwr/xE=",
+        "SKILL.md": "sha256-VLzl8u1jlvmz7cokH9kxONZDE6hW5RvbHu1F3nfp5aM="
       }
     },
     "inventory/skills/claude-project-steward": {

@@ -30,6 +30,8 @@ const toLinear = (c) => {
   return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
 };
 const fromLinear = (l) => 255 * (l <= 0.0031308 ? 12.92 * l : 1.055 * l ** (1 / 2.4) - 0.055);
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const linToHex = (lin) => toHex(lin.map((v) => fromLinear(clamp01(v))));
 
 // WCAG 2.2 relative luminance and contrast ratio.
 export function luminance(hex) {
@@ -99,7 +101,7 @@ const inGamut = (lin) => lin.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
 
 // OKLCH to hex; out-of-gamut colours keep L and h and lose chroma until they fit.
 export function fromOklch(L, C, h) {
-  const Lc = Math.min(1, Math.max(0, L));
+  const Lc = clamp01(L);
   const rad = (h * Math.PI) / 180;
   const lin = (c) => oklabToLin([Lc, c * Math.cos(rad), c * Math.sin(rad)]);
   let c = Math.max(0, C);
@@ -113,7 +115,7 @@ export function fromOklch(L, C, h) {
     }
     c = lo;
   }
-  return toHex(lin(c).map((v) => fromLinear(Math.min(1, Math.max(0, v)))));
+  return linToHex(lin(c));
 }
 
 // Mix a toward b by t (0 = a, 1 = b) in OKLab.
@@ -121,7 +123,7 @@ export function mix(a, b, t) {
   const A = oklab(a);
   const B = oklab(b);
   const lin = oklabToLin(A.map((v, i) => v + (B[i] - v) * t));
-  return toHex(lin.map((v) => fromLinear(Math.min(1, Math.max(0, v)))));
+  return linToHex(lin);
 }
 
 // Euclidean distance in OKLab (about 0.02 is a just-noticeable difference).
@@ -156,7 +158,7 @@ export function simulateCvd(hex, type) {
   if (!M) throw new Error(`unknown colour-vision deficiency: ${type}`);
   const lin = parseHex(hex).map(toLinear);
   const out = M.map((row) => row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]);
-  return toHex(out.map((v) => fromLinear(Math.min(1, Math.max(0, v)))));
+  return linToHex(out);
 }
 
 // Smallest OKLab distance between a and b under normal vision and each simulated deficiency.

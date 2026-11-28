@@ -263,13 +263,13 @@
     },
     "inventory/skills/landing-page": {
       "name": "landing-page",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-5c1IjCAPySR/2qrG59oot/NVo1KYVH3e8WScTyCBY0E=",
+      "integrity": "sha256-s/TSX26v4RDhRXBPMQfYh8zW0myv2KSmwAi/EhH7FbY=",
       "files": {
-        "SKILL.md": "sha256-wPI8B+zj1wf0ggVZEYCfVMamXHuoOSMHcJNhiIWLlD4="
+        "SKILL.md": "sha256-R1jwYZlQi4g62j6z4Vm2EfQbOe7qZ3Jg47/gFq4h1m8="
       }
     },
     "inventory/skills/llm-integration": {
@@ -512,15 +512,30 @@
         "SKILL.md": "sha256-5EQq1VxIMOIKAJjTVMwsw4yuGaemzno6RWAiA1tfp7U="
       }
     },
-    "inventory/skills/ui-portability-baseline": {
-      "name": "ui-portability-baseline",
-      "version": "0.2.0",
+    "inventory/skills/ui-design-tokens": {
+      "name": "ui-design-tokens",
+      "version": "0.1.0",
       "type": "skill",
       "scope": "custom",
       "installable": true,
-      "integrity": "sha256-dL2aKMurLJySGa4oU8xO+UymCQCfIqlz/5hKTyMKzwc=",
+      "integrity": "sha256-2LUbY9DlpmO/nUtw3kJ1SpGzkAq0op5h4HhaF4t7NdM=",
       "files": {
-        "SKILL.md": "sha256-AIJJpqv2EtBYqVcUNqCtlsFdxvGaNvJZFo9DiiPp6pU="
+        "scripts/color.mjs": "sha256-uxf2ROZnQ5E1Ib9ugXolJ3NrfB0RsS3OQQ0VgdsEzmc=",
+        "scripts/tokens.mjs": "sha256-2RTkW+PS/kSEFeSIUOOGrQqaLZoDmmJuE975L46hdtI=",
+        "SKILL.md": "sha256-hLN25C4G6QH+lT4q21EAz5rvJLOjc12WKcTZ+uD0Ub8=",
+        "tokens.css": "sha256-44oTn9ZZkvmiU15xbu+5o0mBM6tRU0H/wfp4sgc4Ls8=",
+        "tokens.json": "sha256-a9lqpUtfV2FXv/XABgMvFmmZmlQ35sAQBhs9ZmtcyAI="
+      }
+    },
+    "inventory/skills/ui-portability-baseline": {
+      "name": "ui-portability-baseline",
+      "version": "0.2.1",
+      "type": "skill",
+      "scope": "custom",
+      "installable": true,
+      "integrity": "sha256-udmhRv/DqlgQ/2/F8+fCT4ibZdbeS207Yofh9qkS6Wc=",
+      "files": {
+        "SKILL.md": "sha256-AXrKh3XV5zUcnGQwBtdAVssMxB2grAcF3ihMTTeIsYo="
       }
     },
     "inventory/skills/umbrella-workspace": {

@@ -1,0 +1,121 @@
+/* Generated from tokens.json by scripts/tokens.mjs css. Do not edit by hand. */
+/* Not custom properties (use the literal values): breakpoint.sm = 640px, breakpoint.md = 960px, breakpoint.lg = 1280px */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#ededeb, #0e0e0f);
+  --plane: light-dark(#f0f0ee, #111112);
+  --surface: light-dark(#f7f7f5, #151517);
+  --surface-2: light-dark(#efefec, #1b1b1e);
+  --surface-3: light-dark(#e6e6e2, #242427);
+  --ink: light-dark(#262624, #e4e3df);
+  --ink-2: light-dark(#55544f, #b5b4af);
+  --ink-3: light-dark(#65645f, #a5a49e);
+  --ink-disabled: light-dark(#9b9a95, #6b6a66);
+  --line: light-dark(rgb(30 30 28 / 0.08), rgb(255 255 255 / 0.07));
+  --line-2: light-dark(rgb(30 30 28 / 0.14), rgb(255 255 255 / 0.12));
+  --line-strong: light-dark(#888782, #7e7d77);
+  --edge-color: light-dark(rgb(30 30 28 / 0.09), rgb(255 255 255 / 0.08));
+  --ring: light-dark(rgb(38 38 36 / 0.08), rgb(255 255 255 / 0.08));
+  --focus: var(--accent-ink);
+  --accent: light-dark(#3263e0, #5b8cff);
+  --accent-ink: light-dark(#2350c4, #a3bdff);
+  --accent-wash: light-dark(#edf2ff, #161f36);
+  --on-fill: var(--surface);
+  --series-1: light-dark(#3d6fd4, #4f80dc);
+  --series-2: light-dark(#cb6e45, #d07650);
+  --series-3: light-dark(#299874, #2fa07c);
+  --series-4: light-dark(#a98127, #b08a30);
+  --series-5: light-dark(#c66a91, #cc6f97);
+  --series-6: light-dark(#6f5fd0, #7d6fdc);
+  --good: light-dark(#399868, #5cb889);
+  --good-wash: light-dark(#eaf5ef, #15241c);
+  --warning: light-dark(#aa802c, #d4ae5e);
+  --warning-wash: light-dark(#faf3e3, #2a2416);
+  --serious: light-dark(#bc7652, #d49673);
+  --serious-wash: light-dark(#fbefe8, #2b1d16);
+  --critical: light-dark(#c8504f, #df7474);
+  --critical-wash: light-dark(#fbecec, #2c1819);
+  --shadow-near: light-dark(rgb(16 24 40 / 0.05), rgb(0 0 0 / 0.5));
+  --shadow-far: light-dark(rgb(16 24 40 / 0.06), rgb(0 0 0 / 0.45));
+  --font-sans: "App Sans", "App Sans CJK", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans", "Noto Sans SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Noto Sans Mono", monospace;
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-bold: 600;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 26px;
+  --fs-4xl: 34px;
+  --fs-5xl: 46px;
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+  --lh-cjk: 1.75;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --t-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --shadow: 0px 1px 2px 0px var(--shadow-near), 0px 8px 24px 0px var(--shadow-far);
+  --shadow-sm: 0px 1px 2px 0px var(--shadow-near);
+  --edge: inset 0px 0px 0px 1px var(--edge-color);
+}
+
+/* Theme: no data-theme follows the system; data-theme forces one mode. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Suppress transitions for the frame in which the theme changes. */
+html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: none !important;
+}
+
+/* Motion: the OS preference wins unless the user turned motion on; data-motion="off" always wins. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="on"]) { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
+  :root:not([data-motion="on"]) *, :root:not([data-motion="on"]) *::before, :root:not([data-motion="on"]) *::after {
+    animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+  }
+  :root:not([data-motion="on"])::view-transition-group(*),
+  :root:not([data-motion="on"])::view-transition-old(*),
+  :root:not([data-motion="on"])::view-transition-new(*) { animation: none !important; }
+}
+:root[data-motion="off"] { --t-fast: 0ms; --t-med: 0ms; --t-slow: 0ms; }
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
+  animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+}
+:root[data-motion="off"]::view-transition-group(*),
+:root[data-motion="off"]::view-transition-old(*),
+:root[data-motion="off"]::view-transition-new(*) { animation: none !important; }
+
+/* Forced colours (Windows high contrast) drop box-shadow, so --edge, --shadow and --ring vanish.
+   Map the focus indicator and control borders to system colours; leave fills to the browser,
+   which draws its own backplate behind text. */
+@media (forced-colors: active) {
+  :root { --focus: Highlight; --line-strong: CanvasText; }
+}
+
+/* Font aliases: local faces only, one per weight token, so no weight is synthesised. */
+@font-face { font-family: "App Sans"; src: local("Segoe UI Light"), local("SegoeUI-Light"); font-weight: 100 349; }
+@font-face { font-family: "App Sans"; src: local("Segoe UI"), local("SegoeUI"); font-weight: 350 549; }
+@font-face { font-family: "App Sans"; src: local("Segoe UI Bold"), local("SegoeUI-Bold"); font-weight: 550 900; }
+@font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Light"), local("MicrosoftYaHeiLight"), local("PingFangSC-Light"); font-weight: 100 349; }
+@font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei"), local("MicrosoftYaHei"), local("PingFangSC-Regular"); font-weight: 350 549; }
+@font-face { font-family: "App Sans CJK"; src: local("Microsoft YaHei Bold"), local("MicrosoftYaHei-Bold"), local("PingFangSC-Semibold"); font-weight: 550 900; }

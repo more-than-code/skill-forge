@@ -39,12 +39,15 @@ const exists = (file) => fs.lstat(file).then(() => true, () => false);
 const skillText = (name, version) => `---\nname: ${name}\ndescription: ${name}.\n---\n${name} ${version}.\n`;
 
 /** A locked fixture registry at each ref: { [ref]: { name: version } }. */
-async function mirror(refs = { [REF]: { alpha: '0.2.1', beta: '0.1.0', 'claude-project-steward': '0.3.0' } }) {
+async function mirror(refs = { [REF]: { alpha: '0.2.1', beta: '0.1.0', 'claude-project-steward': '0.3.0' } }, extras = {}) {
   const base = await tempDir('skf-ensure-base-');
   for (const [ref, versions] of Object.entries(refs)) {
     const root = await tempDir('skf-ensure-reg-');
     const files = {};
-    for (const [name, version] of Object.entries(versions)) files[`inventory/skills/${name}/SKILL.md`] = skillText(name, version);
+    for (const [name, version] of Object.entries(versions)) {
+      files[`inventory/skills/${name}/SKILL.md`] = skillText(name, version);
+      for (const [rel, content] of Object.entries(extras[name] ?? {})) files[`inventory/skills/${name}/${rel}`] = `${content} ${version}\n`;
+    }
     await writeFiles(root, files);
     const registry = {
       name: 'skill-forge-test', version: '0.0.0', schemaVersion: 1,
@@ -199,7 +202,7 @@ test('--upgrade upgrades an older copy in place when the pinned version fits, an
   await fs.writeFile(path.join(edited.homeDir, '.claude/skills/alpha/SKILL.md'), 'my notes\n');
   const keptResult = await ensure(edited, base, ['--upgrade', 'alpha']);
   assert.equal(keptResult.code, 1);
-  assert.match(keptResult.stdout, /alpha not upgraded \(a file in it was edited since install, so it was kept\)/);
+  assert.match(keptResult.stdout, /not upgraded: SKILL\.md in ~\/\.claude\/skills\/alpha changed since install/);
   assert.equal(await read(path.join(edited.homeDir, '.claude/skills/alpha/SKILL.md')), 'my notes\n');
 
   const other = await checkout({ alpha: '^0.2.0' });
@@ -498,7 +501,9 @@ test('--write-hook: creates the file, re-pins in place, refuses bad settings, an
   const repo = path.join(reposDir, 'app');
   await writeFiles(repo, { '.git/HEAD': 'x\n', 'AGENTS.md': '# app\n', 'CLAUDE.md': '@AGENTS.md\n', 'skill-forge.json': '{"schemaVersion":2,"skills":{"dependencies":{}}}' });
   const printed = await ensure({ ...fx, repo }, base, ['--write-hook', '--ref', OLD_REF, '--repo', repo]);
-  const line = printed.stdout.split('\n').find((text) => text.startsWith('Skills: '));
+  // The line and its fenced command, as printed (inline code would break on the command's backticks).
+  const line = printed.stdout.slice(printed.stdout.indexOf('Skills: ')).trimEnd();
+  assert.match(line, /run this from the repo root:\n\n```sh\nnode -e '[^\n]+'\n```$/);
   await fs.writeFile(path.join(repo, 'AGENTS.md'), `# app\n\n${line}\n`);
   await writeFiles(fx.homeDir, { '.claude/skill-forge/state.json': JSON.stringify({ version: 2, ref: REF, files: {}, versions: {} }) });
   const { stdout } = await run('node', [CLOUD, 'doctor', '--repos-dir', reposDir, '--json', '--offline'], { env: { ...process.env, HOME: fx.homeDir } });
@@ -514,6 +519,8 @@ test('flags: a bad --ref or a flag with no value is a usage error; a malformed m
   assert.equal((await ensure(fx, base, ['--ref', 'abc'])).code, 2);
   assert.match((await ensure(fx, base, ['--ref'])).stdout, /--ref needs a value/);
   assert.equal((await ensure(fx, base, ['--repo', '--check'])).code, 2);
+  const usage = JSON.parse((await ensure(fx, base, ['--check', '--json', '--ref', 'abc'])).stdout);
+  assert.deepEqual([usage.repo, usage.skills], [null, []], 'an error path keeps the report shape');
 
   const json = await ensure(fx, base, ['--check', '--json']);
   const report = JSON.parse(json.stdout);
@@ -544,4 +551,186 @@ test('a symlinked .claude/skill-forge is refused, nothing written through it', a
   assert.equal(result.code, 1);
   assert.match(result.stdout, /is a symlink/);
   assert.deepEqual(await fs.readdir(elsewhere), []);
+});
+
+/** Breaks one file of `name` at `ref` in a mirror after locking: its bytes no longer match the lock. */
+async function breakFile(base, ref, name, rel) {
+  await fs.appendFile(path.join(base, ref, 'inventory/skills', name, rel), 'tampered\n');
+}
+
+test('a fetch failure part way writes none of that skill; a write that stopped part way is incomplete and repaired', async () => {
+  const base = await mirror({ [REF]: { alpha: '0.2.1', beta: '0.1.0' } }, { alpha: { 'a.md': 'a', 'z.md': 'z' } });
+  await breakFile(base, REF, 'alpha', 'z.md');
+  const fx = await checkout({ alpha: '^0.2.0', beta: '^0.1.0' });
+  const first = await ensure(fx, base);
+  assert.equal(first.code, 1);
+  assert.match(first.stdout, /installed beta/);
+  assert.equal(await exists(path.join(fx.repo, '.claude/skills/alpha')), false, 'no half-written alpha');
+  const check = JSON.parse((await ensure(fx, base, ['--check', '--json'])).stdout).skills;
+  assert.equal(check.find((entry) => entry.name === 'alpha').status, 'missing', 'so the next run tries again');
+
+  // Files recorded with no version (a write that stopped) are incomplete, not "unknown", and get repaired.
+  const good = await mirror({ [REF]: { alpha: '0.2.1' } }, { alpha: { 'a.md': 'a' } });
+  const partial = await checkout({ alpha: '^0.2.0' });
+  await ensure(partial, good);
+  const statePath = path.join(partial.repo, '.claude/skill-forge/state.json');
+  const state = JSON.parse(await read(statePath));
+  delete state.versions['skill:alpha'];
+  await fs.writeFile(statePath, JSON.stringify(state));
+  await fs.rm(path.join(partial.repo, '.claude/skills/alpha/a.md'));
+  assert.equal(JSON.parse((await ensure(partial, good, ['--check', '--json'])).stdout).skills[0].status, 'incomplete');
+  assert.match((await ensure(partial, good)).stdout, /installed alpha/);
+  assert.equal(await read(path.join(partial.repo, '.claude/skills/alpha/a.md')), 'a 0.2.1\n');
+  assert.equal(JSON.parse(await read(statePath)).versions['skill:alpha'], '0.2.1');
+});
+
+test('--upgrade checks every file before writing: one edited or foreign file, or one that fails to fetch, leaves the old copy whole', async () => {
+  const base = await mirror({ [REF]: { alpha: '0.2.1' }, [OLD_REF]: { alpha: '0.1.9' } }, { alpha: { 'a.md': 'a', 'z.md': 'z' } });
+  const fx = await checkout({ alpha: '^0.2.0' }, { lock: null });
+  const user = path.join(fx.homeDir, '.claude');
+  // Seed the user copy as the environment install would: files plus state, at 0.1.9.
+  const files = { 'SKILL.md': skillText('alpha', '0.1.9'), 'a.md': 'a 0.1.9\n', 'z.md': 'z 0.1.9\n' };
+  const state = { version: 2, ref: OLD_REF, files: {}, versions: { 'skill:alpha': '0.1.9' } };
+  for (const [rel, content] of Object.entries(files)) {
+    await writeFiles(user, { [`skills/alpha/${rel}`]: content });
+    state.files[path.join(user, 'skills/alpha', rel)] = `sha256-${crypto.createHash('sha256').update(content).digest('base64')}`;
+  }
+  await writeFiles(user, { 'skill-forge/state.json': JSON.stringify(state) });
+  const snapshot = async () => Promise.all(Object.keys(files).map((rel) => read(path.join(user, 'skills/alpha', rel))));
+  const before = await snapshot();
+
+  await fs.writeFile(path.join(user, 'skills/alpha/z.md'), 'my edit\n');
+  const edited = await ensure(fx, base, ['--upgrade', 'alpha', '--ref', REF]);
+  assert.equal(edited.code, 1);
+  assert.match(edited.stdout, /not upgraded: z\.md in ~\/\.claude\/skills\/alpha changed since install/);
+  assert.deepEqual(await snapshot(), [before[0], before[1], 'my edit\n'], 'SKILL.md and a.md untouched');
+
+  await fs.writeFile(path.join(user, 'skills/alpha/z.md'), files['z.md']);
+  await writeFiles(user, { 'skills/alpha/notes.md': 'mine\n' });
+  const foreign = await ensure(fx, base, ['--upgrade', 'alpha', '--ref', REF]);
+  assert.match(foreign.stdout, /not upgraded: notes\.md in/);
+  await fs.rm(path.join(user, 'skills/alpha/notes.md'));
+
+  await breakFile(base, REF, 'alpha', 'z.md');
+  const broken = await ensure(fx, base, ['--upgrade', 'alpha', '--ref', REF]);
+  assert.equal(broken.code, 1);
+  assert.match(broken.stdout, /alpha not upgraded \(.*hash mismatch/);
+  assert.deepEqual(await snapshot(), before, 'no file of the old copy changed');
+  assert.equal(JSON.parse(await read(path.join(user, 'skill-forge/state.json'))).versions['skill:alpha'], '0.1.9');
+});
+
+// --- the main-history check and the bootstrap download, against a local HTTPS server ---
+
+const hasOpenssl = await run('openssl', ['version']).then(() => true, () => false);
+
+/** A self-signed certificate for 127.0.0.1, trusted by child processes through NODE_EXTRA_CA_CERTS. */
+async function testCert() {
+  const dir = await tempDir('skf-ensure-tls-');
+  const key = path.join(dir, 'key.pem');
+  const cert = path.join(dir, 'cert.pem');
+  await run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1']);
+  return { key: await fs.readFile(key), cert: await fs.readFile(cert), certFile: cert };
+}
+
+/**
+ * Serves GitHub's compare API (`compare[ref]`: a status string, or a number for an HTTP error) and raw files
+ * from a mirror (`files[path]` overrides one; null answers 404). Returns its https base and a closer.
+ */
+async function fakeGithub(tls, mirrorBase, compare, files = {}) {
+  const https = await import('node:https');
+  const server = https.createServer({ key: tls.key, cert: tls.cert }, async (req, res) => {
+    const url = decodeURIComponent(req.url);
+    const compared = /^\/repos\/more-than-code\/skill-forge\/compare\/([0-9a-f]{40})\.\.\.main$/.exec(url);
+    if (compared) {
+      const answer = compare[compared[1]] ?? 404;
+      res.writeHead(typeof answer === 'number' ? answer : 200, { 'content-type': 'application/json' });
+      return res.end(typeof answer === 'number' ? '{}' : JSON.stringify({ status: answer }));
+    }
+    const body = url in files ? files[url] : await fs.readFile(path.join(mirrorBase, url)).catch(() => null);
+    if (body === null) {
+      res.writeHead(404);
+      return res.end();
+    }
+    res.end(body);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return { url: `https://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
+const tlsEnv = (tls, url) => ({ SKF_BASE: url, SKF_GITHUB_API: url, NODE_EXTRA_CA_CERTS: tls.certFile, HTTPS_PROXY: undefined, https_proxy: undefined, HTTP_PROXY: undefined, http_proxy: undefined, NO_PROXY: '127.0.0.1' });
+
+test('the main-history check: ahead and identical pass; diverged, behind and an HTTP error refuse the lock commit and --write-hook', { skip: !hasOpenssl && 'openssl is not installed here' }, async () => {
+  const tls = await testCert();
+  const refs = { a: 'a'.repeat(40), i: 'd'.repeat(40), d: 'e'.repeat(40), b: 'f'.repeat(40), x: '1'.repeat(40) };
+  const base = await mirror(Object.fromEntries(Object.values(refs).map((ref) => [ref, { alpha: '0.2.1' }])));
+  const server = await fakeGithub(tls, base, { [refs.a]: 'ahead', [refs.i]: 'identical', [refs.d]: 'diverged', [refs.b]: 'behind', [refs.x]: 500 });
+  try {
+    for (const [key, ok] of [['a', true], ['i', true], ['d', false], ['b', false], ['x', false]]) {
+      const fx = await checkout({ alpha: '^0.2.0' }, { lock: refs[key] });
+      const result = await ensure(fx, undefined, [], tlsEnv(tls, server.url));
+      assert.equal(await exists(path.join(fx.repo, '.claude/skills/alpha/SKILL.md')), ok, `${key}: ${result.stdout}`);
+      if (key === 'd' || key === 'b') assert.match(result.stdout, /is not in more-than-code\/skill-forge main's history/);
+      if (key === 'x') assert.match(result.stdout, /\(HTTP 500\)/);
+      const hook = await ensure(fx, undefined, ['--write-hook', '--ref', refs[key]], tlsEnv(tls, server.url));
+      assert.equal(hook.code, ok ? 0 : 1, hook.stdout);
+      assert.equal(await exists(path.join(fx.repo, '.claude/settings.json')), ok);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+test('the bootstrap: a cold cache downloads, checks main and the hash, then runs; a wrong hash or an off-main pin never runs', { skip: (!hasOpenssl && 'openssl is not installed here') || (!(await run('bash', ['--version']).then(() => true, () => false)) && 'bash is not installed here') }, async () => {
+  const tls = await testCert();
+  const off = 'e'.repeat(40);
+  const base = await mirror({ [REF]: { alpha: '0.2.1' }, [off]: { alpha: '0.2.1' } });
+  const fx = await checkout({ alpha: '^0.2.0' });
+  await ensure(fx, base, ['--write-hook', '--ref', REF]);
+  const command = JSON.parse(await read(path.join(fx.repo, '.claude/settings.json'))).hooks.SessionStart[0].hooks[0].command;
+  const cache = path.join(fx.homeDir, '.claude/skill-forge/cache', `skf-cloud-${REF}.mjs`);
+  const runWith = async (compare, files) => {
+    const server = await fakeGithub(tls, base, compare, files);
+    try {
+      const env = { ...ensureEnv(fx, base, tlsEnv(tls, server.url)) };
+      for (const [key, value] of Object.entries(env)) if (value === undefined) delete env[key];
+      return await spawnRun('bash', ['-c', command], { cwd: fx.repo, env, input: JSON.stringify({ cwd: fx.repo }) });
+    } finally {
+      await server.close();
+    }
+  };
+
+  const diverged = await runWith({ [REF]: 'diverged' });
+  assert.match(JSON.parse(diverged.stdout).systemMessage, /the pinned commit is not on skill-forge main/);
+  assert.equal(await exists(cache), false);
+
+  const httpError = await runWith({ [REF]: 'ahead' }, { [`/${REF}/bin/skf-cloud.mjs`]: null });
+  assert.equal(httpError.code, 0, 'a hook never blocks the session');
+  assert.match(JSON.parse(httpError.stdout).systemMessage, /HTTP 404/);
+  assert.equal(await exists(cache), false);
+
+  const tampered = await runWith({ [REF]: 'ahead' }, { [`/${REF}/bin/skf-cloud.mjs`]: 'console.log(`tampered`)\n' });
+  assert.doesNotMatch(tampered.stdout, /tampered"?\s*$/m);
+  assert.match(JSON.parse(tampered.stdout).systemMessage, /hash mismatch/);
+  assert.equal(await exists(cache), false, 'nothing cached');
+
+  const good = await runWith({ [REF]: 'identical' });
+  assert.match(JSON.parse(good.stdout).systemMessage, /installed alpha/);
+  assert.equal(crypto.createHash('sha256').update(await fs.readFile(cache)).digest('hex'), crypto.createHash('sha256').update(await fs.readFile(CLOUD)).digest('hex'), 'the cached copy is the pinned script');
+});
+
+test('path helpers compare case-folded on Windows and macOS, exactly on Linux (path.win32 and path.posix)', async () => {
+  process.env.SKF_CLOUD_NO_MAIN = '1';
+  const { isUnder, samePath } = await import(CLOUD);
+  delete process.env.SKF_CLOUD_NO_MAIN;
+  const win = path.win32;
+  assert.equal(samePath('C:\\Users\\Dana\\.claude', 'c:\\users\\dana\\.CLAUDE', win, 'win32'), true);
+  assert.equal(isUnder('c:\\users\\dana\\.claude\\skills\\alpha\\SKILL.md', 'C:\\Users\\Dana\\.claude\\skills\\alpha', win, 'win32'), true);
+  assert.equal(isUnder('C:\\Users\\Dana\\.claude\\skills\\alphabet\\SKILL.md', 'C:\\Users\\Dana\\.claude\\skills\\alpha', win, 'win32'), false, 'a sibling with the same prefix is not inside');
+  assert.equal(isUnder('D:\\repo\\.claude\\skills\\x', 'C:\\repo\\.claude\\skills', win, 'win32'), false, 'another drive');
+  assert.equal(isUnder('C:\\repo', 'C:\\repo', win, 'win32'), false, 'not strictly inside');
+  assert.equal(isUnder('C:\\repo\\..\\other\\x', 'C:\\repo', win, 'win32'), false);
+  assert.equal(samePath('/Users/Dana/app', '/users/dana/APP', path.posix, 'darwin'), true);
+  assert.equal(samePath('/home/dana/app', '/home/dana/APP', path.posix, 'linux'), false);
+  assert.equal(isUnder('/home/dana/app/.claude/skills/a', '/home/dana/app', path.posix, 'linux'), true);
+  assert.equal(isUnder('/home/dana/App/.claude', '/home/dana/app', path.posix, 'linux'), false);
 });

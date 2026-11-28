@@ -19,6 +19,10 @@ const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(REPO, 'bin', 'cli.js');
 const CLOUD = path.join(REPO, 'bin', 'skf-cloud.mjs');
 const REF = 'a'.repeat(40);
+// The exact hook command --write-hook writes, from the script's own function (imported without running it).
+process.env.SKF_CLOUD_NO_MAIN = '1';
+const { bootstrapCommand } = await import(CLOUD);
+delete process.env.SKF_CLOUD_NO_MAIN;
 const CORE = '# Cloud rules\n\nUse `{{tool}}`.\n';
 const CLAUDE_BLOCK = '## Claude\n\nClaude notes.\n';
 const REVIEWER = '---\nname: reviewer\ndescription: Review.\n---\nReview.\n';
@@ -1435,7 +1439,7 @@ test('doctor: a settings file holding only the ensure hook is not reported; a ho
   const homeDir = await tempDir('skf-cloud-home-');
   const reposDir = await tempDir('skf-cloud-repos-');
   await install(mirror, homeDir, DECL);
-  const hookSettings = (ref) => JSON.stringify({ hooks: { SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command: `node -e 'x=p.join(d,\`skf-cloud-${ref}.mjs\`)' -- --hook` }] }] } });
+  const hookSettings = (ref) => JSON.stringify({ hooks: { SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command: bootstrapCommand(ref, 'e'.repeat(64), true) }] }] } });
   await writeFiles(reposDir, {
     'pinned/.git/HEAD': 'x\n', 'pinned/AGENTS.md': '# pinned\n', 'pinned/CLAUDE.md': '@AGENTS.md\n', 'pinned/skill-forge.json': manifest({}),
     'pinned/.claude/settings.json': hookSettings(REF),

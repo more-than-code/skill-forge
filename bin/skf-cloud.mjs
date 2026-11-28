@@ -78,7 +78,18 @@ const hasCommitBan = (prose) => prose.split('\n').some((line) => REPO_COMMIT_BAN
 
 const hashBytes = (bytes) => `sha256-${crypto.createHash('sha256').update(bytes).digest('base64')}`;
 const withoutManagedBlocks = (text) => text.replace(MANAGED_BLOCK, '');
-const home = () => process.env.HOME || os.homedir();
+// Claude Code and the bootstrap one-liner both use os.homedir() ($HOME on POSIX, the profile folder on Windows).
+const home = () => os.homedir();
+// Windows and macOS file systems are case-insensitive by default, so paths compare case-folded there.
+const foldsCase = (platform) => platform === 'win32' || platform === 'darwin';
+const pathKey = (file, p, platform) => (foldsCase(platform) ? p.resolve(file).toLowerCase() : p.resolve(file));
+/** Whether two paths name the same place (case-folded on Windows and macOS). */
+const samePath = (a, b, p = path, platform = process.platform) => pathKey(a, p, platform) === pathKey(b, p, platform);
+/** Whether `child` is strictly inside `parent` (case-folded on Windows and macOS). */
+function isUnder(child, parent, p = path, platform = process.platform) {
+  const rel = p.relative(pathKey(parent, p, platform), pathKey(child, p, platform));
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel);
+}
 const userClaudeDir = () => path.join(home(), '.claude');
 // The install target of install, top-up and doctor. ensure passes its own root to the install functions.
 const claudeDir = userClaudeDir;
@@ -89,10 +100,12 @@ const logPath = () => path.join(home(), 'skf-setup.log');
 const isSafeRelative = (rel) => typeof rel === 'string' && rel !== '' && !path.isAbsolute(rel) && !/[?#%\\]/.test(rel)
   && rel.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
 const isSafeName = (name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+// A name for a log line: as is when safe, else quoted (escapes control characters) and cut short.
+const shownName = (name) => (isSafeName(name) ? name : JSON.stringify(String(name).slice(0, 80)));
 const isWorkstationOnly = (skill) => (Array.isArray(skill.tags) && skill.tags.includes('workstation-only')) || skill.workstationOnly === true;
 // An install destination we may own: a file under <target>/{rules,agents,skills}.
 const isOwnedDest = (dest, root = claudeDir()) => typeof dest === 'string' && path.isAbsolute(dest)
-  && OWNED_KINDS.some((kind) => path.resolve(dest).startsWith(path.join(root, kind) + path.sep));
+  && OWNED_KINDS.some((kind) => isUnder(dest, path.join(root, kind)));
 
 /** A regular file's JSON (no symlink, FIFO or device, at most 1 MB); null otherwise. */
 function readJsonFile(file) {
@@ -232,7 +245,7 @@ function readRepoNeeds(repos, log) {
     }
     for (const [name, range] of Object.entries(dependencies)) {
       if (!isSafeName(name) || typeof range !== 'string' || satisfiesRange('0.0.0', range) === null) {
-        log(`skipped ${repo.name} dependency ${String(name).slice(0, 80)}: bad name or range`);
+        log(`skipped ${repo.name} dependency ${shownName(name)}: bad name or range`);
         continue;
       }
       if (!needs.has(name)) needs.set(name, []);
@@ -381,7 +394,7 @@ async function planInstall(decl, previous, log, repoNeeds = new Map(), higher = 
     if (found.problem === 'workstation-only') {
       fail(`skill ${name}`, 'workstation-only; it does not belong in a cloud environment', kept);
     } else if (found.problem) {
-      fail(`skill ${String(name).slice(0, 80)}`, found.problem, kept);
+      fail(`skill ${shownName(name)}`, found.problem, kept);
     } else {
       await planSkill(found);
     }
@@ -449,7 +462,7 @@ function writeAtomic(dest, content) {
 function pruneEmptyDirs(dir, root = claudeDir()) {
   const stop = OWNED_KINDS.map((kind) => path.join(root, kind));
   let current = dir;
-  while (!stop.includes(current) && current.startsWith(root + path.sep)) {
+  while (!stop.some((dir) => samePath(dir, current)) && isUnder(current, root)) {
     if (fs.readdirSync(current).length > 0) return;
     fs.rmdirSync(current);
     current = path.dirname(current);
@@ -699,12 +712,12 @@ function repoRootOf(dir) {
 const httpsBase = (value, fallback) => (typeof value === 'string' && value.startsWith('https://') ? value.replace(/\/+$/, '') : fallback);
 
 /**
- * Whether `ref` is in the official registry's main history: true, or the reason it is not known to be.
- * A local mirror (SKF_BASE an absolute path) or another https base is the user's own choice and is not checked.
+ * Whether `ref` is in the registry's main history: true, or the reason it is not known to be. Same check as
+ * the bootstrap one-liner: GitHub's compare API, ahead or identical. Only a local mirror (SKF_BASE an absolute
+ * path, the user's own files) is not checked.
  */
 async function verifyOnMain(ref) {
-  const base = process.env.SKF_BASE || DEFAULT_BASE;
-  if (base !== DEFAULT_BASE) return true;
+  if ((process.env.SKF_BASE || DEFAULT_BASE).startsWith('/')) return true;
   const api = httpsBase(process.env.SKF_GITHUB_API, 'https://api.github.com');
   try {
     const response = await fetch(`${api}/repos/${REGISTRY_REPO}/compare/${ref}...main`, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { 'user-agent': 'skill-forge', accept: 'application/vnd.github+json' } });
@@ -744,8 +757,8 @@ function findCopies(name, startDir, repoRoot) {
   const user = userClaudeDir();
   for (let dir = path.resolve(startDir); ; dir = path.dirname(dir)) {
     const root = path.join(dir, '.claude');
-    if (root !== user && isFile(path.join(root, 'skills', name, 'SKILL.md'))) {
-      const inside = dir === repoRoot || dir.startsWith(repoRoot + path.sep);
+    if (!samePath(root, user) && isFile(path.join(root, 'skills', name, 'SKILL.md'))) {
+      const inside = samePath(dir, repoRoot) || isUnder(dir, repoRoot);
       copies.push({ level: inside ? 'repo' : 'parent', dir, root });
     }
     if (path.dirname(dir) === dir) break;
@@ -755,14 +768,18 @@ function findCopies(name, startDir, repoRoot) {
   return copies;
 }
 
-/** A copy's version and owner: a skf-cloud state file at its root, or the lock of a skf-sync layout there. */
+/**
+ * A copy's version and owner: a skf-cloud state file at its root, or the lock of a skf-sync layout there.
+ * Files recorded with no version are an install that stopped part way: owned and incomplete, so it is repaired.
+ */
 function copyVersion(name, copy) {
   const skillDir = path.join(copy.root, 'skills', name);
   const state = readState(copy.root);
-  const files = Object.keys(state?.files ?? {}).filter((dest) => dest.startsWith(skillDir + path.sep));
+  const files = Object.keys(state?.files ?? {}).filter((dest) => isUnder(dest, skillDir));
   const recorded = state?.versions?.[`skill:${name}`];
-  if (files.length > 0 && SEMVER.test(String(recorded))) {
-    return { version: recorded, owned: true, complete: files.every((dest) => fs.existsSync(dest)) };
+  if (files.length > 0) {
+    const version = SEMVER.test(String(recorded)) ? recorded : null;
+    return { version, owned: true, complete: version !== null && files.every((dest) => fs.existsSync(dest)) };
   }
   if (isLink(path.join(copy.root, 'skills'))) {
     const locked = readJsonFile(path.join(copy.dir, MANIFEST_LOCK_NAME))?.skills?.[name]?.version;
@@ -842,46 +859,75 @@ function excludePaths(repoRoot, rels) {
   return null;
 }
 
-/** The reason `root` (a .claude folder) is not safe to write, or null: no link on the way, owned by this user. */
+/**
+ * The reason `root` (a .claude folder) is not safe to write, or null. A link above it (a symlinked home or
+ * checkout) is followed; root itself and what we write below it are never links, and belong to this user.
+ */
 function unsafeRoot(root) {
-  for (const part of [path.dirname(root), root, path.join(root, 'skills'), path.join(root, 'skill-forge'), statePath(root)]) {
+  for (const part of [root, path.join(root, 'skills'), path.join(root, 'skill-forge'), statePath(root)]) {
     if (isLink(part)) return `${part} is a symlink`;
   }
-  const stat = lstatOf(path.dirname(root));
-  if (stat && typeof process.getuid === 'function' && stat.uid !== process.getuid()) return `${path.dirname(root)} belongs to another user`;
-  return null;
+  if (typeof process.getuid !== 'function') return null;
+  let owner = root;
+  try {
+    if (!fs.existsSync(root)) owner = fs.realpathSync(path.dirname(root));
+  } catch {
+    return `${path.dirname(root)} does not exist`;
+  }
+  const stat = lstatOf(owner);
+  return stat && stat.uid !== process.getuid() ? `${owner} belongs to another user` : null;
+}
+
+/** Files under <root>/skills/<name> that the installer did not write, or that changed since: an upgrade would mix them in. */
+function changedFiles(root, name) {
+  const dir = path.join(root, 'skills', name);
+  const recorded = readState(root)?.files ?? {};
+  const changed = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const file = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (!entry.isFile() || recorded[file] !== hashBytes(fs.readFileSync(file))) changed.push(path.relative(dir, file));
+    }
+  };
+  if (isFile(path.join(dir, 'SKILL.md'))) walk(dir);
+  return changed;
 }
 
 /**
- * Installs `names` into <root>/skills at `ref`, keeping everything else recorded there. A name counts as
- * installed only when every planned file now holds the planned bytes; the state records a version only
- * for those, so a partial copy is found incomplete next time. An existing state (the environment's, at
- * ~/.claude) keeps its ref, base, failures and skips.
+ * Installs `names` into <root>/skills at `ref`, keeping everything else recorded there. A skill with a file
+ * that could not be fetched is not written at all (its old copy stays). The state records a version only
+ * for a skill whose every file was written or kept, so a write that stopped part way is found incomplete
+ * and repaired next time. An existing state (the environment's, at ~/.claude) keeps its ref, base,
+ * failures and skips.
  */
 async function installInto(root, names, ref, needs, log) {
   const unsafe = unsafeRoot(root);
   if (unsafe) throw new Error(unsafe);
   const previous = readState(root);
   const raw = readJsonFile(statePath(root));
-  const dirs = names.map((name) => path.join(root, 'skills', name) + path.sep);
-  const mine = (dest) => dirs.some((dir) => dest.startsWith(dir));
+  const skillDir = (name) => path.join(root, 'skills', name);
+  const mine = (dest) => names.some((name) => isUnder(dest, skillDir(name)));
   const scoped = previous && { ...previous, files: Object.fromEntries(Object.entries(previous.files).filter(([dest]) => mine(dest))) };
   const decl = { ref, base: process.env.SKF_BASE || DEFAULT_BASE, rules: '', agents: '', skills: names.filter((name) => !needs.has(name)), projectRulesFile: '' };
   const repoNeeds = new Map(names.filter((name) => needs.has(name)).map((name) => [name, needs.get(name)]));
   const plan = await planInstall(decl, scoped, log, repoNeeds, new Set(), root);
-  // A name the pinned commit cannot give (out of range, not in the registry) keeps the copy it has.
-  for (const name of Object.keys(plan.skipped)) {
-    for (const dest of Object.keys(scoped?.files ?? {})) if (dest.startsWith(path.join(root, 'skills', name) + path.sep)) plan.failedDests.add(dest);
+  // A name the pinned commit cannot give (out of range, not in the registry), or not all of it, keeps the copy it has.
+  const unfetched = names.filter((name) => plan.skipped[name] || plan.failed.some((entry) => failedFor(entry, name)));
+  for (const name of unfetched) {
+    for (const dest of Object.keys(scoped?.files ?? {})) if (isUnder(dest, skillDir(name))) plan.failedDests.add(dest);
   }
-  const applied = applyInstall(plan.planned, scoped, plan.failedDests, log, root);
+  const planned = plan.planned.filter(({ dest }) => !unfetched.some((name) => isUnder(dest, skillDir(name))));
+  const applied = applyInstall(planned, scoped, plan.failedDests, log, root);
   const failed = [...plan.failed, ...applied.failed];
   const skillOf = (dest) => path.relative(path.join(root, 'skills'), dest).split(path.sep)[0];
-  const kept = new Set(plan.planned.filter(({ dest, content }) => applied.files[dest] !== hashBytes(content)).map(({ dest }) => skillOf(dest)));
+  const kept = new Set(planned.filter(({ dest, content }) => applied.files[dest] !== hashBytes(content)).map(({ dest }) => skillOf(dest)));
   const added = names.filter((name) => plan.versions[`skill:${name}`] && !kept.has(name) && !failed.some((entry) => failedFor(entry, name)));
   const keepOthers = (object) => Object.fromEntries(Object.entries(object ?? {}).filter(([key]) => !names.includes(key.replace(/^skill:/, ''))));
   const versions = { ...(previous?.versions ?? {}) };
   for (const name of added) versions[`skill:${name}`] = plan.versions[`skill:${name}`];
-  for (const name of names) if (!added.includes(name) && !plan.skipped[name]) delete versions[`skill:${name}`];
+  // A skill not fetched this run keeps its old copy whole, and so its version.
+  for (const name of names) if (!added.includes(name) && !unfetched.includes(name)) delete versions[`skill:${name}`];
   const skillSources = { ...(previous?.skillSources ?? {}) };
   for (const name of added) if (skillSources[name] !== 'env') skillSources[name] = plan.skillSources[name] ?? 'env';
   const state = previous
@@ -927,7 +973,7 @@ async function runEnsure(args) {
   const finish = (code, report) => {
     const shown = warnings.length > MAX_WARNINGS ? [...warnings.slice(0, MAX_WARNINGS), `skill-forge: and ${warnings.length - MAX_WARNINGS} more warning(s)`] : warnings;
     if (json) {
-      process.stdout.write(`${JSON.stringify({ version: ENSURE_REPORT_VERSION, ...report, warnings }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ version: ENSURE_REPORT_VERSION, repo: null, skills: [], ...report, warnings }, null, 2)}\n`);
       if (!hook) process.exitCode = code;
       return;
     }
@@ -978,7 +1024,16 @@ async function runEnsure(args) {
         // Malformed payload: the working directory.
       }
     }
-    const repoRoot = values['--repo'] ? path.resolve(values['--repo']) : repoRootOf(startDir);
+    // The real path (true case on Windows), so recorded paths match from run to run.
+    const real = (dir) => {
+      try {
+        return fs.realpathSync.native(dir);
+      } catch {
+        return path.resolve(dir);
+      }
+    };
+    startDir = real(startDir);
+    const repoRoot = values['--repo'] ? real(values['--repo']) : repoRootOf(startDir);
     if (values['--repo']) startDir = repoRoot;
     const context = { repo: repoRoot };
 
@@ -997,8 +1052,9 @@ async function runEnsure(args) {
       const hash = crypto.createHash('sha256').update(script).digest('hex');
       const file = writeHook(repoRoot, ref, hash);
       out.push(`wrote the SessionStart hook to ${file}, pinned to ${ref}`,
-        'For the repo\'s AGENTS.md, this line (paste it as is):',
-        `Skills: this repo declares skills in \`${MANIFEST_NAME}\`. In a local session, use the \`${STEWARD}\` skill to check they are installed; if that skill is missing, first run \`${bootstrapCommand(ref, hash, false)}\` from the repo root.`);
+        'For the repo\'s AGENTS.md, these lines (paste them as they are):',
+        `Skills: this repo declares skills in \`${MANIFEST_NAME}\`. In a local session, use the \`${STEWARD}\` skill to check they are installed; if that skill is missing, first run this from the repo root:`,
+        '', '```sh', bootstrapCommand(ref, hash, false), '```');
       return finish(0, context);
     }
 
@@ -1043,10 +1099,14 @@ async function runEnsure(args) {
       else if (!entry.wins.owned) warnings.push(`skill-forge: ${where(entry.wins)}/${name} was not installed by Skill Forge's installer; upgrade it where it came from (skf home sync, or replace the folder)`);
       else if (!ref) warnings.push('skill-forge: no pinned commit (give --ref, or run the copy in ~/.claude/skill-forge/cache)');
       else {
-        const fits = await upgradeFits(entry, ref, repoRoot);
+        const root = entry.wins.level === 'user' ? userClaudeDir() : path.join(entry.wins.dir, '.claude');
+        // Checked before anything is written: one edited or foreign file refuses the whole skill, never half of it.
+        const changed = changedFiles(root, name);
+        const fits = changed.length > 0
+          ? `${changed.slice(0, 3).join(', ')}${changed.length > 3 ? ` and ${changed.length - 3} more` : ''} in ${where(entry.wins)}/${name} changed since install (or were not installed by Skill Forge)`
+          : await upgradeFits(entry, ref, repoRoot);
         if (fits !== true) warnings.push(`skill-forge: not upgraded: ${fits}`);
         else {
-          const root = entry.wins.level === 'user' ? userClaudeDir() : path.join(entry.wins.dir, '.claude');
           const result = await installInto(root, [name], ref, needs, () => {});
           if (result.added.includes(name)) {
             state.reload = true;
@@ -1110,7 +1170,7 @@ async function upgradeFits(entry, ref, repoRoot) {
   if (order === null || order <= 0) return `the pinned commit has ${version}, not newer than ${entry.wins.version}`;
   // Ranges the shared copy also serves: the manifest in its own folder (an umbrella, or the $HOME profile).
   const ranges = [{ where: 'this repo', range: entry.range }];
-  const shared = path.resolve(entry.wins.dir) === repoRoot ? undefined : readRepoJson(entry.wins.dir, MANIFEST_NAME)?.skills?.dependencies?.[entry.name];
+  const shared = samePath(entry.wins.dir, repoRoot) ? undefined : readRepoJson(entry.wins.dir, MANIFEST_NAME)?.skills?.dependencies?.[entry.name];
   if (typeof shared === 'string') ranges.push({ where: path.join(entry.wins.dir, MANIFEST_NAME), range: shared });
   const broken = ranges.filter((item) => item.range && !satisfiesRange(version, item.range));
   return broken.length === 0 ? true : `${version} is outside ${broken.map((item) => `${item.where} ${item.range}`).join(', ')}`;
@@ -1699,7 +1759,13 @@ function localHookPin(settings, only = false) {
   if (!isObject(settings) || !isObject(settings.hooks)) return null;
   const entries = Array.isArray(settings.hooks.SessionStart) ? settings.hooks.SessionStart : [];
   const commands = entries.flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [])).map((hook) => String(hook?.command ?? ''));
-  const pins = commands.map((command) => HOOK_PIN.exec(command)?.[1]).filter(Boolean);
+  // Exactly the command --write-hook writes for that pin and hash, not any text that mentions the file.
+  const pinOf = (command) => {
+    const ref = HOOK_PIN.exec(command)?.[1];
+    const hash = /===`([0-9a-f]{64})`/.exec(command)?.[1];
+    return ref && hash && command === bootstrapCommand(ref, hash, true) ? ref : null;
+  };
+  const pins = commands.map(pinOf).filter(Boolean);
   if (pins.length === 0) return null;
   if (only && (Object.keys(settings).length !== 1 || Object.keys(settings.hooks).length !== 1 || pins.length !== commands.length)) return null;
   return pins[0];
@@ -2068,8 +2134,12 @@ async function runDoctor(args) {
 }
 
 process.stdout.on('error', () => {});
-const [command, ...rest] = process.argv.slice(2);
-if (command === 'install' && rest.includes('--top-up')) {
+// For unit tests of the helpers below; set only while importing, never in a setup script.
+export { bootstrapCommand, isUnder, samePath };
+const [command, ...rest] = process.env.SKF_CLOUD_NO_MAIN === '1' ? ['--imported'] : process.argv.slice(2);
+if (command === '--imported') {
+  // Imported by a test: run nothing.
+} else if (command === 'install' && rest.includes('--top-up')) {
   await runTopUp(rest);
 } else if (command === 'install') {
   await runInstall();

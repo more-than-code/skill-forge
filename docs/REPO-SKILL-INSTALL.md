@@ -57,7 +57,8 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
 1. **Repo and manifest.** The repo is `--repo`, else the git top level of the working
    directory, else the working directory. It reads `skill-forge.json`
    `skills.dependencies` (registry skills only; `skills.local` names are the repo's own).
-   No manifest or no dependencies: nothing to do, silent.
+   No manifest: nothing to do, silent. A manifest with no dependencies still gets the
+   steward (section 2) unless `SKF_DEFAULT_SKILLS=0`.
 2. **Defer to skf sync.** If `<repo>/.claude/skills` is a symlink (the `skf sync`
    layout), `ensure` changes nothing and says once that `skf sync` manages this repo.
 3. **Discover before install** (the point of the feature: never reinstall or duplicate
@@ -136,7 +137,9 @@ A new subcommand of the existing single-file installer (Node 18+, built-ins only
 `ensure` also installs `claude-project-steward` into `<repo>/.claude/skills/` when no
 copy is found at the levels above (same finding and version rules, range: any version at
 the pinned commit), whether or not the repo declares it. That is the "get steward itself
-onto the machine" step; `SKF_DEFAULT_SKILLS=0` turns it off, as for `install`.
+onto the machine" step; `SKF_DEFAULT_SKILLS=0` turns it off, as for `install`. It applies
+to a manifest with an empty `skills.dependencies` too: having the manifest is what marks the
+repo as a Skill Forge consumer.
 
 ### 3. Output and exit
 
@@ -159,7 +162,13 @@ it):
 
 > Skills: this repo declares skills in `skill-forge.json`. In a local session, use the
 > `claude-project-steward` skill to check they are installed; if that skill is missing,
-> first run `node -e '<bootstrap, pinned to <sha>>'` from the repo root.
+> first run this from the repo root:
+>
+> ```sh
+> node -e '<bootstrap, pinned to <sha> and the script's sha256>'
+> ```
+
+The command goes in a fenced block, not inline code: it contains backticks.
 
 The bootstrap is the same one-line command as the hook's (section 5) without `--hook`, so
 it prints its one line to the terminal. Doctor's existing checks treat this line as
@@ -169,7 +178,7 @@ fetch is pinned to a full sha, so it is not an unpinned remote runner.
 **The steward's new section** ("Local sessions: install a repo's declared skills"), used
 when `CLAUDE_CODE_REMOTE` is not `true`:
 1. run discovery first: `ensure --check --json` from the installed copy
-   (`node .claude/skill-forge/skf-cloud-<sha>.mjs`, or the published line's command when
+   (`node ~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs`, or the published line's command when
    none is there), and tell the user what is already installed and where (repo, parent
    folder, user level), which copy wins, any duplicates and anything older than declared (a warning);
 2. only if something is missing, run `ensure` and report in one line what it installed;
@@ -195,9 +204,10 @@ commits one entry in `.claude/settings.json`:
 ] } ] } }
 ```
 
-The bootstrap is a one-line Node program: if
-`<repo>/.claude/skill-forge/skf-cloud-<sha>.mjs` is missing it fetches
-`bin/skf-cloud.mjs` at the full commit sha over HTTPS into that ignored folder, then runs
+The bootstrap is a one-line Node program: unless
+`~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs` exists with the sha256 the hook pins, it
+checks that the sha is in main's history (GitHub's compare API), fetches `bin/skf-cloud.mjs`
+at that sha over HTTPS, checks the hash and caches it there (outside the repo); then it runs
 it with `ensure --hook --ref <sha>`. Written so the same text works in Git Bash and
 PowerShell (the shells Claude Code uses for hooks on Windows): one outer pair of single
 quotes, no quotes or `$` inside. A fetch failure warns once and exits 0.
@@ -267,7 +277,8 @@ loads only in sessions started in that folder, not in sessions started inside th
 | `ensure --check --json` | — | new versioned JSON shape (`version: 1`), a public contract from release |
 | `install --top-up` | trusts `state.json`; a deleted folder is "nothing to add" | a recorded skill with no `SKILL.md` on disk is added again |
 | `~/.claude` layout, `state.json` | unchanged | unchanged |
-| Repo files | none written by skf-cloud | ignored `<repo>/.claude/skills/<name>/`, `<repo>/.claude/skill-forge/{state.json,skf-cloud-<sha>.mjs}`; a block in `.git/info/exclude` |
+| Repo files | none written by skf-cloud | ignored `<repo>/.claude/skills/<name>/`, `<repo>/.claude/skill-forge/state.json`; a block in `.git/info/exclude` |
+| User files | — | the hash-checked script cache `~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs` |
 | Committed repo files | — | `.claude/settings.json` hook entry, only via `--write-hook` and a PR |
 | Doctor JSON | — | `D-repo-settings-ignored` skips a hook-only settings file; new `D-repo-local-hook-pin`; `version` unchanged |
 | `claude-project-steward` skill | threads only | adds the local-session section, the published line and the PR step; minor version bump |
@@ -362,8 +373,11 @@ the trust model hold against a hostile repository; none adds a surface:
   name `skf-cloud-<sha>.mjs`). The repo lock's commit is used only without `--ref`, and only
   after GitHub's compare API confirms it is in `more-than-code/skill-forge` main's history:
   GitHub serves a sha that exists only in a fork under the same raw URL, so a repo-chosen sha
-  is not authenticated by the URL alone. A local mirror or another https `SKF_BASE` is the
-  user's own choice and is not checked.
+  is not authenticated by the URL alone. The check proves only that the sha is somewhere in
+  main's history: a lock can pin any past main commit, older skill versions included (they
+  are still Skill Forge's own text). A local mirror (`SKF_BASE` an absolute path) is the
+  user's own files and is not checked; since the reviewer pass of 2026-11-28 an https
+  `SKF_BASE` is checked like the default, as the bootstrap always did.
 - **The script.** The hook pins the sha256 of `bin/skf-cloud.mjs` at its sha, and the cache moves
   out of the repo to `~/.claude/skill-forge/cache/skf-cloud-<sha>.mjs`. The bootstrap runs a cached
   copy only when its hash matches; otherwise it checks the sha is on main, fetches it over
@@ -387,8 +401,27 @@ the trust model hold against a hostile repository; none adds a surface:
   helpers); there is no module-level target.
 - **The published line** is printed by `--write-hook` (pinned to its sha and hash) rather than
   written into the skill or README, which cannot know a future release's sha.
-- **Not done:** a `path.win32` unit test (criterion 13). `skf-cloud.mjs` is a script with no
-  exports. Paths are built with `path.join` and compared with `path.sep`, and failure lines are
-  normalised to `/` before matching. Windows end to end and the PowerShell test (criterion 10)
-  were not run in this environment. The bootstrap's download path is exercised only for its
-  failure (no https mirror in tests); the cached-hash path is tested.
+- **Not done:** Windows end to end and the PowerShell test (criterion 10) were not run in
+  this environment.
+
+Changes from the reviewer thread's pass (2026-11-28):
+
+- **Partial installs.** A skill with a file that fails to fetch is not written at all, and its
+  old copy (and version) stays whole. Files recorded with no version (a write that stopped part
+  way) are `incomplete`, not `unknown`, so the next run repairs them. `--upgrade` checks every
+  file of the copy before writing: one edited file, or one Skill Forge did not install, refuses
+  the whole skill.
+- **Paths.** The home folder is `os.homedir()` everywhere, as in the bootstrap and Claude Code.
+  The start folder is resolved to its real path, and paths compare case-folded on Windows and
+  macOS. `path.win32` and `path.posix` unit tests cover the helpers (criterion 13), imported
+  with `SKF_CLOUD_NO_MAIN=1`, which only tests set.
+- **Tests against a local HTTPS server** with a test certificate: the compare check (`ahead`,
+  `identical` pass; `diverged`, `behind`, an HTTP error refuse, for the lock commit and for
+  `--write-hook`) and the bootstrap's download (a cold cache downloads and runs; an off-main
+  pin, an HTTP error and a wrong hash never run or cache anything).
+- **Smaller fixes.** Doctor's `D-repo-local-hook-pin` matches only the exact command
+  `--write-hook` writes. `unsafeRoot` follows a symlinked home or checkout above the root, and
+  checks the root itself. `--check --json` error paths keep `repo` and `skills: []`. Names from a
+  repo's manifest are quoted in log lines when not plain. `--write-hook` prints the command in
+  a fenced block. `reloadSkills` was checked against the hooks reference: it is a documented
+  SessionStart field.
